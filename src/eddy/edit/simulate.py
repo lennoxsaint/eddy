@@ -45,12 +45,16 @@ def simulate(
     kept = cut_transcript(edl, phrases)
     cards = boundary_cards(edl, phrases)
 
-    # dead air remaining inside keep ranges
+    # dead air remaining inside keep ranges — silence inside a protected moment is
+    # a deliberate visual beat (demo footage), not a defect
     dead_air = []
     for a, b in zip(kept, kept[1:]):
         gap = b["out_start"] - a["out_end"]
         if gap > cfg.gates.max_dead_air_s:
-            dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
+            src = a["end"]  # raw-timeline end of the phrase before the gap
+            protected = any(pm.start_s - 1 <= src <= pm.end_s + 1 for pm in decisions.protected_moments)
+            if not protected:
+                dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
 
     # boundary handles below the hard-fail threshold
     thin_handles = [
