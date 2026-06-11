@@ -74,10 +74,10 @@ def compile_edl(
     if problems:
         raise CompileError(problems)
 
-    # Protected moments win deterministically: clip removes around any span where
-    # the cut would take a substantial bite (>3s or >25% of the protection).
-    # Models routinely protect and cut the same content; resolving here beats
-    # bouncing coordinate contradictions back to the model.
+    # Protected moments win deterministically — but protection means "this content
+    # survives", not "nothing inside may be touched". Models routinely protect whole
+    # beats wall-to-wall; a cut is only voided when it would remove the MAJORITY of
+    # the protected span. Smaller bites inside a protection are normal editing.
     clipped: list[tuple[float, float]] = []
     for s, e in removes:
         pieces = [(s, e)]
@@ -86,7 +86,7 @@ def compile_edl(
             next_pieces: list[tuple[float, float]] = []
             for ps, pe in pieces:
                 overlap = min(pe, pm.end_s) - max(ps, pm.start_s)
-                if overlap > 3.0 or overlap / span > 0.25:
+                if overlap / span > 0.5:
                     if pm.start_s - ps > 0.2:
                         next_pieces.append((ps, pm.start_s))
                     if pe - pm.end_s > 0.2:

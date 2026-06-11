@@ -20,7 +20,9 @@ Editorial constitution:
 4. Tighten only if still over target (tier OPTIONAL): slower examples, redundant restatements.
 5. NEVER cut: the hook take that lands, the payoff of any promise made earlier ("I'll show you X"
    means X stays), the CTA/ending, numbers or claims that later content references.
-   Declare these as protected_moments.
+   Declare these as protected_moments - SHORT, SPECIFIC moments (a sentence or exchange,
+   max ~30 seconds each, total protected well under 20% of the runtime). NEVER protect a
+   whole beat or section: broad protections void your own cuts and the edit stops working.
 6. Phrases must survive or die WHOLE. Set cut start_s/end_s on phrase timestamps (copy them
    from the transcript; never invent times). `quote` = first ~8 words of the removed passage.
 7. Mark 2-5 shorts_candidates: self-contained 20-59s passages with a hook and a complete payoff.
