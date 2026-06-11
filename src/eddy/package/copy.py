@@ -9,7 +9,7 @@ from eddy.edit.compiler import cut_transcript
 from eddy.edit.schema import EditDecisions, Edl
 from eddy.loop.receipts import Receipts
 
-PROMPTS = Path(__file__).resolve().parents[3] / "prompts"
+PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 
 TITLES_SCHEMA = {
     "type": "object",

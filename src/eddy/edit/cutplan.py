@@ -17,7 +17,7 @@ from eddy.runs import manifest
 from eddy.transcribe.pack import phrases as load_phrases
 from eddy.transcribe.whisper import words_flat
 
-PROMPTS = Path(__file__).resolve().parents[3] / "prompts"
+PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 
 BEATS_SCHEMA = {
     "type": "object",

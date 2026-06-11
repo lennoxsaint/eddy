@@ -10,7 +10,7 @@ from eddy.edit.schema import EditDecisions, Edl
 from eddy.loop.receipts import Receipts
 from eddy.providers.base import ProviderError
 
-PROMPTS = Path(__file__).resolve().parents[3] / "prompts"
+PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 
 JUDGE_SCHEMA = {
     "type": "object",

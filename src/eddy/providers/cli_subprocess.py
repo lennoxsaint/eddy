@@ -61,7 +61,8 @@ class CliProvider:
                     timeout=TIMEOUT_S,
                 )
                 if proc.returncode != 0:
-                    raise ProviderError(f"{self.binary} exited {proc.returncode}: {proc.stderr[-500:]}")
+                    detail = (proc.stderr.strip() or proc.stdout.strip())[-500:]
+                    raise ProviderError(f"{self.binary} exited {proc.returncode}: {detail}")
                 text = proc.stdout.strip()
                 if schema is None:
                     return text

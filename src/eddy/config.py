@@ -99,7 +99,7 @@ class GatesConfig(BaseModel):
 
 
 class PathsConfig(BaseModel):
-    runs_dir: str = "~/eddy/runs"
+    runs_dir: str = "~/Eddy/runs"
 
 
 class EddyConfig(BaseModel):
