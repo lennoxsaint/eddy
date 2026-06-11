@@ -49,7 +49,9 @@ def _detect(video: Path, run_dir: Path, vf: str, tag: str) -> list[str]:
 
 def black_or_frozen(video: Path, run_dir: Path) -> dict:
     black = _detect(video, run_dir, "blackdetect=d=0.5:pix_th=0.10", "blackdetect")
-    freeze = _detect(video, run_dir, "freezedetect=n=-60dB:d=2", "freeze_start")
+    # screen-share content sits visually static for long stretches while the
+    # creator talks — only a 60s+ freeze indicates a genuinely stuck render
+    freeze = _detect(video, run_dir, "freezedetect=n=-60dB:d=60", "freeze_start")
     return {
         "gate": "black_or_frozen",
         "pass": not black and not freeze,

@@ -70,13 +70,15 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
 
     decisions = None
     start_iter = 1
+    directive: list[dict] = []
     if resume and state.data["iteration"] >= 1:
         prev_dir = run_dir / "iterations" / f"{state.data['iteration']:02d}"
         if (prev_dir / "edit-decisions.json").exists():
             decisions = load_decisions(prev_dir / "edit-decisions.json")
             start_iter = state.data["iteration"] + 1
-
-    directive: list[dict] = []
+            directive_path = prev_dir / "revision-directive.json"
+            if directive_path.exists():
+                directive = json.loads(directive_path.read_text())
     for iteration in range(start_iter, cfg.loop.max_iterations + 1):
         iter_dir = run_dir / "iterations" / f"{iteration:02d}"
         iter_dir.mkdir(parents=True, exist_ok=True)
