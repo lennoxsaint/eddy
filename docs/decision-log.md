@@ -37,3 +37,10 @@ Durable product/architecture decisions. Newest first. Format: date · decision �
 - **Loop behavior:** 5 iterations, best attempt = iter 4 (gates ✓, judge 5.1). Judge at q4 plateaus ~4.5–5.5 and inflates defect counts — absolute calibration unreliable, defect lists still useful for directives. Runs ship via best-attempt path as designed.
 - **Policy fixes shipped during the run:** protected-moments win deterministically (clip cuts, never bounce contradictions to the model); dead air inside protected demo moments is a visual beat, not a defect; handles hard-fail only below the 30ms fade floor; freezedetect at 60s for static screen content; target clamps to feasible speech duration.
 - **Wall-clock:** ~70 min total post-transcript (5 iterations × ~6–8 min incl. qwen calls + proxy renders, final render ~7 min, shorts ~4 min, packaging ~5 min).
+
+## 2026-06-11 — Full dogfood results (54-min raw → launch kit) + v0.1
+
+- **Outcome:** 54.3-min dense-talk raw → 28.8-min final long (all deterministic gates pass, judge 6.2 best-attempt), 3 karaoke shorts (QA pass), 10 titles, 7 chapters, description, 2 Gemini thumbnails. Sources hash-verified untouched.
+- **Benchmark vs prior human-loop pipeline (same video):** Eddy 28.8 min / 31 ranges vs prior 24.8 min / 16 ranges; overlap 15.6 min = 62.9% of the prior edit's selections. Directionally aligned, real divergence on ~40% of selections — `final/benchmark-diff.json` has the regions.
+- **Critical fix discovered here:** the model protects whole beats wall-to-wall; protection semantics changed to "the majority of a protected span must survive" — otherwise broad protections void every cut and the edit silently keeps ~everything.
+- **Judge calibration (q4 27b) across both dogfoods:** plateaus 5–7, never reaches the 8.0 gate; runs ship via best-attempt as designed. Deterministic suite is the effective gate; judge defect lists still drive useful revisions (duration convergence 53.7 → 29.3 min came from directive-driven structural cuts).
