@@ -72,8 +72,8 @@ class RenderConfig(BaseModel):
     proxy_height: int = 480
     proxy_preset: str = "ultrafast"
     final_crf: int = 18
-    cut_pad_before_ms: int = 50
-    cut_pad_after_ms: int = 80
+    cut_pad_before_ms: int = 120
+    cut_pad_after_ms: int = 160
     boundary_fade_ms: int = 30
 
 

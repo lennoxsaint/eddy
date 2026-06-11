@@ -68,6 +68,15 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     phrases = load_phrases(run_dir)
     beats = beat_map(run_dir, provider, receipts)
 
+    # a target above what the footage actually contains is unreachable — clamp to
+    # the speakable content (speech + tightened-gap allowance) so the duration
+    # band is honest and directives never demand restoring content that isn't there
+    speech_s = sum(p["end"] - p["start"] for p in phrases)
+    feasible_s = speech_s * 1.08  # tightened gaps remain between phrases
+    if target_s > feasible_s * 0.95:
+        receipts.log("target_clamped", requested_s=round(target_s), feasible_s=round(feasible_s), speech_s=round(speech_s))
+        target_s = round(feasible_s * 0.9)
+
     decisions = None
     start_iter = 1
     directive: list[dict] = []
