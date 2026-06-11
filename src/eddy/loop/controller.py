@@ -39,8 +39,17 @@ def _directive_from(qa: dict, judge: dict, sim: dict) -> list[dict]:
         )
     if not sim["verdicts"]["duration_in_band"]:
         if sim["duration_s"] > sim["target_s"]:
+            over = sim["duration_s"] - sim["target_s"]
             directive.append(
-                {"op": "tighten_gap", "reason": f"video {sim['duration_s']:.0f}s vs target {sim['target_s']:.0f}s — cut more (use OPTIONAL tier candidates)"}
+                {
+                    "op": "drop_beat",
+                    "reason": (
+                        f"video is {over:.0f}s OVER target ({sim['duration_s']:.0f}s vs {sim['target_s']:.0f}s). "
+                        f"Trims will not get there — remove roughly {over:.0f}s of content structurally: "
+                        "cut the weakest beats entirely, collapse repeated explanations to their best telling, "
+                        "and apply every RECOMMENDED and OPTIONAL tier opportunity. Keep hook, payoffs, CTA."
+                    ),
+                }
             )
         else:
             directive.append(
