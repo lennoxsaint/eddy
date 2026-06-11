@@ -20,7 +20,7 @@ def latest_iteration_dir(run_dir: Path) -> Path:
 
 
 def render_run(run_dir: Path, proxy: bool = False, iteration: int | None = None) -> Path:
-    run_dir = Path(run_dir)
+    run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
     receipts = Receipts(run_dir)
 

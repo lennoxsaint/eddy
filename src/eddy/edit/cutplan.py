@@ -215,7 +215,7 @@ def plan_run(run_dir: Path, target_minutes: float | None = None):
     from eddy.edit.retakes import filler_candidates, retake_candidates
     from eddy.edit.simulate import save_report, simulate
 
-    run_dir = Path(run_dir)
+    run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
     receipts = Receipts(run_dir)
     provider = get_provider(cfg)

@@ -17,7 +17,7 @@ from eddy.transcribe.pack import phrases as load_phrases
 
 
 def qa_run(run_dir: Path, iteration: int | None = None) -> dict:
-    run_dir = Path(run_dir)
+    run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
     iter_dir = (
         run_dir / "iterations" / f"{iteration:02d}" if iteration else latest_iteration_dir(run_dir)

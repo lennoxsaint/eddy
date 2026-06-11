@@ -107,6 +107,10 @@ def chapters_block(chaps: list[dict]) -> str:
     return "\n".join(f"{_fmt_ts(c['out_s'])} {c['label']}" for c in chaps)
 
 
+def _no_em_dashes(text: str) -> str:
+    return text.replace("\u2014", " - ").replace("\u2013", "-").replace("  ", " ")
+
+
 def titles(kept_phrases: list[dict], provider, receipts: Receipts) -> list[dict]:
     prompt = (PROMPTS / "titles.md").read_text()
     transcript = "\n".join(p["text"] for p in kept_phrases)
@@ -116,7 +120,10 @@ def titles(kept_phrases: list[dict], provider, receipts: Receipts) -> list[dict]
         max_tokens=2048,
     )
     receipts.log("titles", count=len(result["titles"]))
-    return result["titles"][:10]
+    cleaned = result["titles"][:10]
+    for item in cleaned:
+        item["title"] = _no_em_dashes(item["title"])
+    return cleaned
 
 
 def description(kept_phrases: list[dict], chaps: list[dict], provider, receipts: Receipts, cta: str = "") -> str:
@@ -128,7 +135,7 @@ def description(kept_phrases: list[dict], chaps: list[dict], provider, receipts:
         content += f"CTA LINE (verbatim, after chapters):\n{cta}\n\n"
     content += f"FINAL CUT TRANSCRIPT:\n{transcript}"
     result = provider.complete([{"role": "user", "content": content}], schema=DESCRIPTION_SCHEMA, max_tokens=2048)
-    desc = result["description"]
+    desc = _no_em_dashes(result["description"])
     if block and block not in desc:
         desc = desc.rstrip() + "\n\nChapters:\n" + block
     receipts.log("description", chars=len(desc))
