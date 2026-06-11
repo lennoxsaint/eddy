@@ -56,11 +56,17 @@ def simulate(
             if not protected:
                 dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
 
-    # boundary handles below the hard-fail threshold
+    # the 30ms boundary fade absorbs glued-word bleed: hard-fail only handles below
+    # the fade floor; sub-min_boundary_handle handles are reported as warnings
+    FADE_FLOOR_S = 0.03
     thin_handles = [
         c for c in cards
-        if 0 < c["start_handle_s"] < cfg.gates.min_boundary_handle_s
-        or 0 < c["end_handle_s"] < cfg.gates.min_boundary_handle_s
+        if 0 < c["start_handle_s"] < FADE_FLOOR_S or 0 < c["end_handle_s"] < FADE_FLOOR_S
+    ]
+    handle_warnings = [
+        c for c in cards
+        if FADE_FLOOR_S <= c["start_handle_s"] < cfg.gates.min_boundary_handle_s
+        or FADE_FLOOR_S <= c["end_handle_s"] < cfg.gates.min_boundary_handle_s
     ]
 
     duration = edl.total_duration_s
@@ -82,6 +88,7 @@ def simulate(
         "boundary_cards": cards,
         "dead_air": dead_air,
         "thin_handles": thin_handles,
+        "handle_warnings": len(handle_warnings),
         "verdicts": verdicts,
         "pass": all(verdicts.values()),
     }

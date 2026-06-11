@@ -167,7 +167,6 @@ def _snap_to_words(
     if not inside:
         return None
     first, last = inside[0], inside[-1]
-
     idx_first = words.index(first)
     idx_last = words.index(last)
     prev_end = words[idx_first - 1]["end"] if idx_first > 0 else 0.0
