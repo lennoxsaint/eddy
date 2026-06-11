@@ -81,16 +81,32 @@ def test_retake_plus_cut_both_removed():
     assert total < total_dur(words)
 
 
-def test_protected_moment_substantial_cut_raises():
+def test_protected_moment_wins_cut_gets_clipped():
     words = make_words()
-    # cut removes the protected span entirely (overlap > 25% of span)
+    # cut spans words 10..20 but words 13..18 are protected (substantial overlap):
+    # the protected words must survive in a kept range
     d = EditDecisions(
         cuts=[Cut(start_s=words[10]["start"], end_s=words[20]["end"], tier="MANDATORY")],
-        protected_moments=[ProtectedMoment(start_s=words[15]["start"], end_s=words[18]["end"])],
+        protected_moments=[ProtectedMoment(start_s=words[13]["start"], end_s=words[18]["end"])],
     )
-    with pytest.raises(CompileError) as e:
-        compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES)
-    assert e.value.problems[0]["type"] == "protected_moment_cut"
+    edl = compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES, tighten_gaps=False)
+    w15 = words[15]
+    assert any(r.start <= w15["start"] and w15["end"] <= r.end for r in edl.ranges)
+    # while an unprotected cut word stays out
+    w11 = words[11]
+    assert not any(r.start <= w11["start"] and w11["end"] <= r.end for r in edl.ranges)
+
+
+def test_self_contradiction_protection_equals_cut():
+    words = make_words()
+    # model protects and cuts the exact same span: protection wins, content survives
+    span = (words[30]["start"], words[40]["end"])
+    d = EditDecisions(
+        cuts=[Cut(start_s=span[0], end_s=span[1], tier="MANDATORY")],
+        protected_moments=[ProtectedMoment(start_s=span[0], end_s=span[1])],
+    )
+    edl = compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES, tighten_gaps=False)
+    assert len(edl.ranges) == 1  # nothing actually removed
 
 
 def test_protected_moment_tiny_filler_trim_allowed():

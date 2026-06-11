@@ -71,19 +71,31 @@ def compile_edl(
             continue
         removes.append((max(0.0, start), min(duration_s, end)))
 
-    for pm in decisions.protected_moments:
-        span = max(0.1, pm.end_s - pm.start_s)
-        for s, e in removes:
-            overlap = min(e, pm.end_s) - max(s, pm.start_s)
-            # tiny filler trims inside a protected beat are legitimate; flag only
-            # cuts that remove a substantial part of what was protected
-            if overlap > 3.0 or overlap / span > 0.25:
-                problems.append(
-                    {"type": "protected_moment_cut", "protected": [pm.start_s, pm.end_s], "cut": [s, e], "reason": pm.reason}
-                )
-
     if problems:
         raise CompileError(problems)
+
+    # Protected moments win deterministically: clip removes around any span where
+    # the cut would take a substantial bite (>3s or >25% of the protection).
+    # Models routinely protect and cut the same content; resolving here beats
+    # bouncing coordinate contradictions back to the model.
+    clipped: list[tuple[float, float]] = []
+    for s, e in removes:
+        pieces = [(s, e)]
+        for pm in decisions.protected_moments:
+            span = max(0.1, pm.end_s - pm.start_s)
+            next_pieces: list[tuple[float, float]] = []
+            for ps, pe in pieces:
+                overlap = min(pe, pm.end_s) - max(ps, pm.start_s)
+                if overlap > 3.0 or overlap / span > 0.25:
+                    if pm.start_s - ps > 0.2:
+                        next_pieces.append((ps, pm.start_s))
+                    if pe - pm.end_s > 0.2:
+                        next_pieces.append((pm.end_s, pe))
+                else:
+                    next_pieces.append((ps, pe))
+            pieces = next_pieces
+        clipped.extend(pieces)
+    removes = clipped
 
     if tighten_gaps:
         removes += gap_tighten_intervals(words)
