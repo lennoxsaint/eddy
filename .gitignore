@@ -1,0 +1,9 @@
+.venv/
+runs/
+work/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.DS_Store
+eddy.toml.local

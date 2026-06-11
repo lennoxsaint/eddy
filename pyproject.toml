@@ -1,0 +1,34 @@
+[project]
+name = "eddy"
+version = "0.1.0"
+description = "Local-first agentic video editor: drop raw footage in, get a complete YouTube launch kit out."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Lennox Saint" }]
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.7",
+    "tomlkit>=0.12",
+    "pillow>=10.0",
+    "openai>=1.30",
+    "anthropic>=0.34",
+    "faster-whisper>=1.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+eddy = "eddy.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
