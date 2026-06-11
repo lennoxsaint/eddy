@@ -72,8 +72,12 @@ def compile_edl(
         removes.append((max(0.0, start), min(duration_s, end)))
 
     for pm in decisions.protected_moments:
+        span = max(0.1, pm.end_s - pm.start_s)
         for s, e in removes:
-            if s < pm.end_s and e > pm.start_s:
+            overlap = min(e, pm.end_s) - max(s, pm.start_s)
+            # tiny filler trims inside a protected beat are legitimate; flag only
+            # cuts that remove a substantial part of what was protected
+            if overlap > 3.0 or overlap / span > 0.25:
                 problems.append(
                     {"type": "protected_moment_cut", "protected": [pm.start_s, pm.end_s], "cut": [s, e], "reason": pm.reason}
                 )

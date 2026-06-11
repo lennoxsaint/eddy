@@ -81,8 +81,9 @@ def test_retake_plus_cut_both_removed():
     assert total < total_dur(words)
 
 
-def test_protected_moment_conflict_raises():
+def test_protected_moment_substantial_cut_raises():
     words = make_words()
+    # cut removes the protected span entirely (overlap > 25% of span)
     d = EditDecisions(
         cuts=[Cut(start_s=words[10]["start"], end_s=words[20]["end"], tier="MANDATORY")],
         protected_moments=[ProtectedMoment(start_s=words[15]["start"], end_s=words[18]["end"])],
@@ -90,6 +91,17 @@ def test_protected_moment_conflict_raises():
     with pytest.raises(CompileError) as e:
         compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES)
     assert e.value.problems[0]["type"] == "protected_moment_cut"
+
+
+def test_protected_moment_tiny_filler_trim_allowed():
+    words = make_words()
+    # 0.7s trim inside a 20s protected beat: legitimate filler removal
+    d = EditDecisions(
+        cuts=[Cut(start_s=words[30]["start"], end_s=words[31]["end"], tier="MANDATORY")],
+        protected_moments=[ProtectedMoment(start_s=words[15]["start"], end_s=words[65]["end"])],
+    )
+    edl = compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES, tighten_gaps=False)
+    assert len(edl.ranges) == 2
 
 
 def test_inverted_and_out_of_bounds_rejected():
