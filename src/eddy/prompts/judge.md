@@ -17,6 +17,13 @@ Score 1-10 on each dimension (10 = ship it):
   ("like I showed before" pointing at nothing)?
 - ending_cta (x1): does it end on a complete thought with a clean CTA, not an abrupt stop?
 
+Context limits you must respect:
+- This is a screen-share creator video. The creator often READS ON-SCREEN ITEMS ALOUD
+  (lists of posts, numbers, metrics). Enumeration content legitimately reads as fragments
+  in a transcript - that is NOT a bad splice. Only flag boundary_continuity when the
+  creator's own narration grammar breaks ACROSS a splice point (check the boundary cards).
+- Silent stretches during demos are deliberate visual beats, already policed elsewhere.
+
 Rules:
 - List DEFECTS FIRST, then score. Every defect needs: out_s (output timestamp), quote (exact
   text at the defect), type (one of: bad_splice, orphan_reference, drag, missing_payoff,
