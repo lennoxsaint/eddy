@@ -1,4 +1,10 @@
-"""Ollama via its OpenAI-compatible endpoint. The default free-unlimited brain."""
+"""Ollama provider — the default free-unlimited brain.
+
+Uses Ollama's NATIVE /api/chat (not the OpenAI-compatible shim) for two reasons:
+- `options.num_ctx` must be explicit or long transcripts get silently truncated
+  at the model's default context;
+- `format` accepts a full JSON Schema (real structured outputs).
+"""
 
 from __future__ import annotations
 
@@ -15,6 +21,7 @@ class OllamaProvider:
 
     def __init__(self, cfg: OllamaConfig):
         self.cfg = cfg
+        self.root = cfg.base_url.removesuffix("/v1").rstrip("/")
 
     def complete(
         self,
@@ -26,27 +33,27 @@ class OllamaProvider:
         body: dict = {
             "model": self.cfg.model,
             "messages": messages,
-            "temperature": self.cfg.temperature if temperature is None else temperature,
-            "max_tokens": self.cfg.max_tokens if max_tokens is None else max_tokens,
             "stream": False,
+            "options": {
+                "temperature": self.cfg.temperature if temperature is None else temperature,
+                "num_predict": self.cfg.max_tokens if max_tokens is None else max_tokens,
+                "num_ctx": self.cfg.num_ctx,
+            },
         }
         if schema is not None:
-            # Ollama supports structured outputs via `format` on the native API and
-            # response_format on the OpenAI-compatible one; json_object is the widely
-            # supported floor, schema enforcement is checked on our side.
-            body["response_format"] = {"type": "json_object"}
+            body["format"] = schema
 
         last_err: Exception | None = None
         for _attempt in range(2):
             try:
                 r = httpx.post(
-                    f"{self.cfg.base_url}/chat/completions",
+                    f"{self.root}/api/chat",
                     json=body,
-                    timeout=httpx.Timeout(600, connect=10),
+                    timeout=httpx.Timeout(1200, connect=10),
                 )
                 if r.status_code >= 400:
                     raise ProviderError(f"ollama {r.status_code}: {r.text[:500]}")
-                text = r.json()["choices"][0]["message"]["content"]
+                text = r.json()["message"]["content"]
                 if schema is None:
                     return text
                 return validate_against(schema, extract_json(text))
@@ -55,6 +62,6 @@ class OllamaProvider:
         raise ProviderError(f"ollama failed after retry: {last_err}")
 
     def models(self) -> list[str]:
-        r = httpx.get(f"{self.cfg.base_url}/models", timeout=10)
+        r = httpx.get(f"{self.root}/api/tags", timeout=10)
         r.raise_for_status()
-        return [m["id"] for m in r.json().get("data", [])]
+        return [m["name"] for m in r.json().get("models", [])]

@@ -19,6 +19,7 @@ class OllamaConfig(BaseModel):
     judge_model: str = ""  # empty -> use model
     temperature: float = 0.3
     max_tokens: int = 4096
+    num_ctx: int = 32768
 
 
 class AnthropicConfig(BaseModel):
