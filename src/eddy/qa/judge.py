@@ -49,7 +49,9 @@ JUDGE_SCHEMA = {
     },
 }
 
-WEIGHTS = {"hook_integrity": 2, "boundary_continuity": 3, "pacing": 2, "completeness": 2, "ending_cta": 1}
+# v0.3: pacing raised 2→3 (ties boundary as the heaviest) — a too-long, drag-heavy cut must
+# no longer be able to score well on the strength of the other dimensions alone.
+WEIGHTS = {"hook_integrity": 2, "boundary_continuity": 3, "pacing": 3, "completeness": 2, "ending_cta": 1}
 
 
 def weighted_score(scores: dict) -> float:
@@ -143,10 +145,53 @@ def run_judge(
             return {**r, "judge_unstable": False}
 
     if not results:
+        # v0.3: an unavailable judge returns weighted 0 and judge_unstable — it must NOT
+        # certify "done" (the old advisory_only auto-pass is gone; the loop gates on
+        # `not judge_unstable`, and quality caps an unstable critic at 5).
         return {
             "defects": [], "scores": {k: 0 for k in WEIGHTS}, "weighted": 0.0,
-            "summary": "judge unavailable", "judge_unstable": True, "advisory_only": True,
+            "summary": "judge unavailable", "judge_unstable": True,
         }
     worst = min(results, key=lambda r: r["weighted"])
     receipts.log("judge", ok=True, unstable=True, score=worst["weighted"])
     return {**worst, "judge_unstable": True}
+
+
+# --- v0.3 final-ship panel: 3 independent lenses, majority ships ----------------------------
+
+PANEL_SCHEMA = {
+    "type": "object",
+    "required": ["ship", "reason"],
+    "properties": {"ship": {"type": "boolean"}, "reason": {"type": "string"}},
+}
+
+SHIP_LENSES = {
+    "pacing": "You judge ONE thing: does this edit DRAG? Ignore splices and continuity. A demanding "
+              "viewer's time is precious — if any stretch is slow, list-reading, or over-long, do not ship.",
+    "continuity": "You judge ONE thing: splices and orphans. Ignore pacing. If any cut sounds glued, "
+                  "a setup is orphaned from its payoff, or a reference dangles, do not ship.",
+    "taste": "You judge ONE thing: is this worth a stranger's time end to end — strong hook, the promise "
+             "paid off, a clean ending? If it opens weak or trails off, do not ship.",
+}
+
+
+def run_ship_panel(provider, receipts: Receipts, sim_report: dict, decisions: EditDecisions,
+                   edl: Edl, kept_phrases: list[dict], cfg: EddyConfig) -> dict:
+    """Run ONCE on the chosen best iteration: 3 independent lenses each vote ship/no-ship,
+    majority decides. Advisory — never blocks delivery in v0.3 (records dissent)."""
+    packet = evidence_packet(sim_report, decisions, edl, kept_phrases)
+    votes = []
+    for lens, framing in SHIP_LENSES.items():
+        msg = [{"role": "user", "content":
+                f"You are a hostile, skeptical release reviewer. Default: NOT ready.\n{framing}\n\n"
+                f"EVIDENCE:\n{packet}"}]
+        try:
+            r = provider.complete(msg, schema=PANEL_SCHEMA, temperature=0.2, max_tokens=512)
+            votes.append({"lens": lens, "ship": bool(r.get("ship")), "reason": r.get("reason", "")[:200]})
+        except ProviderError as e:
+            receipts.log("ship_panel_lens", lens=lens, ok=False, error=str(e)[:200])
+            votes.append({"lens": lens, "ship": False, "reason": f"lens unavailable: {str(e)[:80]}"})
+    ship_yes = sum(1 for v in votes if v["ship"])
+    ships = ship_yes >= (len(votes) // 2 + 1)
+    receipts.log("ship_panel", ships=ships, yes=ship_yes, of=len(votes))
+    return {"ships": ships, "yes": ship_yes, "of": len(votes), "votes": votes}

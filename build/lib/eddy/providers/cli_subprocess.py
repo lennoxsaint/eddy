@@ -6,12 +6,22 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import time
 from typing import Any
 
 from eddy.config import CliProviderConfig
 from eddy.providers.base import ProviderError, extract_json, validate_against
 
 TIMEOUT_S = 1200
+
+# The local Claude pairing guard (claude_local_guard.sh) exits 43 the first time it
+# corrects Chrome pairing, asking the caller to re-run. This is a one-time settle, not a
+# real failure — retry it after a short pause WITHOUT spending the normal retry budget, so
+# a single pairing correction never wastes the editorial call and falls back to local q4.
+PAIRING_GUARD_EXIT = 43
+PAIRING_GUARD_MARKERS = ("Re-run the same command", "corrected Claude Chrome pairing")
+SETTLE_DELAY_S = 3.0
+MAX_SETTLE_RETRIES = 2
 
 
 class CliProvider:
@@ -51,7 +61,9 @@ class CliProvider:
             )
 
         last_err: Exception | None = None
-        for _ in range(2):
+        settle_used = 0
+        attempts = 0
+        while attempts < 2:
             try:
                 proc = subprocess.run(
                     self._argv(prompt_via_stdin=True),
@@ -62,6 +74,15 @@ class CliProvider:
                 )
                 if proc.returncode != 0:
                     detail = (proc.stderr.strip() or proc.stdout.strip())[-500:]
+                    is_pairing_guard = proc.returncode == PAIRING_GUARD_EXIT or any(
+                        m in detail for m in PAIRING_GUARD_MARKERS
+                    )
+                    if is_pairing_guard and settle_used < MAX_SETTLE_RETRIES:
+                        # One-time pairing correction: pause for the guard to settle, then
+                        # retry without consuming the normal retry budget.
+                        settle_used += 1
+                        time.sleep(SETTLE_DELAY_S)
+                        continue
                     raise ProviderError(f"{self.binary} exited {proc.returncode}: {detail}")
                 text = proc.stdout.strip()
                 if schema is None:
@@ -69,4 +90,5 @@ class CliProvider:
                 return validate_against(schema, extract_json(text))
             except (ProviderError, subprocess.TimeoutExpired, ValueError) as e:
                 last_err = e
+                attempts += 1
         raise ProviderError(f"{self.binary} failed after retry: {last_err}")

@@ -1,0 +1,30 @@
+[
+  {
+    "title": "v0.3-C0: decouple duration_in_band from sim pass (make-or-break)",
+    "description": "simulate.py: remove duration_in_band from verdicts/pass so over-ceiling iterations still pass deterministic gates and the quality-driven loop can report 'done'. Add advisory under_ceiling for the directive only. sim['pass'] = no_dead_air AND handles_safe AND has_content. Without this the whole v0.3 feature is inert."
+  },
+  {
+    "title": "v0.3-A: hybrid quality metric (qa/quality.py)",
+    "description": "New quality_score() = clamp(0.6*objective + 0.4*critic - ceiling_penalty, 0, 10). Objective sub-signals (monotonic in defect count, can't be gamed): dead_air 0.25, pacing 0.25 (beat_density wpm>200 & kept_s>45 + slow-start), orphan_refs 0.20 (reuse protect.py SETUP_PATTERNS), hook_present 0.15 (binary 10/4), closure_present 0.15. Length is a constraint: ceiling_penalty=min(10,4*over/ceiling). Dump iterations/NN/quality.json."
+  },
+  {
+    "title": "v0.3-B: judge reweight + critic framing + remove advisory auto-pass + ship panel",
+    "description": "judge.py: reweight {hook:2,boundary:3,pacing:3,completeness:2,ending:1}. prompts/judge.md: hostile/skeptical critic framing, keep evidence_packet blinded. Remove the advisory_only auto-pass; new ship gate = (not judge_unstable) and weighted>=threshold; unstable critic capped min(worst,5). run_ship_panel() 3 lenses (pacing/continuity/taste) majority, ONCE at final ship, behind cfg.loop.ship_panel, never blocks delivery."
+  },
+  {
+    "title": "v0.3-C: controller branch-from-best + plateau + ranking + compression directive",
+    "description": "controller.py + state.py: branch revise from BEST-so-far (new best_decisions_iter); plateau stop after plateau_rounds=2 no-improvement; cap 5->15; clean-ship check before plateau break; best() ranking on gate-fail prefers -over_ceiling_s then quality then duration; record_attempt stores quality/components/judge_unstable/over_ceiling_s. Compression directive names beat_density[:4] heavy beats -> keep intro + top-3 as cuts. Persist no_improve/prev_best_q for resume. Keep EditLoopError guard."
+  },
+  {
+    "title": "v0.3-D: config (LoopConfig v0.3 fields)",
+    "description": "LoopConfig: plateau_rounds=2, max_iterations 5->15, length_ceiling_minutes=14.0, quality_weight_objective=0.6, quality_weight_critic=0.4, ship_panel=True, ship_panel_size=3. All defaulted (eddy.toml stays valid). Keep duration_band/default_target_minutes advisory."
+  },
+  {
+    "title": "v0.3-E: unit tests",
+    "description": "pytest (no render): quality monotonicity + not-gameable; hook/closure floors; plateau-stop; branch-from-best (iter4 revises iter2 not iter3); ranking-on-gate-fail closer-to-feasible; advisory judge no-auto-pass (unstable+9 -> judge_ok False, critic capped 5); ship-panel majority; config back-compat; resume restores plateau."
+  },
+  {
+    "title": "v0.3-F: dogfood + verification",
+    "description": "One real v0.3 dogfood: loop terminates via plateau or clean-ship (not just cap); final/quality.json + final/ship-panel.json exist; final deterministic QA passes (incl. av_drift after -shortest fix); over-ceiling still ships a best; v0.2 behaviour intact (cold_open, silence, studio sound). Honest report of which checks ran."
+  }
+]

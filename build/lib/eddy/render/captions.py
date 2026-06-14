@@ -132,12 +132,12 @@ def make_caption_layer(out_dir: Path, events: list[dict], total_duration: float,
     return layer
 
 
-def burn_captions(base: Path, final: Path, events: list[dict], total_duration: float, out_dir: Path, run_dir: Path) -> Path:
+def burn_captions(base: Path, final: Path, events: list[dict], total_duration: float, out_dir: Path, run_dir: Path, caption_y: int | None = None) -> Path:
     layer = make_caption_layer(out_dir, events, total_duration, run_dir)
     run_ffmpeg(
         [
             "-i", str(base), "-i", str(layer),
-            "-filter_complex", f"[0:v][1:v]overlay=0:{L.CAPTION_Y}:format=auto[v]",
+            "-filter_complex", f"[0:v][1:v]overlay=0:{L.CAPTION_Y if caption_y is None else caption_y}:format=auto[v]",
             "-map", "[v]", "-map", "0:a",
             "-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "7500k",
             "-c:a", "copy", "-shortest", "-movflags", "+faststart",

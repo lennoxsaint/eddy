@@ -46,6 +46,10 @@ class CliProviderConfig(BaseModel):
 
 class ProviderConfig(BaseModel):
     active: str = "ollama"
+    # which brain runs the editorial-reasoning passes (beat map, cut decisions, revisions,
+    # judge). "auto" = prefer a stronger brain (claude_cli > anthropic) when available, else
+    # fall back to `active`. "local" pins it to `active`. Or name a provider explicitly.
+    editorial: str = "auto"
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
@@ -72,8 +76,8 @@ class RenderConfig(BaseModel):
     proxy_height: int = 480
     proxy_preset: str = "ultrafast"
     final_crf: int = 18
-    cut_pad_before_ms: int = 50
-    cut_pad_after_ms: int = 80
+    cut_pad_before_ms: int = 120
+    cut_pad_after_ms: int = 160
     boundary_fade_ms: int = 30
 
 
@@ -81,6 +85,18 @@ class ShortsConfig(BaseModel):
     count: int = 3
     min_s: float = 20.0
     max_s: float = 59.0
+
+
+class AudioConfig(BaseModel):
+    """Local 'studio sound' — denoise/dereverb + speech EQ + loudness normalization."""
+    studio_sound: bool = True
+    deep_filter_binary: str = "deep-filter"  # DeepFilterNet CLI if present; else ffmpeg-only
+    target_lufs: float = -14.0  # YouTube integrated loudness
+    true_peak_db: float = -1.5
+    lra: float = 11.0
+    highpass_hz: int = 80
+    presence_hz: int = 3500  # gentle speech-presence lift
+    presence_gain_db: float = 2.0
 
 
 class ThumbnailsConfig(BaseModel):
@@ -96,6 +112,11 @@ class GatesConfig(BaseModel):
     min_range_s: float = 1.2
     max_av_drift_s: float = 0.5
     min_boundary_handle_s: float = 0.10
+    # audio-truth silence handling (kills "mouth moving, no sound")
+    silence_noise_db: float = -34.0  # silencedetect noise floor
+    silence_min_cut_s: float = 0.40  # audio-silent span >= this (and no words) gets removed
+    silence_handle_s: float = 0.10  # silence left each side of a removed silent span
+    max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
 
 
 class PathsConfig(BaseModel):
@@ -108,6 +129,7 @@ class EddyConfig(BaseModel):
     loop: LoopConfig = Field(default_factory=LoopConfig)
     render: RenderConfig = Field(default_factory=RenderConfig)
     shorts: ShortsConfig = Field(default_factory=ShortsConfig)
+    audio: AudioConfig = Field(default_factory=AudioConfig)
     thumbnails: ThumbnailsConfig = Field(default_factory=ThumbnailsConfig)
     gates: GatesConfig = Field(default_factory=GatesConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)

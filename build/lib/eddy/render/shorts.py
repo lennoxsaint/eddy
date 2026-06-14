@@ -148,7 +148,7 @@ def _render_segment_dual(
 
 
 def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict]:
-    run_dir = Path(run_dir)
+    run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
     receipts = Receipts(run_dir)
     m = manifest(run_dir)
@@ -193,8 +193,10 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         else:
             vw = src_summary["video"]["width"] or 1920
             vh = src_summary["video"]["height"] or 1080
-            panel_h = min(int(L.PANEL_W * vh / vw), L.CAPTION_Y - 80)
-            panel_y = max(60, L.CAPTION_Y - panel_h - 56)
+            panel_h = min(int(L.PANEL_W * vh / vw), 1100)
+            stack_h = panel_h + 56 + L.CAPTION_H
+            panel_y = max(60, (L.H - stack_h) // 2)
+            caption_y = panel_y + panel_h + 56
             mask = asset_dir / "panel-mask.png"
             _rounded_mask(mask, (L.PANEL_W, panel_h), L.RADIUS)
 
@@ -230,7 +232,13 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
 
         events = caption_events(asset_dir, out_words)
         final = out_root / f"{slug}.mp4"
-        burn_captions(base, final, events, cursor, asset_dir, run_dir)
+        burn_captions(base, final, events, cursor, asset_dir, run_dir, caption_y=None if dual else caption_y)
+
+        # Studio Sound on the assembled short (full-track, non-fatal)
+        if cfg.audio.studio_sound:
+            from eddy.render.audio import studio_sound
+
+            studio_sound(final, run_dir, cfg.audio, receipts=receipts)
 
         final_summary = stream_summary(final)
         entry = {

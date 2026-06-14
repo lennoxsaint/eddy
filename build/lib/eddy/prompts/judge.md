@@ -12,10 +12,21 @@ Score 1-10 on each dimension (10 = ship it):
 - hook_integrity (x2): does the opening land immediately, no throat-clearing, no leftover restart?
 - boundary_continuity (x3): does EVERY splice read as one continuous natural utterance?
   Flag any boundary where the grammar breaks, a reference dangles, or the thought jumps.
-- pacing (x2): any section that drags, repeats a landed point, or wanders without payoff?
+- pacing (x2): any section that drags, repeats a landed point, or wanders without payoff? Use the
+  per-section WPM + per-beat durations: a long beat where the creator reads on-screen lists/text
+  aloud is information-light and should have been compressed to the top 2-3 items — flag it as a
+  `drag` defect with a `drop_beat` fix. Also penalise a slow start: if the video's promised payoff
+  has not begun within roughly the first 10% of the runtime, that is a pacing defect.
 - completeness (x2): every promise paid off? any orphaned reference to removed content
   ("like I showed before" pointing at nothing)?
 - ending_cta (x1): does it end on a complete thought with a clean CTA, not an abrupt stop?
+
+Context limits you must respect:
+- This is a screen-share creator video. The creator often READS ON-SCREEN ITEMS ALOUD
+  (lists of posts, numbers, metrics). Enumeration content legitimately reads as fragments
+  in a transcript - that is NOT a bad splice. Only flag boundary_continuity when the
+  creator's own narration grammar breaks ACROSS a splice point (check the boundary cards).
+- Silent stretches during demos are deliberate visual beats, already policed elsewhere.
 
 Rules:
 - List DEFECTS FIRST, then score. Every defect needs: out_s (output timestamp), quote (exact

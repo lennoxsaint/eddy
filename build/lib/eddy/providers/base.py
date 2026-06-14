@@ -81,3 +81,57 @@ def get_provider(cfg: EddyConfig, name: str | None = None) -> LLMProvider:
 
         return CliProvider(cfg.provider.claude_cli, name="claude_cli")
     raise ProviderError(f"unknown provider {active!r}")
+
+
+class FallbackProvider:
+    """Editorial wrapper: try the upgraded brain; on ProviderError fall back to local so a
+    run never hard-fails on a missing/unavailable subscription brain. Logs each fallback."""
+
+    def __init__(self, primary: LLMProvider, fallback: LLMProvider, receipts=None):
+        self.primary = primary
+        self.fallback = fallback
+        self.receipts = receipts
+        self.name = f"{primary.name}->{fallback.name}"
+
+    def complete(self, messages, schema=None, temperature=None, max_tokens=None):
+        try:
+            return self.primary.complete(messages, schema=schema, temperature=temperature, max_tokens=max_tokens)
+        except ProviderError as e:
+            if self.receipts is not None:
+                self.receipts.log("editorial_fallback", primary=self.primary.name, fallback=self.fallback.name, error=str(e)[:200])
+            return self.fallback.complete(messages, schema=schema, temperature=temperature, max_tokens=max_tokens)
+
+
+def _editorial_available(cfg: EddyConfig) -> str | None:
+    """First available stronger editorial brain: claude_cli (binary on PATH) > anthropic
+    (API key present). None if no upgrade is available."""
+    import os
+    import shutil
+
+    claude = cfg.provider.claude_cli
+    if shutil.which(claude.binary or "claude"):
+        return "claude_cli"
+    if os.environ.get(cfg.provider.anthropic.api_key_env):
+        return "anthropic"
+    return None
+
+
+def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
+    """Resolve the brain for editorial-reasoning passes. Mechanical work (transcribe,
+    render, QA) never calls this — it stays on the local default."""
+    setting = cfg.provider.editorial
+    local = get_provider(cfg, cfg.provider.active)
+    if setting == "local":
+        chosen = cfg.provider.active
+    elif setting == "auto":
+        chosen = _editorial_available(cfg) or cfg.provider.active
+    else:
+        chosen = setting
+    if chosen == cfg.provider.active:
+        if receipts is not None:
+            receipts.log("editorial_brain", chosen=chosen, upgraded=False)
+        return local
+    primary = get_provider(cfg, chosen)
+    if receipts is not None:
+        receipts.log("editorial_brain", chosen=chosen, upgraded=True, fallback=cfg.provider.active)
+    return FallbackProvider(primary, local, receipts=receipts)

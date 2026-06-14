@@ -65,11 +65,19 @@ class TranscribeConfig(BaseModel):
 
 
 class LoopConfig(BaseModel):
-    max_iterations: int = 5
+    max_iterations: int = 15  # v0.3: raised from 5; plateau is the real brake
     judge_threshold: float = 8.0
+    plateau_rounds: int = 2  # v0.3: stop after K rounds with no best-quality gain
+    length_ceiling_minutes: float = 14.0  # v0.3: length guardrail (constraint, not a target)
+    quality_weight_objective: float = 0.6  # v0.3: hybrid quality = 0.6*objective + 0.4*critic
+    quality_weight_critic: float = 0.4
+    ship_panel: bool = True  # v0.3: 3-lens majority panel at final ship
+    ship_panel_size: int = 3
     max_model_calls_per_iteration: int = 4
-    duration_band: tuple[float, float] = (0.8, 1.2)  # x target
-    default_target_minutes: float = 12.0
+    # v0.3: duration_band / default_target_minutes are advisory only — the loop now
+    # maximizes quality with length as a ceiling constraint, not a target band.
+    duration_band: tuple[float, float] = (0.8, 1.2)  # x target (advisory)
+    default_target_minutes: float = 12.0  # advisory initial-cut preference
 
 
 class RenderConfig(BaseModel):

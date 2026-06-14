@@ -89,9 +89,10 @@ def transcribe_run(run_dir: Path) -> Path:
         segments=len(payload["segments"]),
     )
 
-    from eddy.transcribe.pack import pack_run
+    from eddy.transcribe.pack import build_audio_silence_map, pack_run
 
     pack_run(run_dir)
+    build_audio_silence_map(run_dir, noise_db=cfg.gates.silence_noise_db)
     return out
 
 

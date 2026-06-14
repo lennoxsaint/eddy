@@ -19,7 +19,7 @@ from eddy.transcribe.pack import phrases as load_phrases
 
 
 def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
-    run_dir = Path(run_dir)
+    run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
     receipts = Receipts(run_dir)
     provider = get_provider(cfg)

@@ -92,8 +92,12 @@ def simulate(
 
     duration = edl.total_duration_s
     lo, hi = cfg.loop.duration_band
+    ceiling_s = cfg.loop.length_ceiling_minutes * 60
+    # v0.3: duration is NO LONGER a gate. The loop maximizes quality with length as a
+    # ceiling constraint, so an over-ceiling iteration must still pass deterministic gates
+    # (otherwise the loop could never report "done" and would best-attempt at the cap every
+    # run). under_ceiling is advisory — it drives the compression directive, not pass/fail.
     verdicts = {
-        "duration_in_band": lo * target_s <= duration <= hi * target_s,
         "no_dead_air": not dead_air,
         "handles_safe": not thin_handles,
         "has_content": len(kept) > 0,
@@ -103,6 +107,9 @@ def simulate(
         "duration_s": duration,
         "target_s": target_s,
         "band_s": [round(lo * target_s, 1), round(hi * target_s, 1)],
+        "ceiling_s": round(ceiling_s, 1),
+        "under_ceiling": duration <= ceiling_s,
+        "duration_in_band": lo * target_s <= duration <= hi * target_s,  # advisory only
         "kept_phrases": len(kept),
         "ranges": len(edl.ranges),
         "removed_total_s": round(sum(max(0.0, b.start - a.end) for a, b in zip(edl.ranges, edl.ranges[1:])), 1),

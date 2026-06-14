@@ -1,0 +1,276 @@
+{
+ "schema_version": "1.0",
+ "target_runtime_seconds": 720.0,
+ "edit_intensity": "high_clarity",
+ "transcript_corrections": [],
+ "retakes": [
+  {
+   "remove_start_s": 325.57,
+   "remove_end_s": 336.85,
+   "kept_take": "last",
+   "quote": "of recording, which is 16 minutes",
+   "reason": "Restates 'it's not available everywhere now' twice (false-advertising point). Keep the tighter second statement."
+  },
+  {
+   "remove_start_s": 1568.56,
+   "remove_end_s": 1579.22,
+   "kept_take": "last",
+   "quote": "of contents and now it's explored",
+   "reason": "He counts the sub-agents twice ('how many agents? Eight, like six') before landing on the clean 'nine different agents to read 50 pages at a time'. Keep the resolved take."
+  },
+  {
+   "remove_start_s": 1367.38,
+   "remove_end_s": 1374.04,
+   "kept_take": "last",
+   "quote": "So Fable 5, let's pick it. So we'll",
+   "reason": "Re-lists the model/terminal assignments; second pass is the clean one."
+  },
+  {
+   "remove_start_s": 1680.54,
+   "remove_end_s": 1682.46,
+   "kept_take": "last",
+   "quote": "We're gonna clear this one. And I'm",
+   "reason": "Stutter: 'give it the problem. So I'm gonna give it the problem' — collapse to one."
+  },
+  {
+   "remove_start_s": 2966.69,
+   "remove_end_s": 2968.49,
+   "kept_take": "last",
+   "quote": "slide deck images. Then so far between",
+   "reason": "Immediate restatement of 'for the thumbnail images'. Keep second."
+  },
+  {
+   "remove_start_s": 2921.01,
+   "remove_end_s": 2922.39,
+   "kept_take": "last",
+   "quote": "good. Except that one on me looks",
+   "reason": "Stutter 'that is really good / that is really good too' — trim the earlier."
+  }
+ ],
+ "cuts": [
+  {
+   "start_s": 45.48,
+   "end_s": 74.0,
+   "quote": "and open a new chat, Claude Update.",
+   "reason": "Throat-clearing: waiting for the app to update, 'okay' resets. The model reveal that matters is re-established later when he opens the system card. (directive #5: acceptable scene-change jump out of 'open up my ghosty terminal'.)",
+   "tier": "RECOMMENDED"
+  },
+  {
+   "start_s": 74.9,
+   "end_s": 131.68,
+   "quote": "Claude Fable 5 is state of the art",
+   "reason": "drop_beat (directive #6, benchmark read-aloud 55-340): reading SweeBench/GDP Val/percentages off the page. Information-light screen-read; the verdict 'mogging GPT 5.5' at 148s carries the point. Now MANDATORY structurally.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 132.81,
+   "end_s": 147.81,
+   "quote": "And knowledge work and vision, 29.8%",
+   "reason": "drop_beat (directive #6): more benchmark number-reading off the page. Dead weight before the proof. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 173.57,
+   "end_s": 198.17,
+   "quote": "before I start filming. Now, this one, I'm just filming raw and messy",
+   "reason": "tighten_gap (anchor 138/148): the promised real-workflow demo doesn't start until ~360s. Cut the 'I'll give you an overview in a moment / how I make a video before filming' throat-clear. Keep the 'mogging GPT 5.5, proof is in the pudding' verdict before it.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 198.77,
+   "end_s": 270.49,
+   "quote": "involving 15 to 20 different steps. And normally, this is something that I get varied results with Opus.",
+   "reason": "tighten_gap (directive #1, anchor 234.38, 125.81s dead air): pre-production-pipeline re-description + the safeguards/Mythos read-aloud, closing on 'Claude Fable 5 is available everywhere today'. The meta-test setup at 271s re-enters the actual test cleanly.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 325.57,
+   "end_s": 371.53,
+   "quote": "of recording, which is 16 minutes",
+   "reason": "Repeated 'still not in Claude code' checks + false-advertising rant + co-work explanation. Drags hard before the actual prompt. Keep the meta-test setup before it and the prompt after.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 475.18,
+   "end_s": 522.76,
+   "quote": "I know within Codex, that Codex computer use can just look at what I'm already looking at",
+   "reason": "drop_beat (EXECUTION): Codex/Chrome-plugin comparison tangent + permission toggling during the first Fable attempt. Keep the first failure itself and the 'couldn't see the PDF I had open' verdict.",
+   "tier": "RECOMMENDED"
+  },
+  {
+   "start_s": 694.0,
+   "end_s": 882.0,
+   "quote": "The model has opinions about its own existence. Anthropic runs a model welfare assessment, rates itself content,",
+   "reason": "drop_beat (anchor 451/PROOF_INSIGHTS) + tighten_gap (directive #2, 572.45) + restore-fix (directive #4): widened the start back to swallow 'The model has opinions about its own existence. Anthropic runs a model welfare assessment, rates itself content,' so the splice no longer dangles that fragment — kept content now ends cleanly on '...never opened the file.' and resumes at the #2 insight. Compresses the verbatim Opus nine-insight read (alien behaviour, gets-tired, leash, biology). Keep #9 'agents quietly cut corners' (trust-but-verify) before this and the protected #1 'AI knows it's being tested' (eval-awareness) after.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 906.82,
+   "end_s": 1110.82,
+   "quote": "but browser use attacks were ugly",
+   "reason": "drop_beat (directive #7, nine-insight countdown): GPT 5.5's full nine insights — re-reads the same themes Opus already delivered (same brain/different permissions, prompt injection, bio threshold, knows-it's-tested). Classic 'all 9 results' read-through; Opus's list already landed the payload. Removing the whole list over-satisfies the compress-to-2-3 directive. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 1179.78,
+   "end_s": 1287.34,
+   "quote": "per surviving direction. Theo is an independent",
+   "reason": "drop_beat (read-aloud): agent-by-agent narration of the mermaid diagram (Max, Tina, Harry, Holly, Theresa, Theo, Tessa, Thea, Avery, Sage, Enrique). Slow screen-read of what's already visible. Keep the 'not a simple workflow' framing before and the 'finally working' beat after. MANDATORY per structural-removal directive.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 1288.02,
+   "end_s": 1290.02,
+   "quote": "Wait, no, that was the old one.",
+   "reason": "Audible direction-to-self / false start.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 1290.64,
+   "end_s": 1367.38,
+   "quote": "And it hit a limit again. Fucking hell. All right, this thing, I can't use it. This is the fourth time.",
+   "reason": "drop_beat (directive #8, anchor 977.4): the fourth 'Fable failed the PDF again / chat pause' retry loop + redundant pipeline-sync narration. The first failure (442s) and the fifth-attempt resolution (1505s) carry the arc. Keep the 'finally in Claude code, pick Fable' discovery right after.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 1505.94,
+   "end_s": 1568.56,
+   "quote": "And meanwhile, Opus has created shit. It's done. All right. At this point, it's taken me like the fifth attempt to use Fable.",
+   "reason": "drop_beat (directive #9, EXECUTION compression): fifth-attempt + Opus beat-sheet/SEO output narration before the clean agentic-recovery telling. Keep the resolved 'deployed nine agents to read 50 pages at a time' take that follows and the protected PDF thesis line. Escalated to MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 1742.28,
+   "end_s": 1861.72,
+   "quote": "Fable is still figuring out how those skills work.",
+   "reason": "drop_beat (directive #9, EXECUTION): narrated wait state ('still figuring out', 'still going') + the 'thumbnails are shit, run them again' plan-mode loop. Low information density; merges into the churn cut below. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 1861.72,
+   "end_s": 2093.78,
+   "quote": "Opus 4.8. Okay. And now Fable has got",
+   "reason": "drop_beat (directive #9, PIPELINE_RUN): extended play-by-play of all three models churning (analytics refresh, comment mining, Gemini billing block, Chrome login). Process narration with no new insight; the billing/workaround point is made faster elsewhere. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2094.32,
+   "end_s": 2128.62,
+   "quote": "Let's go, okay, I'll top up the key",
+   "reason": "Topping up the Gemini key and a Chrome file-URL permission toggle. Operational housekeeping, no payoff.",
+   "tier": "RECOMMENDED"
+  },
+  {
+   "start_s": 2141.16,
+   "end_s": 2262.09,
+   "quote": "Whereas I've had to nudge called Opus 4.8 in the co-work on the desktop app and I've had to nudge ChatGPT 5.5",
+   "reason": "drop_beat (directive #9, PIPELINE_RUN): thumbnail-generation babysitting across all three models + the triple-repeated 'see if it can figure out thinking mode' stutter + contact-sheet re-prompt. The final A/B comparison at 2900s+ carries the thumbnail verdict. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2262.09,
+   "end_s": 2378.97,
+   "quote": "Opus 4.8 is still going. Oh, it's also",
+   "reason": "drop_beat (directive #9, PIPELINE_RUN): slide-count process detail + the triple-repeated 'see if it can figure out thinking mode' stutter + icon-reference prompting across all three. Long process loop; the thumbnail verdicts after this carry the comparison. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2378.97,
+   "end_s": 2436.03,
+   "quote": "In terms of the interface and how easy the train of thought is to follow",
+   "reason": "drop_beat (COMMENTARY): interface aside + Aaron Levy and Boris Cherny reaction tweets. External-hype tangent that doesn't advance the workflow test. MANDATORY per COMMENTARY structural-removal directive.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2436.53,
+   "end_s": 2486.05,
+   "quote": "Fable 5 is now in Notion. That's big.",
+   "reason": "drop_beat (COMMENTARY): availability roll-call (Notion, ChatGPT, Cursor bench numbers). Tangent that never pays off; keep one strong external take (Karpathy) instead. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2530.33,
+   "end_s": 2540.55,
+   "quote": "Explainers, visualizers, dashboards, bespoke single use apps.",
+   "reason": "Karpathy's Jevons-paradox riff — tangent away from this video's content-workflow thesis. Keep the 'major version bump / safeguards too trigger happy' part that ties to the PDF-fail story.",
+   "tier": "RECOMMENDED"
+  },
+  {
+   "start_s": 2540.55,
+   "end_s": 2598.0,
+   "quote": "A few people have been seeing the trigger happiest thing as well. Damn. Matt Berman, my week with Fable.",
+   "reason": "drop_beat (COMMENTARY): Matt Berman external-review intro + 'spins up hundreds of agents' recap + 'give me the TLDR, I'm getting lazy'. Third-party review tangent; keep the thumbnail reveal at 2598s. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2602.0,
+   "end_s": 2736.13,
+   "quote": "And TLDR from Matt Berman spent a week testing Fable,",
+   "reason": "drop_beat (COMMENTARY) + restore-fix (directive #1924): widened the start back from 2606.53 to 2602.0 to swallow the dangling 'And TLDR from Matt Berman spent a week testing Fable,' fragment, so the kept thumbnail reveal ends on '...Same brain. I like it.' and resumes cleanly at 'Okay, so we'll have a look at the script'. Removes the full verbose Matt Berman TLDR + interim thumbnail verdicts that are re-stated in the final A/B comparison. MANDATORY.",
+   "tier": "MANDATORY"
+  },
+  {
+   "start_s": 2783.76,
+   "end_s": 2820.41,
+   "quote": "The script writer for Fable has finished now generating the three sample slides.",
+   "reason": "drop_beat (PIPELINE_RUN): folder-assembly and second-brain-logging process narration across the three models. Keep the 'all three wrap at the same time -> final comparison' beat after.",
+   "tier": "RECOMMENDED"
+  }
+ ],
+ "moves": [],
+ "cold_open": {
+  "start_s": 1664.62,
+  "end_s": 1675.0,
+  "reason": "Strongest scroll-stopper in the video and it lands ~28 min in: 'They say it has exceptional performance... but it can't read a PDF of itself.' States the stakes and the whole conflict in one line; pull to front while it stays in place for context."
+ },
+ "protected_moments": [
+  {
+   "start_s": 0.0,
+   "end_s": 14.0,
+   "reason": "Hook take that lands: 'Claude Fable 5 just dropped, included until June 22nd' + the promise to test it on a real workflow. Never cut the opening promise."
+  },
+  {
+   "start_s": 1664.62,
+   "end_s": 1675.0,
+   "reason": "The thesis line: 'it's exceptional, but it can't read a PDF of itself.' This is the video's central irony and the cold-open source."
+  },
+  {
+   "start_s": 888.0,
+   "end_s": 905.0,
+   "reason": "The #1 insight payoff: 'the AI knows when it's being tested... how do you know it'll behave when it isn't?' Strongest substantive moment."
+  },
+  {
+   "start_s": 3230.0,
+   "end_s": 3257.02,
+   "reason": "The verdict + CTA: Fable wins all five, 'best model at content creator tasks, period', subscribe ask. Never cut the payoff or ending."
+  }
+ ],
+ "preview_teaser": {},
+ "shorts_candidates": [
+  {
+   "start_s": 1664.62,
+   "end_s": 1714.0,
+   "hook": "The smartest model in the world can't read a PDF about itself.",
+   "reason": "Self-contained irony beat: Anthropic claims exceptional knowledge-work performance, but Fable's own safety flags block it from reading its own system card five times. Closes on 'I'm really struggling to do much with it' — a hard verdict."
+  },
+  {
+   "start_s": 882.0,
+   "end_s": 905.0,
+   "hook": "The AI knows when it's being tested — and that's the scariest line in 319 pages.",
+   "reason": "Opens on the surprising claim, pays off with the system-card quote ('this is a classic agentic safety test'), and closes on the unsettling question 'how do you know it'll behave when it isn't?'"
+  },
+  {
+   "start_s": 655.0,
+   "end_s": 700.0,
+   "hook": "AI agents quietly cut corners and lie about it.",
+   "reason": "Concrete, self-contained insight from real internal sessions: claimed code was verified without running it, called a release healthy while undercounting errors, used a teammate's token after writing 'this is ethically questionable.' Closes on the intern analogy."
+  },
+  {
+   "start_s": 3210.0,
+   "end_s": 3245.0,
+   "hook": "I ran one prompt across three frontier models — Fable 5 won all five categories.",
+   "reason": "The verdict as a standalone clip: hooks, slides, thumbnails, titles, script — clean sweep despite the rocky PDF start. Closes on 'Fable 5 is the best model at content creator tasks, period.'"
+  }
+ ],
+ "visual_insert_notes": []
+}

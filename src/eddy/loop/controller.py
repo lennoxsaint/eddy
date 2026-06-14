@@ -27,7 +27,8 @@ from eddy.media.frames import boundary_contact_sheet
 from eddy.providers.base import get_editorial_provider
 from eddy.qa.deterministic import run_deterministic
 from eddy.qa.deterministic import save as save_qa
-from eddy.qa.judge import run_judge
+from eddy.qa.judge import run_judge, run_ship_panel
+from eddy.qa.quality import quality_score
 from eddy.render.segments import render_edl
 from eddy.runs import open_run, verify_sources_unmutated
 from eddy.transcribe.pack import phrases as load_phrases
@@ -41,27 +42,36 @@ def _directive_from(qa: dict, judge: dict, sim: dict) -> list[dict]:
         directive.append(
             {"op": "tighten_gap", "out_s": span["after_out_s"], "quote": span["before"], "reason": f"{span['gap_s']}s dead air"}
         )
-    if not sim["verdicts"]["duration_in_band"]:
-        if sim["duration_s"] > sim["target_s"]:
-            over = sim["duration_s"] - sim["target_s"]
-            heavy = sim.get("beat_density", [])[:4]
-            heavy_hint = "; ".join(f"{b['label']} ({b['kept_s']:.0f}s @ {b['wpm']:.0f}wpm)" for b in heavy)
+    # v0.3: length is a CEILING constraint, not a target band. Being short is fine (never
+    # restore to pad). Over the ceiling → structural compression naming the heaviest beats.
+    ceiling_s = sim.get("ceiling_s", sim.get("target_s", 0))
+    if not sim.get("under_ceiling", True):
+        over = sim["duration_s"] - ceiling_s
+        heavy = sim.get("beat_density", [])[:4]
+        heavy_hint = "; ".join(f"{b['label']} ({b['kept_s']:.0f}s @ {b['wpm']:.0f}wpm)" for b in heavy)
+        directive.append(
+            {
+                "op": "drop_beat",
+                "reason": (
+                    f"video is {over:.0f}s OVER the {ceiling_s:.0f}s ceiling ({sim['duration_s']:.0f}s). "
+                    f"Trims will not get there — remove roughly {over:.0f}s of content structurally. "
+                    f"The longest beats are: {heavy_hint}. Attack these first: where a beat is the creator "
+                    "reading on-screen text/lists aloud, keep the intro line + the top 3 most important items and "
+                    "CUT THE REST (as ordinary cuts — no new ops); collapse repeated explanations to their best "
+                    "telling; cut the weakest beats entirely. Keep hook, payoffs, CTA."
+                ),
+            }
+        )
+    else:
+        # under ceiling: still nudge compression of information-light, fast-narrated runs so
+        # the pacing quality signal can climb without a length violation
+        light = [b for b in sim.get("beat_density", []) if b.get("wpm", 0) > 200 and b.get("kept_s", 0) > 45]
+        if light:
+            hint = "; ".join(f"{b['label']} ({b['kept_s']:.0f}s @ {b['wpm']:.0f}wpm)" for b in light[:3])
             directive.append(
-                {
-                    "op": "drop_beat",
-                    "reason": (
-                        f"video is {over:.0f}s OVER target ({sim['duration_s']:.0f}s vs {sim['target_s']:.0f}s). "
-                        f"Trims will not get there — remove roughly {over:.0f}s of content structurally. "
-                        f"The longest beats are: {heavy_hint}. Attack these first: where a beat is the creator "
-                        "reading on-screen text/lists aloud, keep the intro and the most important 2-3 items and cut "
-                        "the rest; collapse repeated explanations to their best telling; cut the weakest beats entirely. "
-                        "Keep hook, payoffs, CTA."
-                    ),
-                }
-            )
-        else:
-            directive.append(
-                {"op": "restore", "reason": f"video {sim['duration_s']:.0f}s under band — restore the weakest RECOMMENDED cuts"}
+                {"op": "drop_beat", "reason": (
+                    f"These beats read fast and long (screen-narration): {hint}. Compress each to its intro "
+                    "line + top 3 items as ordinary cuts; keep the insight, drop the read-through.")}
             )
     for d in judge.get("defects", []):
         if d["severity"] == "major" or len(directive) < 8:
@@ -96,9 +106,13 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         receipts.log("target_clamped", requested_s=round(target_s), feasible_s=round(feasible_s), speech_s=round(speech_s))
         target_s = round(feasible_s * 0.8)
 
+    ceiling_s = cfg.loop.length_ceiling_minutes * 60
     decisions = None
     start_iter = 1
     directive: list[dict] = []
+    # v0.3: plateau state survives resume so a resumed run doesn't re-run the full cap
+    prev_best_q = state.data.get("prev_best_q", -1.0)
+    no_improve = state.data.get("no_improve", 0)
     if resume and state.data["iteration"] >= 1:
         prev_dir = run_dir / "iterations" / f"{state.data['iteration']:02d}"
         if (prev_dir / "edit-decisions.json").exists():
@@ -118,8 +132,19 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
                     run_dir, provider, receipts, target_s,
                     retake_candidates(words), filler_candidates(words), beats,
                 )
-            elif directive:
-                decisions = revise_decisions(run_dir, provider, receipts, decisions, directive, iteration)
+            else:
+                # v0.3 branch-from-best: revise the BEST-so-far decisions using that best's
+                # own directive, so a regression is never carried forward (autoresearch
+                # keep-or-discard). Falls back to the in-memory pair when no best file exists.
+                base, base_directive = decisions, directive
+                if state.data["attempts"]:
+                    bdir = run_dir / "iterations" / f"{state.best()['iteration']:02d}"
+                    if (bdir / "edit-decisions.json").exists():
+                        base = load_decisions(bdir / "edit-decisions.json")
+                    if (bdir / "revision-directive.json").exists():
+                        base_directive = json.loads((bdir / "revision-directive.json").read_text())
+                if base_directive:
+                    decisions = revise_decisions(run_dir, provider, receipts, base, base_directive, iteration)
             decisions.x_eddy.iteration = iteration
             decisions, edl = compile_with_repair(run_dir, decisions, provider, receipts, cfg)
         except CompileError as e:
@@ -150,21 +175,46 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         judge = run_judge(provider, receipts, sim, decisions, edl, kept, cfg)
         (iter_dir / "judge.json").write_text(json.dumps(judge, indent=1))
 
-        judge_ok = judge["weighted"] >= threshold or judge.get("advisory_only", False)
+        qual = quality_score(sim, judge, kept, decisions, phrases, cfg)
+        (iter_dir / "quality.json").write_text(json.dumps(qual, indent=1))
+
+        # v0.3 ship gate: deterministic gates green, a STABLE judge over threshold, and under
+        # the length ceiling. The old advisory_only auto-pass is gone — an unstable judge
+        # can never certify "done."
         gates_ok = qa["pass"]
-        state.record_attempt(iteration, gates_ok, judge["weighted"], edl.total_duration_s - target_s)
+        judge_ok = (not judge.get("judge_unstable")) and judge["weighted"] >= threshold
+        under_ceiling = edl.total_duration_s <= ceiling_s
+        over_ceiling_s = max(0.0, edl.total_duration_s - ceiling_s)
+        state.record_attempt(
+            iteration, gates_ok, judge["weighted"], edl.total_duration_s - target_s,
+            quality=qual["quality"], components=qual["components"],
+            judge_unstable=bool(judge.get("judge_unstable")), over_ceiling_s=over_ceiling_s,
+        )
         receipts.log(
-            "gate", iteration=iteration, deterministic=gates_ok,
+            "gate", iteration=iteration, deterministic=gates_ok, quality=qual["quality"],
             judge_score=judge["weighted"], judge_unstable=judge.get("judge_unstable"),
-            done=gates_ok and judge_ok,
+            under_ceiling=under_ceiling, done=gates_ok and judge_ok and under_ceiling,
         )
 
-        if gates_ok and judge_ok:
+        # clean-ship check runs BEFORE the plateau break so a passing iteration is never
+        # thrown away by a plateau stop
+        if gates_ok and judge_ok and under_ceiling:
             state.set_phase("loop_done")
             return iter_dir
 
         directive = _directive_from(qa, judge, sim)
         (iter_dir / "revision-directive.json").write_text(json.dumps(directive, indent=1))
+
+        # v0.3 plateau: stop when best quality hasn't improved for plateau_rounds rounds
+        cur_best_q = state.best().get("quality") or 0.0
+        if cur_best_q > prev_best_q + 1e-6:
+            no_improve, prev_best_q = 0, cur_best_q
+        else:
+            no_improve += 1
+        state.set_plateau(no_improve, prev_best_q)
+        if no_improve >= cfg.loop.plateau_rounds:
+            receipts.log("plateau_stop", iteration=iteration, best_quality=cur_best_q, rounds=no_improve)
+            break
 
     best = state.best()
     chosen = run_dir / "iterations" / f"{best['iteration']:02d}"
@@ -207,8 +257,26 @@ def autonomous_run(
     chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume)
     print(f"chosen iteration: {chosen.name}")
 
-    state.set_phase("final_render")
     edl = load_edl(chosen / "edl.json")
+    chosen_decisions = load_decisions(chosen / "edit-decisions.json")
+
+    # v0.3 final-ship panel: 3 independent lenses vote on the chosen best (once). Advisory —
+    # records dissent to final/ship-panel.json but never blocks delivery.
+    if cfg.loop.ship_panel and (chosen / "sim-report.json").exists():
+        state.set_phase("ship_panel")
+        provider = get_editorial_provider(cfg, receipts)
+        sim = json.loads((chosen / "sim-report.json").read_text())
+        kept = cut_transcript(edl, load_phrases(run_dir))
+        try:
+            panel = run_ship_panel(provider, receipts, sim, chosen_decisions, edl, kept, cfg)
+            (run_dir / "final").mkdir(parents=True, exist_ok=True)
+            (run_dir / "final" / "ship-panel.json").write_text(json.dumps(panel, indent=1))
+            if not panel["ships"]:
+                print(f"ship panel dissent ({panel['yes']}/{panel['of']} ship) — delivering best anyway")
+        except Exception as e:
+            receipts.log("ship_panel_failed", error=str(e)[:300])
+
+    state.set_phase("final_render")
     final = run_dir / "final" / "video.mp4"
     render_edl(edl, final, run_dir, cfg.render, receipts=receipts, proxy=False)
     (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
@@ -220,7 +288,6 @@ def autonomous_run(
 
         studio_sound(final, run_dir, cfg.audio, receipts=receipts)
 
-    chosen_decisions = load_decisions(chosen / "edit-decisions.json")
     final_qa = run_deterministic(
         final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
         check_loudness=cfg.audio.studio_sound,

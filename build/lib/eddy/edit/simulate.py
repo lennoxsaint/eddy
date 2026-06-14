@@ -17,6 +17,10 @@ def boundary_cards(edl: Edl, phrases: list[dict]) -> list[dict]:
     """One card per splice: text running into the cut, what was removed, text out."""
     cards = []
     for left, right in zip(edl.ranges, edl.ranges[1:]):
+        # a cold-open is a deliberate reorder (right precedes left in source time); it is a
+        # hard cut by design, not a splice to evaluate for continuity
+        if right.start < left.start:
+            continue
         before = [p["text"] for p in phrases if p["end"] <= left.end + 0.05][-2:]
         removed = [p["text"] for p in phrases if left.end - 0.05 < p["start"] and p["end"] < right.start + 0.05]
         after = [p["text"] for p in phrases if p["start"] >= right.start - 0.05][:2]
@@ -45,19 +49,46 @@ def simulate(
     kept = cut_transcript(edl, phrases)
     cards = boundary_cards(edl, phrases)
 
-    # dead air remaining inside keep ranges
+    # dead air remaining inside keep ranges — silence inside a protected moment is
+    # a deliberate visual beat (demo footage), not a defect. The exception is NARROW:
+    # the protected span must explicitly cover the silence, not merely sit within ~1s,
+    # so "mouth moving, no sound" can no longer hide behind a nearby protection.
     dead_air = []
     for a, b in zip(kept, kept[1:]):
         gap = b["out_start"] - a["out_end"]
         if gap > cfg.gates.max_dead_air_s:
-            dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
+            src = a["end"]  # raw-timeline end of the phrase before the gap
+            protected = any(pm.start_s <= src <= pm.end_s for pm in decisions.protected_moments)
+            if not protected:
+                dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
 
-    # boundary handles below the hard-fail threshold
+    # the 30ms boundary fade absorbs glued-word bleed: hard-fail only handles below
+    # the fade floor; sub-min_boundary_handle handles are reported as warnings
+    FADE_FLOOR_S = 0.03
     thin_handles = [
         c for c in cards
-        if 0 < c["start_handle_s"] < cfg.gates.min_boundary_handle_s
-        or 0 < c["end_handle_s"] < cfg.gates.min_boundary_handle_s
+        if 0 < c["start_handle_s"] < FADE_FLOOR_S or 0 < c["end_handle_s"] < FADE_FLOOR_S
     ]
+    handle_warnings = [
+        c for c in cards
+        if FADE_FLOOR_S <= c["start_handle_s"] < cfg.gates.min_boundary_handle_s
+        or FADE_FLOOR_S <= c["end_handle_s"] < cfg.gates.min_boundary_handle_s
+    ]
+
+    # beat density: kept seconds + words-per-minute per beat. Long beats are the
+    # structural-cut candidates when over target; sustained fast WPM flags "reading the
+    # screen aloud" runs the editorial brain should compress to the essential items.
+    beat_density = []
+    for beat in decisions.x_eddy.beats:
+        bs, be = beat.get("start_s", 0), beat.get("end_s", 0)
+        in_beat = [p for p in kept if bs <= p["start"] < be]
+        if not in_beat:
+            continue
+        kept_s = sum(p["out_end"] - p["out_start"] for p in in_beat)
+        nwords = sum(len(p["text"].split()) for p in in_beat)
+        wpm = round(nwords / kept_s * 60, 1) if kept_s > 0 else 0
+        beat_density.append({"label": beat.get("label", ""), "kept_s": round(kept_s, 1), "wpm": wpm})
+    beat_density.sort(key=lambda b: b["kept_s"], reverse=True)
 
     duration = edl.total_duration_s
     lo, hi = cfg.loop.duration_band
@@ -74,10 +105,12 @@ def simulate(
         "band_s": [round(lo * target_s, 1), round(hi * target_s, 1)],
         "kept_phrases": len(kept),
         "ranges": len(edl.ranges),
-        "removed_total_s": round(sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:])), 1),
+        "removed_total_s": round(sum(max(0.0, b.start - a.end) for a, b in zip(edl.ranges, edl.ranges[1:])), 1),
         "boundary_cards": cards,
+        "beat_density": beat_density,
         "dead_air": dead_air,
         "thin_handles": thin_handles,
+        "handle_warnings": len(handle_warnings),
         "verdicts": verdicts,
         "pass": all(verdicts.values()),
     }

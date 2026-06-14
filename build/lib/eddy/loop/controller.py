@@ -8,6 +8,10 @@ from pathlib import Path
 
 from eddy.config import load_config
 from eddy.edit.compiler import CompileError, cut_transcript
+
+
+class EditLoopError(RuntimeError):
+    """Raised when the loop cannot produce any compilable edit to ship."""
 from eddy.edit.cutplan import (
     beat_map,
     compile_with_repair,
@@ -20,7 +24,7 @@ from eddy.edit.simulate import save_report, simulate
 from eddy.loop.receipts import Receipts
 from eddy.loop.state import RunState
 from eddy.media.frames import boundary_contact_sheet
-from eddy.providers.base import get_provider
+from eddy.providers.base import get_editorial_provider
 from eddy.qa.deterministic import run_deterministic
 from eddy.qa.deterministic import save as save_qa
 from eddy.qa.judge import run_judge
@@ -39,8 +43,21 @@ def _directive_from(qa: dict, judge: dict, sim: dict) -> list[dict]:
         )
     if not sim["verdicts"]["duration_in_band"]:
         if sim["duration_s"] > sim["target_s"]:
+            over = sim["duration_s"] - sim["target_s"]
+            heavy = sim.get("beat_density", [])[:4]
+            heavy_hint = "; ".join(f"{b['label']} ({b['kept_s']:.0f}s @ {b['wpm']:.0f}wpm)" for b in heavy)
             directive.append(
-                {"op": "tighten_gap", "reason": f"video {sim['duration_s']:.0f}s vs target {sim['target_s']:.0f}s — cut more (use OPTIONAL tier candidates)"}
+                {
+                    "op": "drop_beat",
+                    "reason": (
+                        f"video is {over:.0f}s OVER target ({sim['duration_s']:.0f}s vs {sim['target_s']:.0f}s). "
+                        f"Trims will not get there — remove roughly {over:.0f}s of content structurally. "
+                        f"The longest beats are: {heavy_hint}. Attack these first: where a beat is the creator "
+                        "reading on-screen text/lists aloud, keep the intro and the most important 2-3 items and cut "
+                        "the rest; collapse repeated explanations to their best telling; cut the weakest beats entirely. "
+                        "Keep hook, payoffs, CTA."
+                    ),
+                }
             )
         else:
             directive.append(
@@ -60,7 +77,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     cfg = load_config()
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
-    provider = get_provider(cfg)
+    provider = get_editorial_provider(cfg, receipts)  # beat map/decisions/revise/judge; mechanical stays local
     target_s = (target_minutes or cfg.loop.default_target_minutes) * 60
     threshold = cfg.loop.judge_threshold
 
@@ -68,15 +85,28 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     phrases = load_phrases(run_dir)
     beats = beat_map(run_dir, provider, receipts)
 
+    # a target above what the footage actually contains is unreachable — clamp to
+    # the speakable content (speech + tightened-gap allowance) so the duration
+    # band is honest and directives never demand restoring content that isn't there
+    speech_s = sum(p["end"] - p["start"] for p in phrases)
+    feasible_s = speech_s * 1.08  # tightened gaps remain between phrases
+    if target_s > feasible_s * 0.95:
+        # asking for more than the footage holds: clamp to 0.8x feasible so the loop
+        # still demands real compression rather than settling for a loose all-content cut
+        receipts.log("target_clamped", requested_s=round(target_s), feasible_s=round(feasible_s), speech_s=round(speech_s))
+        target_s = round(feasible_s * 0.8)
+
     decisions = None
     start_iter = 1
+    directive: list[dict] = []
     if resume and state.data["iteration"] >= 1:
         prev_dir = run_dir / "iterations" / f"{state.data['iteration']:02d}"
         if (prev_dir / "edit-decisions.json").exists():
             decisions = load_decisions(prev_dir / "edit-decisions.json")
             start_iter = state.data["iteration"] + 1
-
-    directive: list[dict] = []
+            directive_path = prev_dir / "revision-directive.json"
+            if directive_path.exists():
+                directive = json.loads(directive_path.read_text())
     for iteration in range(start_iter, cfg.loop.max_iterations + 1):
         iter_dir = run_dir / "iterations" / f"{iteration:02d}"
         iter_dir.mkdir(parents=True, exist_ok=True)
@@ -111,7 +141,9 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         except Exception as e:
             receipts.log("contact_sheet_failed", error=str(e)[:200])
 
-        qa = run_deterministic(proxy, edl, run_dir, cfg, sim_report=sim)
+        qa = run_deterministic(
+            proxy, edl, run_dir, cfg, sim_report=sim, protected_count=len(decisions.protected_moments)
+        )
         save_qa(qa, iter_dir)
 
         kept = cut_transcript(edl, phrases)
@@ -135,9 +167,23 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         (iter_dir / "revision-directive.json").write_text(json.dumps(directive, indent=1))
 
     best = state.best()
+    chosen = run_dir / "iterations" / f"{best['iteration']:02d}"
+    if not (chosen / "edl.json").exists():
+        # Every iteration failed to compile a valid EDL — abort cleanly instead of
+        # crashing later on a missing edl.json in final_render. The usual cause is the
+        # editorial model emitting decisions the compiler rejects (e.g. cuts inside
+        # declared protected_moments); a stronger editorial brain resolves it.
+        receipts.log("loop_no_compilable_edl", iterations=cfg.loop.max_iterations)
+        state.set_phase("loop_failed_no_edl")
+        raise EditLoopError(
+            f"No iteration produced a compilable EDL after {cfg.loop.max_iterations} attempts. "
+            "The editorial model kept emitting decisions the compiler rejected (see receipts "
+            "'iteration_failed' problems, e.g. cuts inside protected_moments). Set "
+            "provider.editorial=claude_cli (or auto) for a stronger brain, then re-run."
+        )
     receipts.log("best_attempt", **best, shipped_with_failures=not best["gates_passed"])
     state.set_phase("loop_done_best_attempt")
-    return run_dir / "iterations" / f"{best['iteration']:02d}"
+    return chosen
 
 
 def autonomous_run(
@@ -167,7 +213,18 @@ def autonomous_run(
     render_edl(edl, final, run_dir, cfg.render, receipts=receipts, proxy=False)
     (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
 
-    final_qa = run_deterministic(final, edl, run_dir, cfg)
+    # Studio Sound: full-track audio enhancement on the rendered output (non-fatal)
+    if cfg.audio.studio_sound:
+        state.set_phase("studio_sound")
+        from eddy.render.audio import studio_sound
+
+        studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+
+    chosen_decisions = load_decisions(chosen / "edit-decisions.json")
+    final_qa = run_deterministic(
+        final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
+        check_loudness=cfg.audio.studio_sound,
+    )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")
     receipts.log("final_render", path=str(final), qa_pass=final_qa["pass"])
 
