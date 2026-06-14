@@ -44,20 +44,22 @@ def test_pacing_drag_lowers_score():
     assert q(draggy)["components"]["pacing"] < q(clean)["components"]["pacing"]
 
 
-def test_over_ceiling_penalizes_being_short_does_not():
+def test_length_does_not_zero_quality_and_is_not_in_score():
+    # the v0.3 dogfood bug: an over-ceiling cut must KEEP a real quality gradient, not be zeroed.
     ceiling = CFG.loop.length_ceiling_minutes * 60
+    way_over = q(mk_sim(duration_s=ceiling * 3))  # 3x over ceiling, like the dogfood (~42min vs 14)
+    assert way_over["quality"] > 0.0  # not saturated to zero
+    # length is reported for ranking but is NOT folded into the score
+    assert way_over["over_ceiling_s"] > 0.0
     under = q(mk_sim(duration_s=ceiling - 120))
-    over = q(mk_sim(duration_s=ceiling * 2))
-    assert under["ceiling_penalty"] == 0.0
-    assert over["ceiling_penalty"] > 0.0
-    assert over["quality"] < under["quality"]
+    assert way_over["quality"] == under["quality"]  # same edit, length doesn't move quality
 
 
 def test_shorter_without_removing_defect_is_not_rewarded():
-    # same single dead-air defect, just shorter (both under ceiling) -> no length bonus
+    # same single dead-air defect, just shorter -> no length bonus in quality
     longer = q(mk_sim(dead_air=1, duration_s=400))
     shorter = q(mk_sim(dead_air=1, duration_s=80))
-    assert shorter["quality"] <= longer["quality"] + 1e-9
+    assert shorter["quality"] == longer["quality"]
 
 
 def test_hook_floor_vs_present():

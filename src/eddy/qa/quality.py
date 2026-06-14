@@ -5,9 +5,9 @@ dead-air, duration) plus a deterministic transcript scan, so the model cannot ga
 monotonic in a defect count (adding a defect can never raise the score). The critic half is the
 recalibrated, adversarial LLM judge (capped when unstable so it can't certify "done").
 
-Length is a CONSTRAINT, never a reward: a penalty applies only ABOVE the ceiling, and being
-short earns nothing. This is what lets the loop maximize quality without farming a "shorter = better"
-bonus (see edit/simulate.py — duration is no longer a gate).
+Length is a CONSTRAINT handled OUTSIDE this score (the loop's under_ceiling clean-ship check, the
+over_ceiling_s ranking tiebreak, and the compression directive) — never folded into quality, so an
+over-ceiling cut keeps a meaningful gradient instead of being zeroed. Being short earns nothing here.
 """
 
 from __future__ import annotations
@@ -110,7 +110,15 @@ def _signal_closure(kept: list[dict], decisions: EditDecisions) -> float:
 
 def quality_score(sim: dict, judge: dict, kept: list[dict], decisions: EditDecisions,
                   phrases: list[dict], cfg) -> dict:
-    """Hybrid edit-quality score. Returns {quality, objective, critic, ceiling_penalty, components}."""
+    """Hybrid EDIT-quality score: 0.6*objective + 0.4*critic on 0-10 (locked decision #2).
+
+    Length is NOT part of this score — it is a separate CONSTRAINT enforced by the loop
+    (the under_ceiling clean-ship requirement + the over_ceiling_s ranking tiebreak) and pushed
+    by the compression directive. An earlier design subtracted a ceiling penalty here, but it
+    saturated to 10 for any cut >2.5x the ceiling, zeroing quality for every over-ceiling
+    iteration and destroying the gradient the loop needs. Keeping quality as pure edit quality
+    means a 37-min cut and a 50-min cut are differentiated by how GOOD the edit is, while length
+    is handled where it belongs."""
     comp = {
         "dead_air": _signal_dead_air(sim),
         "pacing": _signal_pacing(sim, kept, decisions),
@@ -125,16 +133,13 @@ def quality_score(sim: dict, judge: dict, kept: list[dict], decisions: EditDecis
     if judge.get("judge_unstable"):
         critic = min(critic, 5.0)
 
-    ceiling_s = cfg.loop.length_ceiling_minutes * 60
-    over = max(0.0, sim.get("duration_s", 0.0) - ceiling_s)
-    ceiling_penalty = min(10.0, 4.0 * (over / ceiling_s)) if ceiling_s > 0 else 0.0
-
     wo, wc = cfg.loop.quality_weight_objective, cfg.loop.quality_weight_critic
-    quality = max(0.0, min(10.0, wo * objective + wc * critic - ceiling_penalty))
+    quality = max(0.0, min(10.0, wo * objective + wc * critic))
+    ceiling_s = cfg.loop.length_ceiling_minutes * 60
     return {
         "quality": round(quality, 3),
         "objective": round(objective, 3),
         "critic": round(critic, 3),
-        "ceiling_penalty": round(ceiling_penalty, 3),
+        "over_ceiling_s": round(max(0.0, sim.get("duration_s", 0.0) - ceiling_s), 1),
         "components": {k: round(v, 2) for k, v in comp.items()},
     }
