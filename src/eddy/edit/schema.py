@@ -65,6 +65,7 @@ class EditDecisions(BaseModel):
     retakes: list[Retake] = Field(default_factory=list)
     cuts: list[Cut] = Field(default_factory=list)
     moves: list[dict] = Field(default_factory=list)  # unsupported in v1 renderer; kept for schema parity
+    cold_open: dict = Field(default_factory=dict)  # {start_s, end_s, reason}: one payoff clip pulled to the front
     protected_moments: list[ProtectedMoment] = Field(default_factory=list)
     preview_teaser: dict = Field(default_factory=dict)
     shorts_candidates: list[ShortsCandidate] = Field(default_factory=list)

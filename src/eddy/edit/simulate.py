@@ -17,6 +17,10 @@ def boundary_cards(edl: Edl, phrases: list[dict]) -> list[dict]:
     """One card per splice: text running into the cut, what was removed, text out."""
     cards = []
     for left, right in zip(edl.ranges, edl.ranges[1:]):
+        # a cold-open is a deliberate reorder (right precedes left in source time); it is a
+        # hard cut by design, not a splice to evaluate for continuity
+        if right.start < left.start:
+            continue
         before = [p["text"] for p in phrases if p["end"] <= left.end + 0.05][-2:]
         removed = [p["text"] for p in phrases if left.end - 0.05 < p["start"] and p["end"] < right.start + 0.05]
         after = [p["text"] for p in phrases if p["start"] >= right.start - 0.05][:2]
@@ -101,7 +105,7 @@ def simulate(
         "band_s": [round(lo * target_s, 1), round(hi * target_s, 1)],
         "kept_phrases": len(kept),
         "ranges": len(edl.ranges),
-        "removed_total_s": round(sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:])), 1),
+        "removed_total_s": round(sum(max(0.0, b.start - a.end) for a, b in zip(edl.ranges, edl.ranges[1:])), 1),
         "boundary_cards": cards,
         "beat_density": beat_density,
         "dead_air": dead_air,

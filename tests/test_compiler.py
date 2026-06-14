@@ -251,3 +251,49 @@ def test_silence_inside_protected_moment_survives():
     )
     removed = sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:]))
     assert removed < 0.3  # protected silence preserved
+
+
+# --- Workstream D: setup-payoff protection + scoped cold-open ---
+
+
+def test_cold_open_prepends_payoff_clip():
+    """A cold_open clip is rendered FIRST and also stays in the body (teaser + context)."""
+    words = make_words(n=120, word_s=0.3, gap_s=0.1)
+    # pick a payoff clip late in the video: words 100..108
+    cs, ce = words[100]["start"], words[108]["end"]
+    d = EditDecisions(cold_open={"start_s": cs, "end_s": ce, "reason": "the hook"})
+    edl = compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES, tighten_gaps=False)
+    # first range is the cold open, sourced from late in the timeline
+    assert edl.ranges[0].beat == "COLD_OPEN"
+    assert edl.ranges[0].start >= words[99]["end"]
+    # the body still runs from the top (a later range starts near 0)
+    assert any(r.start <= words[1]["start"] for r in edl.ranges[1:])
+    # output order (cut transcript) stays monotonic despite the source reorder
+    kept = cut_transcript(edl, [{"start": w["start"], "end": w["end"], "text": w["word"]} for w in words])
+    outs = [p["out_start"] for p in kept]
+    assert outs == sorted(outs)
+
+
+def test_cold_open_capped_at_15s():
+    words = make_words(n=200, word_s=0.3, gap_s=0.1)
+    cs = words[100]["start"]
+    ce = words[180]["end"]  # ~32s span, must be capped
+    d = EditDecisions(cold_open={"start_s": cs, "end_s": ce})
+    edl = compile_edl(d, words, "cam.mp4", total_dur(words), RENDER, GATES, tighten_gaps=False)
+    cold = edl.ranges[0]
+    assert cold.beat == "COLD_OPEN"
+    assert cold.end - cold.start <= 15.5
+
+
+def test_setup_protection_blocks_orphaning_cut():
+    """A cut spanning a setup line is voided by the auto setup-protection."""
+    from eddy.edit.protect import setup_protections
+    phrases = [
+        {"start": 0.0, "end": 2.0, "text": "intro words here we go"},
+        {"start": 2.0, "end": 4.0, "text": "now let's look at the scripts"},
+        {"start": 4.0, "end": 6.0, "text": "and here is the actual script content"},
+    ]
+    prot = setup_protections(phrases)
+    assert any("scripts" in p.reason for p in prot)
+    # the setup phrase 2.0-4.0 is protected
+    assert any(p.start_s <= 3.0 <= p.end_s for p in prot)

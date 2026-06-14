@@ -103,8 +103,10 @@ def compile_edl(
     gates_cfg: GatesConfig,
     tighten_gaps: bool = True,
     silence_spans: list[dict] | None = None,
+    extra_protected: list | None = None,
 ) -> Edl:
     problems: list[dict] = []
+    protected = list(decisions.protected_moments) + list(extra_protected or [])
 
     removes: list[tuple[float, float]] = []
     for start, end, label in decisions.all_remove_intervals():
@@ -123,7 +125,7 @@ def compile_edl(
     # survives", not "nothing inside may be touched". Models routinely protect whole
     # beats wall-to-wall; a cut is only voided when it would remove the MAJORITY of
     # the protected span. Smaller bites inside a protection are normal editing.
-    removes = _clip_by_protected(removes, decisions.protected_moments)
+    removes = _clip_by_protected(removes, protected)
 
     # Audio-truth silence removal: collapse word-free silent spans (false starts,
     # swallowed words, pre-speech lip movement) that inter-word gap tightening misses.
@@ -132,7 +134,7 @@ def compile_edl(
         sil = silence_cut_intervals(
             silence_spans, words, gates_cfg.silence_min_cut_s, gates_cfg.silence_handle_s
         )
-        removes += _clip_by_protected(sil, decisions.protected_moments)
+        removes += _clip_by_protected(sil, protected)
 
     if tighten_gaps:
         removes += gap_tighten_intervals(words)
@@ -180,6 +182,26 @@ def compile_edl(
             merged[-1].end_handle_s = r.end_handle_s
         else:
             merged.append(r)
+
+    # Scoped cold-open: pull ONE strong payoff clip (<=15s) to the very front as a hook.
+    # It also stays in its natural position in the body (teaser-then-context). Prepended
+    # after the source-order merge so it deliberately breaks monotonic order.
+    co = decisions.cold_open or {}
+    if "start_s" in co and "end_s" in co and float(co["end_s"]) > float(co["start_s"]):
+        cs = max(0.0, float(co["start_s"]))
+        ce = min(float(co["end_s"]), cs + 15.0, duration_s)
+        snapped = _snap_to_words(cs, ce, words, pad_before, pad_after, duration_s)
+        if snapped is not None:
+            ns, ne, sh, eh = snapped
+            if ne - ns >= 1.0:
+                merged.insert(
+                    0,
+                    EdlRange(
+                        start=round(ns, 3), end=round(ne, 3),
+                        start_handle_s=round(sh, 3), end_handle_s=round(eh, 3),
+                        beat="COLD_OPEN", reason=co.get("reason", "cold-open hook"),
+                    ),
+                )
 
     total = sum(r.end - r.start for r in merged)
     return Edl(

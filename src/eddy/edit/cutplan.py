@@ -9,6 +9,7 @@ from pathlib import Path
 
 from eddy.config import EddyConfig, load_config
 from eddy.edit.compiler import CompileError, compile_edl
+from eddy.edit.protect import setup_protections
 from eddy.edit.schema import EditDecisions, EddyMeta, save
 from eddy.loop.receipts import Receipts
 from eddy.media.probe import duration_s as probe_duration
@@ -83,6 +84,14 @@ DECISIONS_SCHEMA = {
                     "end_s": {"type": "number"},
                     "reason": {"type": "string"},
                 },
+            },
+        },
+        "cold_open": {
+            "type": "object",
+            "properties": {
+                "start_s": {"type": "number"},
+                "end_s": {"type": "number"},
+                "reason": {"type": "string"},
             },
         },
         "shorts_candidates": {
@@ -197,10 +206,16 @@ def compile_with_repair(
     src = m["sources"]["camera"]
     dur = probe_duration(Path(src))
     silence_spans = audio_silence_map(run_dir)
+    # deterministic setup→payoff integrity: protect transition/setup lines so cuts can't
+    # orphan the payoff they introduce
+    extra_protected = setup_protections(load_phrases(run_dir))
 
     for attempt in range(3):
         try:
-            edl = compile_edl(decisions, words, src, dur, cfg.render, cfg.gates, silence_spans=silence_spans)
+            edl = compile_edl(
+                decisions, words, src, dur, cfg.render, cfg.gates,
+                silence_spans=silence_spans, extra_protected=extra_protected,
+            )
             return decisions, edl
         except CompileError as e:
             receipts.log("compile_error", attempt=attempt, problems=e.problems[:10])

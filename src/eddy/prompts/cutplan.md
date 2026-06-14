@@ -29,12 +29,23 @@ Editorial constitution:
    Declare these as protected_moments - SHORT, SPECIFIC moments (a sentence or exchange,
    max ~30 seconds each, total protected well under 20% of the runtime). NEVER protect a
    whole beat or section: broad protections void your own cuts and the edit stops working.
+   SETUP→PAYOFF INTEGRITY: never orphan a payoff by cutting the line that introduces it. If you
+   keep a section, keep the transition that sets it up ("now let's look at the scripts", "let's run
+   the same prompt with GPT 5.5") — otherwise the kept content appears with no context and feels
+   random. If you keep content that's referenced LATER (titles/scores read out, then compared at
+   the end), keep that content too.
 6. Phrases must survive or die WHOLE. Set cut start_s/end_s on phrase timestamps (copy them
    from the transcript; never invent times). `quote` = first ~8 words of the removed passage.
 7. Mark 2-5 shorts_candidates: self-contained 20-59s passages with a hook and a complete payoff.
    If the creator says "hook for short" (or "book for short"), the passage after the marker is a
    candidate and the marker phrase itself must be cut (tier MANDATORY).
 8. Long silences are auto-tightened by the compiler. Don't write cuts for pure silence.
+9. COLD OPEN (optional but encouraged): find the single strongest, most surprising, most concrete
+   line in the whole video — the one that would stop a scroll. If it is NOT already in the first
+   ~90 seconds, set `cold_open` to its {start_s, end_s} (one clean sentence/exchange, max ~15s).
+   It will be pulled to the very front as a hook; it also stays in its natural place for context.
+   Pick a line that states the stakes or the payoff (e.g. "the smartest model in the world can't
+   read a PDF about itself"), not a setup line. Leave `cold_open` empty if nothing qualifies.
 
 Return ONLY JSON matching the provided schema: target_runtime_seconds, retakes[], cuts[],
-protected_moments[], shorts_candidates[].
+protected_moments[], cold_open, shorts_candidates[].
