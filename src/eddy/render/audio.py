@@ -108,11 +108,15 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             )
         run_ffmpeg(["-i", str(src), "-af", f"{eq},{ln2}", "-ar", "48000", str(clean)], run_dir=run_dir, receipts=receipts)
 
-        # remux cleaned audio over the untouched video
+        # remux cleaned audio over the untouched video. -shortest bounds the output to the
+        # video stream: the loudnorm/EQ filter chain emits ~1s of trailing tail past the video
+        # length, which would otherwise overrun the container and trip the av_drift gate. The
+        # source audio came from the video, so the trimmed tail carries no speech.
         out = work / "out.mp4"
         run_ffmpeg(
             ["-i", str(video), "-i", str(clean), "-map", "0:v:0", "-map", "1:a:0",
-             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)],
+             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
+             "-movflags", "+faststart", str(out)],
             run_dir=run_dir, receipts=receipts,
         )
         out.replace(video)
