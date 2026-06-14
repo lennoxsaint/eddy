@@ -87,6 +87,18 @@ class ShortsConfig(BaseModel):
     max_s: float = 59.0
 
 
+class AudioConfig(BaseModel):
+    """Local 'studio sound' — denoise/dereverb + speech EQ + loudness normalization."""
+    studio_sound: bool = True
+    deep_filter_binary: str = "deep-filter"  # DeepFilterNet CLI if present; else ffmpeg-only
+    target_lufs: float = -14.0  # YouTube integrated loudness
+    true_peak_db: float = -1.5
+    lra: float = 11.0
+    highpass_hz: int = 80
+    presence_hz: int = 3500  # gentle speech-presence lift
+    presence_gain_db: float = 2.0
+
+
 class ThumbnailsConfig(BaseModel):
     enabled: bool = True
     gemini_model: str = "gemini-3.1-flash-image-preview"
@@ -117,6 +129,7 @@ class EddyConfig(BaseModel):
     loop: LoopConfig = Field(default_factory=LoopConfig)
     render: RenderConfig = Field(default_factory=RenderConfig)
     shorts: ShortsConfig = Field(default_factory=ShortsConfig)
+    audio: AudioConfig = Field(default_factory=AudioConfig)
     thumbnails: ThumbnailsConfig = Field(default_factory=ThumbnailsConfig)
     gates: GatesConfig = Field(default_factory=GatesConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)

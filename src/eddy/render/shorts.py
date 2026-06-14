@@ -234,6 +234,12 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         final = out_root / f"{slug}.mp4"
         burn_captions(base, final, events, cursor, asset_dir, run_dir, caption_y=None if dual else caption_y)
 
+        # Studio Sound on the assembled short (full-track, non-fatal)
+        if cfg.audio.studio_sound:
+            from eddy.render.audio import studio_sound
+
+            studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+
         final_summary = stream_summary(final)
         entry = {
             "slug": slug,

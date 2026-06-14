@@ -99,6 +99,15 @@ def silent_motion_gate(
     }
 
 
+def loudness_gate(video: Path, target_lufs: float, tol: float = 2.0) -> dict:
+    """Output integrated loudness within target +/- tol LUFS (post Studio Sound)."""
+    from eddy.render.audio import measure_lufs
+
+    lufs = measure_lufs(video)
+    ok = lufs is not None and abs(lufs - target_lufs) <= tol
+    return {"gate": "loudness", "pass": ok, "lufs": lufs, "target": target_lufs, "tol": tol}
+
+
 def run_deterministic(
     video: Path,
     edl: Edl,
@@ -106,6 +115,7 @@ def run_deterministic(
     cfg: EddyConfig,
     sim_report: dict | None = None,
     protected_count: int = 0,
+    check_loudness: bool = False,
 ) -> dict:
     gates = [
         probe_clean(video),
@@ -116,6 +126,8 @@ def run_deterministic(
             video, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, protected_count
         ),
     ]
+    if check_loudness:
+        gates.append(loudness_gate(video, cfg.audio.target_lufs))
     if sim_report is not None:
         gates.append({"gate": "sim_pass", "pass": sim_report.get("pass", False)})
     return {"gates": gates, "pass": all(g["pass"] for g in gates)}

@@ -195,9 +195,17 @@ def autonomous_run(
     render_edl(edl, final, run_dir, cfg.render, receipts=receipts, proxy=False)
     (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
 
+    # Studio Sound: full-track audio enhancement on the rendered output (non-fatal)
+    if cfg.audio.studio_sound:
+        state.set_phase("studio_sound")
+        from eddy.render.audio import studio_sound
+
+        studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+
     chosen_decisions = load_decisions(chosen / "edit-decisions.json")
     final_qa = run_deterministic(
-        final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments)
+        final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
+        check_loudness=cfg.audio.studio_sound,
     )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")
     receipts.log("final_render", path=str(final), qa_pass=final_qa["pass"])
