@@ -36,7 +36,16 @@ Editorial constitution:
    the end), keep that content too.
 6. Phrases must survive or die WHOLE. Set cut start_s/end_s on phrase timestamps (copy them
    from the transcript; never invent times). `quote` = first ~8 words of the removed passage.
-7. Mark 2-5 shorts_candidates: self-contained 20-59s passages with a hook and a complete payoff.
+7. Mark 2-5 shorts_candidates: self-contained 20-59s passages. A short lives or dies on its first
+   line, so choose the clip boundaries deliberately:
+   - START on a HOOK: the candidate's FIRST sentence must state the stakes or the surprising claim
+     ("The smartest model in the world can't read a PDF about itself"). Never start cold, mid-thought,
+     or on setup throat-clearing. If the punchy line sits a few sentences in, start there.
+     `hook` = that opening line, written as the short's on-screen hook.
+     - Add ONE line of context if the clip would otherwise be confusing out of its original place.
+   - END on CLOSURE: the candidate's LAST sentence must be a definitive "so what" — a payoff,
+     verdict, or punchline. Never end mid-explanation or trailing off. Extend or trim the boundary
+     so it lands on a complete, hard-hitting closing thought.
    If the creator says "hook for short" (or "book for short"), the passage after the marker is a
    candidate and the marker phrase itself must be cut (tier MANDATORY).
 8. Long silences are auto-tightened by the compiler. Don't write cuts for pure silence.

@@ -41,9 +41,9 @@ def discover_sources(source: Path) -> dict[str, Path]:
     for p in files:
         stem = p.stem.lower()
         if p.suffix.lower() in VIDEO_EXTS:
-            if "screen" in stem:
+            if "screen" in stem or "display" in stem:
                 found.setdefault("screen", p)
-            elif "camera" in stem or "cam" in stem:
+            elif any(k in stem for k in ("camera", "cam", "webcam", "face", "talking")):
                 found.setdefault("camera", p)
         elif p.suffix.lower() in {".wav", ".m4a"} and "mic" in stem:
             found.setdefault("mic", p)
