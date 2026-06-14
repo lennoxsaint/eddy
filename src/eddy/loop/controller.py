@@ -8,6 +8,10 @@ from pathlib import Path
 
 from eddy.config import load_config
 from eddy.edit.compiler import CompileError, cut_transcript
+
+
+class EditLoopError(RuntimeError):
+    """Raised when the loop cannot produce any compilable edit to ship."""
 from eddy.edit.cutplan import (
     beat_map,
     compile_with_repair,
@@ -163,9 +167,23 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         (iter_dir / "revision-directive.json").write_text(json.dumps(directive, indent=1))
 
     best = state.best()
+    chosen = run_dir / "iterations" / f"{best['iteration']:02d}"
+    if not (chosen / "edl.json").exists():
+        # Every iteration failed to compile a valid EDL — abort cleanly instead of
+        # crashing later on a missing edl.json in final_render. The usual cause is the
+        # editorial model emitting decisions the compiler rejects (e.g. cuts inside
+        # declared protected_moments); a stronger editorial brain resolves it.
+        receipts.log("loop_no_compilable_edl", iterations=cfg.loop.max_iterations)
+        state.set_phase("loop_failed_no_edl")
+        raise EditLoopError(
+            f"No iteration produced a compilable EDL after {cfg.loop.max_iterations} attempts. "
+            "The editorial model kept emitting decisions the compiler rejected (see receipts "
+            "'iteration_failed' problems, e.g. cuts inside protected_moments). Set "
+            "provider.editorial=claude_cli (or auto) for a stronger brain, then re-run."
+        )
     receipts.log("best_attempt", **best, shipped_with_failures=not best["gates_passed"])
     state.set_phase("loop_done_best_attempt")
-    return run_dir / "iterations" / f"{best['iteration']:02d}"
+    return chosen
 
 
 def autonomous_run(

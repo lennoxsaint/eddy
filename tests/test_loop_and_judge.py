@@ -87,3 +87,21 @@ def test_directive_builder_caps_and_types():
     ops = {d["op"] for d in directive}
     assert "tighten_gap" in ops  # dead air + over duration
     assert "restore" in ops  # judge defects
+
+
+def test_no_edl_precondition_and_error_type(tmp_path):
+    """Contract for the loop's all-iterations-failed guard: a state with only failed
+    (compile-error) attempts selects a best iteration whose dir has NO edl.json — the exact
+    precondition the guard checks — and EditLoopError is a RuntimeError so the CLI catches it."""
+    from eddy.loop.controller import EditLoopError
+
+    assert issubclass(EditLoopError, RuntimeError)
+
+    run_dir = tmp_path / "run"
+    (run_dir / "iterations" / "03").mkdir(parents=True)  # best dir exists, never got an edl.json
+    state = RunState(run_dir)
+    state.record_attempt(3, False, 0.0, 99.0)  # compile-failed attempt (gates_passed=False)
+
+    chosen_dir = run_dir / "iterations" / f"{state.best()['iteration']:02d}"
+    assert chosen_dir.name == "03"
+    assert not (chosen_dir / "edl.json").exists()  # -> guard raises EditLoopError, no FileNotFoundError
