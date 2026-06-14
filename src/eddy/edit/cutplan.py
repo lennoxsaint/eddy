@@ -14,6 +14,7 @@ from eddy.loop.receipts import Receipts
 from eddy.media.probe import duration_s as probe_duration
 from eddy.providers.base import ProviderError, get_provider
 from eddy.runs import manifest
+from eddy.transcribe.pack import audio_silence_map
 from eddy.transcribe.pack import phrases as load_phrases
 from eddy.transcribe.whisper import words_flat
 
@@ -195,10 +196,11 @@ def compile_with_repair(
     words = words_flat(run_dir)
     src = m["sources"]["camera"]
     dur = probe_duration(Path(src))
+    silence_spans = audio_silence_map(run_dir)
 
     for attempt in range(3):
         try:
-            edl = compile_edl(decisions, words, src, dur, cfg.render, cfg.gates)
+            edl = compile_edl(decisions, words, src, dur, cfg.render, cfg.gates, silence_spans=silence_spans)
             return decisions, edl
         except CompileError as e:
             receipts.log("compile_error", attempt=attempt, problems=e.problems[:10])

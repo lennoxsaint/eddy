@@ -96,6 +96,11 @@ class GatesConfig(BaseModel):
     min_range_s: float = 1.2
     max_av_drift_s: float = 0.5
     min_boundary_handle_s: float = 0.10
+    # audio-truth silence handling (kills "mouth moving, no sound")
+    silence_noise_db: float = -34.0  # silencedetect noise floor
+    silence_min_cut_s: float = 0.40  # audio-silent span >= this (and no words) gets removed
+    silence_handle_s: float = 0.10  # silence left each side of a removed silent span
+    max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
 
 
 class PathsConfig(BaseModel):

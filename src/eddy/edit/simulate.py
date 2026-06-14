@@ -46,13 +46,15 @@ def simulate(
     cards = boundary_cards(edl, phrases)
 
     # dead air remaining inside keep ranges — silence inside a protected moment is
-    # a deliberate visual beat (demo footage), not a defect
+    # a deliberate visual beat (demo footage), not a defect. The exception is NARROW:
+    # the protected span must explicitly cover the silence, not merely sit within ~1s,
+    # so "mouth moving, no sound" can no longer hide behind a nearby protection.
     dead_air = []
     for a, b in zip(kept, kept[1:]):
         gap = b["out_start"] - a["out_end"]
         if gap > cfg.gates.max_dead_air_s:
             src = a["end"]  # raw-timeline end of the phrase before the gap
-            protected = any(pm.start_s - 1 <= src <= pm.end_s + 1 for pm in decisions.protected_moments)
+            protected = any(pm.start_s <= src <= pm.end_s for pm in decisions.protected_moments)
             if not protected:
                 dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
 

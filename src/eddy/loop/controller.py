@@ -131,7 +131,9 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         except Exception as e:
             receipts.log("contact_sheet_failed", error=str(e)[:200])
 
-        qa = run_deterministic(proxy, edl, run_dir, cfg, sim_report=sim)
+        qa = run_deterministic(
+            proxy, edl, run_dir, cfg, sim_report=sim, protected_count=len(decisions.protected_moments)
+        )
         save_qa(qa, iter_dir)
 
         kept = cut_transcript(edl, phrases)
@@ -187,7 +189,10 @@ def autonomous_run(
     render_edl(edl, final, run_dir, cfg.render, receipts=receipts, proxy=False)
     (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
 
-    final_qa = run_deterministic(final, edl, run_dir, cfg)
+    chosen_decisions = load_decisions(chosen / "edit-decisions.json")
+    final_qa = run_deterministic(
+        final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments)
+    )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")
     receipts.log("final_render", path=str(final), qa_pass=final_qa["pass"])
 

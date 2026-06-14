@@ -28,9 +28,15 @@ def qa_run(run_dir: Path, iteration: int | None = None) -> dict:
     video = iter_dir / "proxy.mp4"
     if not video.exists():
         video = run_dir / "final" / "video.mp4"
+    decisions_path = iter_dir / "edit-decisions.json"
+    protected_count = (
+        len(load_decisions(decisions_path).protected_moments) if decisions_path.exists() else 0
+    )
     result: dict = {}
     if video.exists():
-        result["deterministic"] = run_deterministic(video, edl, run_dir, cfg, sim_report=sim)
+        result["deterministic"] = run_deterministic(
+            video, edl, run_dir, cfg, sim_report=sim, protected_count=protected_count
+        )
         save(result["deterministic"], iter_dir)
 
     if sim is not None and (iter_dir / "edit-decisions.json").exists():

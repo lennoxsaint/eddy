@@ -148,8 +148,10 @@ def test_gap_tightening_cuts_center_leaves_handles():
     intervals = gap_tighten_intervals(words)
     assert len(intervals) == 1
     s, e = intervals[0]
-    assert s >= words[4]["end"] + 0.2
-    assert e <= words[5]["start"] - 0.2
+    # tightened gaps now leave a 0.12s handle each side (was 0.25s) — tighter pacing
+    from eddy.edit.compiler import GAP_LEAVE_HANDLE_S
+    assert s == pytest.approx(words[4]["end"] + GAP_LEAVE_HANDLE_S, abs=0.005)
+    assert e == pytest.approx(words[5]["start"] - GAP_LEAVE_HANDLE_S, abs=0.005)
 
 
 def test_debris_ranges_dropped():
@@ -193,3 +195,59 @@ def test_benchmark_format_roundtrip():
     for br, er in zip(bench["ranges"], edl.ranges):
         assert br["start"] == er.start and br["end"] == er.end
         assert abs(br["duration"] - (er.end - er.start)) < 0.005
+
+
+# --- Workstream B: audio-truth silence removal ("mouth moving, no sound") ---
+
+
+def test_silence_span_removed_when_word_free():
+    """A word-free silent span between two phrases is collapsed to a micro-pause."""
+    # words 0..9 then a 1.2s silent gap (no words) then words 10..19
+    words = make_words(n=10, word_s=0.3, gap_s=0.1)
+    gap_start = words[-1]["end"]
+    tail = make_words(n=10, word_s=0.3, gap_s=0.1, start=gap_start + 1.2)
+    all_words = words + tail
+    silence = [{"start": gap_start, "end": gap_start + 1.2, "dur": 1.2}]
+    d = EditDecisions()
+    edl = compile_edl(
+        d, all_words, "cam.mp4", total_dur(all_words), RENDER, GATES,
+        tighten_gaps=False, silence_spans=silence,
+    )
+    # the silent span should be cut out -> two keep ranges around it
+    removed = sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:]))
+    assert removed > 0.8  # most of the 1.2s silence gone
+    # but a handle of silence remains on each side (not a zero-gap hard splice)
+    assert removed < 1.2
+
+
+def test_silence_removal_never_cuts_a_word():
+    """A silence span that (wrongly) overlaps a word must not remove that word."""
+    words = make_words(n=20, word_s=0.3, gap_s=0.1)
+    # claim silence right over words 5..7 — must be ignored (overlaps speech)
+    bad_span = [{"start": words[5]["start"], "end": words[7]["end"], "dur": 0.9}]
+    d = EditDecisions()
+    edl = compile_edl(
+        d, words, "cam.mp4", total_dur(words), RENDER, GATES,
+        tighten_gaps=False, silence_spans=bad_span,
+    )
+    # no word should fall inside a removed region: every word survives in some range
+    for w in words:
+        mid = (w["start"] + w["end"]) / 2
+        assert any(r.start <= mid <= r.end for r in edl.ranges), f"word at {mid} dropped"
+
+
+def test_silence_inside_protected_moment_survives():
+    """Deliberate silence inside a protected beat is NOT removed."""
+    words = make_words(n=10, word_s=0.3, gap_s=0.1)
+    gap_start = words[-1]["end"]
+    tail = make_words(n=10, word_s=0.3, gap_s=0.1, start=gap_start + 1.2)
+    all_words = words + tail
+    silence = [{"start": gap_start, "end": gap_start + 1.2, "dur": 1.2}]
+    # protect the silent beat wall-to-wall
+    d = EditDecisions(protected_moments=[ProtectedMoment(start_s=gap_start - 0.1, end_s=gap_start + 1.3)])
+    edl = compile_edl(
+        d, all_words, "cam.mp4", total_dur(all_words), RENDER, GATES,
+        tighten_gaps=False, silence_spans=silence,
+    )
+    removed = sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:]))
+    assert removed < 0.3  # protected silence preserved

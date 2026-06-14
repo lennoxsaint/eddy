@@ -74,14 +74,47 @@ def silence_gate(video: Path, run_dir: Path, max_dead_air_s: float) -> dict:
     return {"gate": "no_dead_air", "pass": not bad, "spans_s": spans[:10]}
 
 
+def silent_motion_gate(
+    video: Path, run_dir: Path, noise_db: float, max_silence_s: float, protected_allow: int
+) -> dict:
+    """The 'mouth moving, no sound' guard. Run on the RENDERED output: any silent span
+    longer than max_silence_s is a retained dead/false-start moment. Deliberate beats
+    live inside protected moments, so we allow up to `protected_allow` such spans; one
+    extra grace for a natural trailing pause. Anything beyond that FAILS — independent
+    of the (advisory) judge."""
+    lines = _detect(video, run_dir, f"silencedetect=noise={noise_db}dB:d={max_silence_s}", "silence_duration")
+    spans = []
+    for ln in lines:
+        m = re.search(r"silence_duration: ([\d.]+)", ln)
+        if m:
+            spans.append(round(float(m.group(1)), 2))
+    over = [s for s in spans if s > max_silence_s]
+    allowed = protected_allow + 1  # protected beats + one trailing-pause grace
+    return {
+        "gate": "silent_motion",
+        "pass": len(over) <= allowed,
+        "spans_s": spans[:15],
+        "over_count": len(over),
+        "allowed": allowed,
+    }
+
+
 def run_deterministic(
-    video: Path, edl: Edl, run_dir: Path, cfg: EddyConfig, sim_report: dict | None = None
+    video: Path,
+    edl: Edl,
+    run_dir: Path,
+    cfg: EddyConfig,
+    sim_report: dict | None = None,
+    protected_count: int = 0,
 ) -> dict:
     gates = [
         probe_clean(video),
         av_drift(video, edl, cfg.gates.max_av_drift_s),
         black_or_frozen(video, run_dir),
         silence_gate(video, run_dir, cfg.gates.max_dead_air_s),
+        silent_motion_gate(
+            video, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, protected_count
+        ),
     ]
     if sim_report is not None:
         gates.append({"gate": "sim_pass", "pass": sim_report.get("pass", False)})

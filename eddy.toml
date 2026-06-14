@@ -1,2 +1,8 @@
 [paths]
 runs_dir = "~/eddy/runs"
+
+[provider]
+active = "ollama"
+
+[provider.ollama]
+model = "qwen36-27b-codex:q4"

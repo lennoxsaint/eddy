@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Linear board driver for the Eddy build. Reads LINEAR_API_KEY from env.
+"""Linear board driver for the Eddy build.
+
+Key resolution (first hit wins) — the shared LINEAR_API_KEY in the shell points
+at a different workspace, so the Eddy key is kept separate:
+    1. EDDY_LINEAR_API_KEY env var
+    2. ~/eddy/.linear-key file (gitignored, chmod 600)
+    3. LINEAR_API_KEY env var (fallback)
 
 Commands:
     setup <issues.json>   create project + issues (idempotent-ish: skips if project exists)
@@ -12,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 
 import httpx
 
@@ -20,8 +27,22 @@ TEAM_KEY = "EDD"
 PROJECT_NAME = "Eddy v1"
 
 
+def api_key() -> str:
+    if os.environ.get("EDDY_LINEAR_API_KEY"):
+        return os.environ["EDDY_LINEAR_API_KEY"]
+    key_file = Path(__file__).resolve().parents[1] / ".linear-key"
+    if key_file.exists():
+        return key_file.read_text().strip()
+    if os.environ.get("LINEAR_API_KEY"):
+        return os.environ["LINEAR_API_KEY"]
+    raise SystemExit(
+        "No Linear key. Set EDDY_LINEAR_API_KEY, or write the key to ~/eddy/.linear-key, "
+        "or export LINEAR_API_KEY."
+    )
+
+
 def gql(query: str, variables: dict | None = None) -> dict:
-    key = os.environ["LINEAR_API_KEY"]
+    key = api_key()
     r = httpx.post(
         API,
         json={"query": query, "variables": variables or {}},

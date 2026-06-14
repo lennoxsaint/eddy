@@ -18,13 +18,57 @@ from eddy.config import GatesConfig, RenderConfig
 from eddy.edit.schema import EditDecisions, Edl, EdlRange
 
 GAP_TIGHTEN_THRESHOLD_S = 0.68  # from approved shorts standard
-GAP_LEAVE_HANDLE_S = 0.25  # silence left on each side of a tightened gap
+GAP_LEAVE_HANDLE_S = 0.12  # silence left on each side of a tightened gap
 
 
 class CompileError(ValueError):
     def __init__(self, problems: list[dict]):
         self.problems = problems
         super().__init__(f"{len(problems)} compile problem(s): {problems[:3]}")
+
+
+def _clip_by_protected(intervals, protected_moments):
+    """Drop the part of each remove-interval that would take the MAJORITY of a
+    protected span. Smaller bites inside a protection are normal editing."""
+    clipped: list[tuple[float, float]] = []
+    for s, e in intervals:
+        pieces = [(s, e)]
+        for pm in protected_moments:
+            span = max(0.1, pm.end_s - pm.start_s)
+            next_pieces: list[tuple[float, float]] = []
+            for ps, pe in pieces:
+                overlap = min(pe, pm.end_s) - max(ps, pm.start_s)
+                if overlap > 0 and overlap / span > 0.5:
+                    if pm.start_s - ps > 0.2:
+                        next_pieces.append((ps, pm.start_s))
+                    if pe - pm.end_s > 0.2:
+                        next_pieces.append((pm.end_s, pe))
+                else:
+                    next_pieces.append((ps, pe))
+            pieces = next_pieces
+        clipped.extend(pieces)
+    return clipped
+
+
+def silence_cut_intervals(
+    silence_spans: list[dict], words: list[dict], min_cut_s: float, handle_s: float
+) -> list[tuple[float, float]]:
+    """Audio-truth silence removal: collapse every word-free silent span >= min_cut_s
+    to a ~2*handle micro-pause. This is what kills 'mouth moving, no sound' — spans that
+    produce no transcribed words and so are invisible to inter-word gap tightening."""
+    out: list[tuple[float, float]] = []
+    for sp in silence_spans:
+        s, e = float(sp["start"]), float(sp["end"])
+        if e - s < min_cut_s:
+            continue
+        rs, re_ = s + handle_s, e - handle_s
+        if re_ - rs <= 0.05:
+            continue
+        # safety: never remove a region that overlaps a transcribed word
+        if any(w["start"] < re_ and w["end"] > rs for w in words):
+            continue
+        out.append((rs, re_))
+    return out
 
 
 def _merge(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -58,6 +102,7 @@ def compile_edl(
     render_cfg: RenderConfig,
     gates_cfg: GatesConfig,
     tighten_gaps: bool = True,
+    silence_spans: list[dict] | None = None,
 ) -> Edl:
     problems: list[dict] = []
 
@@ -78,24 +123,16 @@ def compile_edl(
     # survives", not "nothing inside may be touched". Models routinely protect whole
     # beats wall-to-wall; a cut is only voided when it would remove the MAJORITY of
     # the protected span. Smaller bites inside a protection are normal editing.
-    clipped: list[tuple[float, float]] = []
-    for s, e in removes:
-        pieces = [(s, e)]
-        for pm in decisions.protected_moments:
-            span = max(0.1, pm.end_s - pm.start_s)
-            next_pieces: list[tuple[float, float]] = []
-            for ps, pe in pieces:
-                overlap = min(pe, pm.end_s) - max(ps, pm.start_s)
-                if overlap / span > 0.5:
-                    if pm.start_s - ps > 0.2:
-                        next_pieces.append((ps, pm.start_s))
-                    if pe - pm.end_s > 0.2:
-                        next_pieces.append((pm.end_s, pe))
-                else:
-                    next_pieces.append((ps, pe))
-            pieces = next_pieces
-        clipped.extend(pieces)
-    removes = clipped
+    removes = _clip_by_protected(removes, decisions.protected_moments)
+
+    # Audio-truth silence removal: collapse word-free silent spans (false starts,
+    # swallowed words, pre-speech lip movement) that inter-word gap tightening misses.
+    # Protected beats keep their deliberate silence.
+    if silence_spans:
+        sil = silence_cut_intervals(
+            silence_spans, words, gates_cfg.silence_min_cut_s, gates_cfg.silence_handle_s
+        )
+        removes += _clip_by_protected(sil, decisions.protected_moments)
 
     if tighten_gaps:
         removes += gap_tighten_intervals(words)
