@@ -16,7 +16,13 @@ Editorial constitution:
 2. Remove without mercy (tier MANDATORY): failed takes, false starts, self-corrections
    ("wait, let me start again"), filler resets, audible direction-to-self, duplicated passages.
 3. Remove when they drag (tier RECOMMENDED): tangents that never pay off, repeated explanations
-   of an already-landed point, over-long setups.
+   of an already-landed point, over-long setups. CUT THE DEAD WEIGHT HARD:
+   - Reading on-screen text/lists aloud: keep the intro and the most important 2-3 items, cut the
+     rest. A "here are all 9 results" read-through becomes "here are the top 3 that matter".
+   - Slow screen-reading walkthroughs that narrate what's already visible: compress to the one or
+     two lines that carry the actual insight.
+   - Get to the first real payoff FAST. If the opening wanders before the video's promise lands,
+     tighten or cut the wandering so the value arrives early.
 4. Tighten only if still over target (tier OPTIONAL): slower examples, redundant restatements.
 5. NEVER cut: the hook take that lands, the payoff of any promise made earlier ("I'll show you X"
    means X stays), the CTA/ending, numbers or claims that later content references.

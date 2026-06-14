@@ -71,6 +71,21 @@ def simulate(
         or FADE_FLOOR_S <= c["end_handle_s"] < cfg.gates.min_boundary_handle_s
     ]
 
+    # beat density: kept seconds + words-per-minute per beat. Long beats are the
+    # structural-cut candidates when over target; sustained fast WPM flags "reading the
+    # screen aloud" runs the editorial brain should compress to the essential items.
+    beat_density = []
+    for beat in decisions.x_eddy.beats:
+        bs, be = beat.get("start_s", 0), beat.get("end_s", 0)
+        in_beat = [p for p in kept if bs <= p["start"] < be]
+        if not in_beat:
+            continue
+        kept_s = sum(p["out_end"] - p["out_start"] for p in in_beat)
+        nwords = sum(len(p["text"].split()) for p in in_beat)
+        wpm = round(nwords / kept_s * 60, 1) if kept_s > 0 else 0
+        beat_density.append({"label": beat.get("label", ""), "kept_s": round(kept_s, 1), "wpm": wpm})
+    beat_density.sort(key=lambda b: b["kept_s"], reverse=True)
+
     duration = edl.total_duration_s
     lo, hi = cfg.loop.duration_band
     verdicts = {
@@ -88,6 +103,7 @@ def simulate(
         "ranges": len(edl.ranges),
         "removed_total_s": round(sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:])), 1),
         "boundary_cards": cards,
+        "beat_density": beat_density,
         "dead_air": dead_air,
         "thin_handles": thin_handles,
         "handle_warnings": len(handle_warnings),

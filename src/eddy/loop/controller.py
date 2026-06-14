@@ -40,14 +40,18 @@ def _directive_from(qa: dict, judge: dict, sim: dict) -> list[dict]:
     if not sim["verdicts"]["duration_in_band"]:
         if sim["duration_s"] > sim["target_s"]:
             over = sim["duration_s"] - sim["target_s"]
+            heavy = sim.get("beat_density", [])[:4]
+            heavy_hint = "; ".join(f"{b['label']} ({b['kept_s']:.0f}s @ {b['wpm']:.0f}wpm)" for b in heavy)
             directive.append(
                 {
                     "op": "drop_beat",
                     "reason": (
                         f"video is {over:.0f}s OVER target ({sim['duration_s']:.0f}s vs {sim['target_s']:.0f}s). "
-                        f"Trims will not get there — remove roughly {over:.0f}s of content structurally: "
-                        "cut the weakest beats entirely, collapse repeated explanations to their best telling, "
-                        "and apply every RECOMMENDED and OPTIONAL tier opportunity. Keep hook, payoffs, CTA."
+                        f"Trims will not get there — remove roughly {over:.0f}s of content structurally. "
+                        f"The longest beats are: {heavy_hint}. Attack these first: where a beat is the creator "
+                        "reading on-screen text/lists aloud, keep the intro and the most important 2-3 items and cut "
+                        "the rest; collapse repeated explanations to their best telling; cut the weakest beats entirely. "
+                        "Keep hook, payoffs, CTA."
                     ),
                 }
             )
@@ -83,8 +87,10 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     speech_s = sum(p["end"] - p["start"] for p in phrases)
     feasible_s = speech_s * 1.08  # tightened gaps remain between phrases
     if target_s > feasible_s * 0.95:
+        # asking for more than the footage holds: clamp to 0.8x feasible so the loop
+        # still demands real compression rather than settling for a loose all-content cut
         receipts.log("target_clamped", requested_s=round(target_s), feasible_s=round(feasible_s), speech_s=round(speech_s))
-        target_s = round(feasible_s * 0.9)
+        target_s = round(feasible_s * 0.8)
 
     decisions = None
     start_iter = 1
