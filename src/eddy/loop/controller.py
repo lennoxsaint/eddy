@@ -257,6 +257,11 @@ def autonomous_run(
     chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume)
     print(f"chosen iteration: {chosen.name}")
 
+    # edit_loop used its own RunState and wrote the attempts/best_iter to disk. Reload here so
+    # this function's later set_phase() saves don't clobber that record with stale empty data
+    # (would wipe the state.json audit trail and break --resume of a finished run).
+    state = RunState(run_dir)
+
     edl = load_edl(chosen / "edl.json")
     chosen_decisions = load_decisions(chosen / "edit-decisions.json")
 
