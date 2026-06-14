@@ -20,7 +20,7 @@ from eddy.edit.simulate import save_report, simulate
 from eddy.loop.receipts import Receipts
 from eddy.loop.state import RunState
 from eddy.media.frames import boundary_contact_sheet
-from eddy.providers.base import get_provider
+from eddy.providers.base import get_editorial_provider
 from eddy.qa.deterministic import run_deterministic
 from eddy.qa.deterministic import save as save_qa
 from eddy.qa.judge import run_judge
@@ -69,7 +69,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     cfg = load_config()
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
-    provider = get_provider(cfg)
+    provider = get_editorial_provider(cfg, receipts)  # beat map/decisions/revise/judge; mechanical stays local
     target_s = (target_minutes or cfg.loop.default_target_minutes) * 60
     threshold = cfg.loop.judge_threshold
 

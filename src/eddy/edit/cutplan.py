@@ -12,7 +12,7 @@ from eddy.edit.compiler import CompileError, compile_edl
 from eddy.edit.schema import EditDecisions, EddyMeta, save
 from eddy.loop.receipts import Receipts
 from eddy.media.probe import duration_s as probe_duration
-from eddy.providers.base import ProviderError, get_provider
+from eddy.providers.base import ProviderError, get_editorial_provider
 from eddy.runs import manifest
 from eddy.transcribe.pack import audio_silence_map
 from eddy.transcribe.pack import phrases as load_phrases
@@ -220,7 +220,7 @@ def plan_run(run_dir: Path, target_minutes: float | None = None):
     run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
     receipts = Receipts(run_dir)
-    provider = get_provider(cfg)
+    provider = get_editorial_provider(cfg, receipts)
     target_s = (target_minutes or cfg.loop.default_target_minutes) * 60
 
     words = words_flat(run_dir)

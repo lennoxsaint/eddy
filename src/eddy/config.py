@@ -46,6 +46,10 @@ class CliProviderConfig(BaseModel):
 
 class ProviderConfig(BaseModel):
     active: str = "ollama"
+    # which brain runs the editorial-reasoning passes (beat map, cut decisions, revisions,
+    # judge). "auto" = prefer a stronger brain (claude_cli > anthropic) when available, else
+    # fall back to `active`. "local" pins it to `active`. Or name a provider explicitly.
+    editorial: str = "auto"
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
