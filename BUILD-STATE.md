@@ -60,7 +60,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 | v0.6 crossplatform | `v0.6-crossplatform` | **CODE DONE** — 9/9 autonomous items merged to master, tagged `v0.6` (review SHIP-WITH-NITS, fixed). Distribution VALIDATION (3-OS CI green, signed installer, publish) is 🔒 human-gate-blocked. |
 | v0.7 operability | `v0.7-operability` | **DONE** — 10/10 merged to master, tagged `v0.7` (review FIX-BEFORE-MERGE: 2 criticals + 2 important all fixed, re-verified). Note: corrective-control re-edit + NSFW-model moderation deferred (bigger/needs-API). |
 | v0.8 breadth | `v0.8-breadth` | **DONE** — 9/9 autonomous items merged to master, tagged `v0.8`, v0.8.0 pipx-installed (suite 405→439, ruff+mypy clean; review NO-CRITICAL: 2 important [EDL speed drift, profile bool precedence] + 2 nits all fixed). |
-| v1.0 GA | `v1.0-ga` | **next** (autonomous: coverage floor, reproducibility proof, no-egress test + offline wheelhouse, release process, support runbook, EDD-84, soak/scale) |
+| v1.0 GA | `v1.0-ga` | **DONE** — 8/8 autonomous items merged to master, tagged `v1.0`, v1.0.0 pipx-installed (suite 439→464, cov 69.0%, golden GA gate GREEN on the real pinned qwen:q4 in 16s; review NO-CRITICAL-after-fix: 1 critical [offline egress leak via CLI-subprocess brain] + 2 important + 4 nits all fixed). Signing/notarize/publish + 3-OS CI green remain 🔒 human-gate. |
 
 ### v0.4 items
 - [x] **Model boundary** — reject non-finite timestamps at JSON/schema/compiler (`1283f5a`, +13 tests)
