@@ -57,8 +57,12 @@ def run(
     ),
     language: Optional[str] = typer.Option(None, "--language", help="Force transcription language (e.g. en, es); default auto-detect."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Check environment + that the footage decodes, then exit (no transcribe/render)."),
+    format: str = typer.Option("default", "--format", help="Content profile: default | tutorial | lesson | longform | podcast (raises the length ceiling)."),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
+    from eddy.formats import resolve_format
+
+    ceiling_minutes = resolve_format(format)["ceiling_minutes"]
     if local_only:
         from eddy.privacy import set_offline
 
@@ -99,6 +103,7 @@ def run(
             skip_shorts=skip_shorts,
             skip_package=skip_package,
             language=language,
+            ceiling_minutes=ceiling_minutes,
         )
     except Exception as e:
         from eddy.beacon import send_failure_beacon

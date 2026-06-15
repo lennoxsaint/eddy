@@ -197,7 +197,8 @@ def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int =
     return directive[:10]
 
 
-def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool = False) -> Path:
+def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool = False,
+              ceiling_minutes: float | None = None) -> Path:
     """Iterate to a gated EDL. Returns the chosen iteration dir."""
     run_dir = Path(run_dir)
     cfg = load_config()
@@ -223,7 +224,9 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         receipts.log("target_clamped", requested_s=round(target_s), feasible_s=round(feasible_s), speech_s=round(speech_s))
         target_s = round(feasible_s * 0.8)
 
-    ceiling_s = cfg.loop.length_ceiling_minutes * 60
+    # format profiles (e.g. tutorials) can raise/disable the ceiling so the loop doesn't compress
+    # step-by-step content; otherwise use the configured ceiling.
+    ceiling_s = (ceiling_minutes if ceiling_minutes is not None else cfg.loop.length_ceiling_minutes) * 60
     loop_start = time.time()
     decisions = None
     start_iter = 1
@@ -400,6 +403,7 @@ def autonomous_run(
     skip_shorts: bool = False,
     skip_package: bool = False,
     language: str | None = None,
+    ceiling_minutes: float | None = None,
 ) -> Path:
     """The product: footage in, launch kit out."""
     cfg = load_config()
@@ -414,7 +418,7 @@ def autonomous_run(
     print("[eddy] transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
 
-    chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume)
+    chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume, ceiling_minutes=ceiling_minutes)
     print(f"chosen iteration: {chosen.name}")
 
     # edit_loop used its own RunState and wrote the attempts/best_iter to disk. Reload here so
