@@ -1,0 +1,10 @@
+[
+  {
+    "title": "v0.3.3: best() ranking discards length progress among gate-passing over-ceiling cuts",
+    "description": "Surfaced by the v0.3.2 fable-mythos dogfood. state.best() applies the feasibility tiebreak (-over_ceiling_s) ONLY to gate-FAILING attempts; among gate-PASSING but over-ceiling attempts it maximizes quality and ignores length. So the loop shipped iter2 (1694s over, q5.556) instead of iter3 (1452s over, q5.264) -- the loop's own length progress (the whole point of the feasibility-gated plateau) is thrown away at selection time. Pre-existing v0.3 behavior, amplified by v0.3.2 running more iterations. Proposed fix: band the over_ceiling_s (e.g. -round(over/120) 2-min buckets) BEFORE quality for over-ceiling gate-passing attempts, so a materially-shorter cut wins but small differences defer to quality (honors decision #3 length-not-in-quality and #6 don't-sacrifice-quality-to-force-the-number). Needs its own tests; was out-of-scope for v0.3.2 (changing the ranking key)."
+  },
+  {
+    "title": "v0.3.3: cutting push -- dense ultra-long sources floor well above the ceiling",
+    "description": "The v0.3.2 dogfood source is ~82min raw; reaching the 14-min ceiling means removing ~83%. The model (claude_cli) cut ~50% to ~40min and the judge correctly stopped further cuts from orphaning payoffs; the deterministic trim backstop selected 6 whole beats then REVERTED (judge 5.64->5.0 + panel dissent) rather than gut the video. So v0.3.2 is SAFE and behaves as designed but cannot reach the ceiling on this content -- an honest content limit, not a bug. Options to investigate: (a) source-length guidance / a soft warning when raw >> ceiling so expectations are set; (b) redundancy/tangent detection to enable deeper safe cuts; (c) a per-section keep-budget the model must hit; (d) accept a content-specific floor and report it honestly. Do NOT re-introduce a length term into quality_score (the v0.3 reward-hack)."
+  }
+]
