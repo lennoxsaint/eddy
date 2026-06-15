@@ -80,7 +80,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 
 ### v0.8 items (breadth — all autonomous-able)
 - [x] **Editor-native timeline export** (`final/timeline.edl` CMX3600 — import into Premiere/Resolve/FCP) (`nle_export.py`/`launch_kit.py`, +3 tests)
-- [ ] Batch/queue runner (glob/manifest, resumable, per-item failures) + `eddy runs` fleet list
+- [x] **Batch/queue runner + `eddy runs`** (`eddy batch <root>` — many sources, per-item failure recovery, `--json` headless + nonzero exit on failures) (`batch.py`/`cli.py`, +4 tests)
 - [ ] Named per-channel profiles / `--profile` + per-run overrides
 - [ ] Format profiles (disable the 14-min ceiling + compression for tutorials)
 - [ ] Audio-first ingest (.wav/.mp3/.m4a) acceptance

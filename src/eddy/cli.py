@@ -112,6 +112,47 @@ def run(
 
 
 @app.command()
+def batch(
+    path: Path = typer.Argument(..., help="A footage root (each subdir/video = one source) or a single source."),
+    skip_shorts: bool = typer.Option(False, help="Skip shorts rendering for every item."),
+    skip_package: bool = typer.Option(False, help="Skip packaging for every item."),
+    json_out: bool = typer.Option(False, "--json", help="Emit the summary as JSON (headless)."),
+) -> None:
+    """Process MANY sources as a resumable queue, continuing past per-item failures."""
+    from eddy.batch import discover_batch_sources, run_batch
+
+    sources = discover_batch_sources(path)
+    if not sources:
+        typer.echo(f"no sources found under {path}", err=True)
+        raise typer.Exit(1)
+    summary = run_batch(sources, skip_shorts=skip_shorts, skip_package=skip_package)
+    if json_out:
+        import json as _json
+
+        typer.echo(_json.dumps(summary, indent=1))
+    else:
+        typer.echo(f"batch: {summary['succeeded']}/{summary['total']} ok, {summary['failed']} failed")
+        for i in summary["items"]:
+            mark = "ok  " if i["status"] == "ok" else "FAIL"
+            typer.echo(f"  {mark} {i['source']}" + (f" — {i.get('error','')}" if i["status"] == "failed" else ""))
+    raise typer.Exit(1 if summary["failed"] else 0)
+
+
+@app.command()
+def runs() -> None:
+    """List all runs (fleet view): slug, phase, best iteration."""
+    from eddy.batch import list_runs
+    from eddy.config import load_config
+
+    rows = list_runs(load_config().runs_dir)
+    if not rows:
+        typer.echo("no runs yet")
+        return
+    for r in rows:
+        typer.echo(f"  {r['slug']:40} {r['phase']:24} best={r['best_iter']}")
+
+
+@app.command()
 def transcribe(
     source: Path = typer.Argument(...),
     slug: Optional[str] = typer.Option(None),
