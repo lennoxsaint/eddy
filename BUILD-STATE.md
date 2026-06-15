@@ -86,7 +86,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Creator-facing review notes** (`final/REVIEW.md`: plain-language "N moments Eddy was unsure about" + timestamps + over-ceiling banner + QA verdict, indexed in the kit) (`package/review.py`/`launch_kit.py`, +5 tests)
 - [ ] Output moderation/likeness gate before thumbnails/titles + AI-generated disclosure
 - [x] **Prompt-injection hardening** (transcript data-fenced in the cut-planner + judge; injection patterns flagged to receipts; deterministic gates remain the backstop) (`safety.py`/`cutplan.py`/`judge.py`, +4 tests)
-- [ ] GDPR/CCPA purge tooling + documented retention posture
+- [x] **GDPR/CCPA purge** (`eddy purge` removes transcript/face-frames/caption-text PII, keeps deliverables; `--full` erases the run; `--dry-run`) (`clean.py`/`cli.py`, +3 tests)
 - [ ] Opt-in anonymized failure beacon (stage/OS/ffmpeg/error-class only)
 - [x] **Generalized the personal Chrome-pairing guard** — exit-43 hardcoding replaced by configurable `transient_exit_codes` (empty default; no author-specific behavior shipped) (`cli_subprocess.py`/`config.py`, tests updated +1)
 

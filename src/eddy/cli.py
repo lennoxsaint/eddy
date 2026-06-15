@@ -208,5 +208,21 @@ def clean(
         typer.echo(f"  {r}")
 
 
+@app.command()
+def purge(
+    run_dir: Path = typer.Argument(..., help="Run directory to purge personal data from."),
+    full: bool = typer.Option(False, "--full", help="Delete the ENTIRE run directory (complete erasure)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be purged without deleting."),
+) -> None:
+    """GDPR/CCPA: delete PII (transcript, face frames, caption text). --full erases the whole run."""
+    from eddy.clean import purge_run
+
+    info = purge_run(run_dir, full=full, dry_run=dry_run)
+    verb = "would purge" if dry_run else "purged"
+    typer.echo(f"{verb} {info['freed_mb']}MB of personal data ({len(info['removed'])} item(s))")
+    for r in info["removed"]:
+        typer.echo(f"  {r}")
+
+
 if __name__ == "__main__":
     app()
