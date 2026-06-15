@@ -69,6 +69,16 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
     qa = json.loads(qa_final.read_text()) if qa_final.exists() else {}
     # plain-language "review these moments" note for a non-engineer creator
     review = build_review(run_dir, iter_dir, edl.total_duration_s, cfg.loop.length_ceiling_minutes * 60)
+    # AI-generated content disclosure (titles/description/thumbnails are model output)
+    (final_dir / "AI-DISCLOSURE.md").write_text(
+        "# AI-generated content disclosure\n\n"
+        "These launch-kit assets are AI-generated — review before publishing:\n"
+        "- **Titles** — model-written (grounded in transcript quotes)\n"
+        "- **Description + chapter labels** — model-written\n"
+        "- **Thumbnails** — AI image edits of your own face frame (only if you enabled upload consent)\n\n"
+        "Verify accuracy and likeness, ensure no claim is misleading, and disclose AI generation "
+        "where your platform requires it.\n"
+    )
 
     index = [
         f"# Launch Kit — {run_dir.name}",

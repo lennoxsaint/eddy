@@ -84,7 +84,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **`eddy bundle` redacted diagnostic archive** (audit trail + env zip; transcript text redacted + home paths scrubbed; no footage/transcript/faces) (`bundle.py`/`cli.py`, +3 tests)
 - [ ] Structured logging (per-run eddy.log, --verbose/--quiet) replacing raw print()
 - [x] **Creator-facing review notes** (`final/REVIEW.md`: plain-language "N moments Eddy was unsure about" + timestamps + over-ceiling banner + QA verdict, indexed in the kit) (`package/review.py`/`launch_kit.py`, +5 tests)
-- [ ] Output moderation/likeness gate before thumbnails/titles + AI-generated disclosure
+- [x] **Face-upload consent gate + AI-generated disclosure** (thumbnails opt-in via `thumbnails.consent_to_upload`; `final/AI-DISCLOSURE.md`) — NSFW/deception MODEL moderation deferred (needs a moderation API) (`config.py`/`thumbnails.py`/`launch_kit.py`, +2 tests)
 - [x] **Prompt-injection hardening** (transcript data-fenced in the cut-planner + judge; injection patterns flagged to receipts; deterministic gates remain the backstop) (`safety.py`/`cutplan.py`/`judge.py`, +4 tests)
 - [x] **GDPR/CCPA purge** (`eddy purge` removes transcript/face-frames/caption-text PII, keeps deliverables; `--full` erases the run; `--dry-run`) (`clean.py`/`cli.py`, +3 tests)
 - [ ] Opt-in anonymized failure beacon (stage/OS/ffmpeg/error-class only)

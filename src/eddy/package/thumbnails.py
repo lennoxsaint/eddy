@@ -101,9 +101,16 @@ def generate_thumbnails(
 
     out_dir = Path(run_dir) / "final" / "thumbnails"
     out_dir.mkdir(parents=True, exist_ok=True)
-    # offline/local-only: thumbnails upload a real face frame to cloud image APIs — skip entirely.
-    if is_offline() or not cfg.thumbnails.enabled or not ref_frames:
-        reason = "offline (--local-only)" if is_offline() else "disabled or no reference frames"
+    # thumbnails upload a real FACE frame to cloud image APIs. Skip unless: online, enabled,
+    # explicit upload consent, and reference frames exist. Consent is opt-in so a person's
+    # likeness is never sent automatically.
+    if is_offline() or not cfg.thumbnails.enabled or not cfg.thumbnails.consent_to_upload or not ref_frames:
+        if is_offline():
+            reason = "offline (--local-only)"
+        elif not cfg.thumbnails.consent_to_upload:
+            reason = "no face-upload consent (set thumbnails.consent_to_upload=true to enable)"
+        else:
+            reason = "disabled or no reference frames"
         receipts.log("thumbnails_skipped", reason=reason)
         (out_dir / "thumbnails-skipped.json").write_text(json.dumps({"reason": reason}))
         return []

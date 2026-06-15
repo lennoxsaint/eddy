@@ -137,6 +137,9 @@ class AudioConfig(BaseModel):
 
 class ThumbnailsConfig(BaseModel):
     enabled: bool = True
+    # thumbnails upload a real FACE frame to a cloud image model — opt-in, not automatic. Off by
+    # default so a person's likeness is never sent without explicit consent.
+    consent_to_upload: bool = False
     gemini_model: str = "gemini-3.1-flash-image-preview"
     gemini_key_env: str = "GEMINI_API_KEY"
     openai_key_env: str = "OPENAI_API_KEY"
