@@ -192,11 +192,31 @@ def render(
 
 
 @app.command()
-def shorts(run_dir: Path = typer.Argument(...)) -> None:
-    """Stage: render karaoke-caption shorts from the run's decisions."""
-    from eddy.render.shorts import render_shorts
+def shorts(
+    source: Path = typer.Argument(..., help="An existing run dir (render stage) OR raw footage (standalone mine)."),
+    slug: Optional[str] = typer.Option(None),
+    resume: bool = typer.Option(False, "--resume", help="Resume an existing run dir for this source."),
+    language: Optional[str] = typer.Option(None, "--language", help="Force language (e.g. en, es); default auto-detect."),
+) -> None:
+    """Render karaoke-caption shorts. Pass an existing run dir to render from its decisions, or raw
+    footage to mine clips standalone (transcribe -> one decision pass -> shorts; no long edit loop)."""
+    source = source.expanduser()
+    if source.is_dir() and (source / "manifest.json").exists() and (source / "iterations").exists():
+        from eddy.render.shorts import render_shorts  # stage mode: existing run dir
 
-    render_shorts(run_dir)
+        render_shorts(source)
+        return
+
+    from eddy.errors import friendly_error, write_crash_log
+    from eddy.loop.controller import mine_shorts  # standalone mode: raw footage
+
+    try:
+        mine_shorts(source=source, slug=slug, resume=resume, language=language)
+    except Exception as e:
+        headline, next_step = friendly_error(e)
+        log = write_crash_log(e)
+        typer.echo(f"\n✗ {headline}\n  → {next_step}\n  crash log: {log}", err=True)
+        raise typer.Exit(1) from e
 
 
 @app.command()

@@ -531,3 +531,42 @@ def autonomous_run(
     cost_note = f" · editorial cost ${cost['total_usd']} ({cost['calls']} paid calls)" if cost["total_usd"] > 0 else " · $0 (local brain)"
     print(f"[eddy] done in {_fmt_dur(time.time() - run_t0)}{cost_note} · launch kit: {run_dir / 'final'}")
     return run_dir
+
+
+def mine_shorts(
+    source: Path,
+    slug: str | None = None,
+    resume: bool = False,
+    language: str | None = None,
+) -> Path:
+    """Standalone `eddy shorts <source>`: transcribe -> ONE decision pass -> render shorts only.
+    Skips the iterative judge/revise loop and the long-form render — for creators who only want
+    vertical clips out of a source, fast and cheap. Source is never mutated."""
+    from eddy.edit.cutplan import plan_run
+    from eddy.render.shorts import render_shorts
+
+    run_dir = open_run(source, slug=slug, resume=resume)
+    assert_sources_decodable(manifest(run_dir)["sources"])  # fail loud on corrupt/unsupported input
+    receipts = Receipts(run_dir)
+    state = RunState(run_dir)
+    run_t0 = time.time()
+    print(f"run: {run_dir}")
+
+    state.set_phase("transcribe")
+    print("[eddy] transcribing (this can take a few minutes on a long source)…")
+    transcribe_run(run_dir, language=language)
+
+    state.set_phase("plan")
+    print("[eddy] finding short-worthy moments…")
+    iter_dir = plan_run(run_dir)  # iteration-1 decisions incl. shorts_candidates
+
+    state.set_phase("shorts")
+    shorts = render_shorts(run_dir, iteration_dir=iter_dir)
+
+    verify_sources_unmutated(run_dir)
+    cost = run_cost_summary(receipts.read())
+    receipts.log("run_cost", **cost)
+    state.set_phase("done")
+    cost_note = f" · editorial cost ${cost['total_usd']}" if cost["total_usd"] > 0 else " · $0 (local brain)"
+    print(f"[eddy] {len(shorts)} short(s) in {_fmt_dur(time.time() - run_t0)}{cost_note} · {run_dir / 'final' / 'shorts'}")
+    return run_dir

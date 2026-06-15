@@ -84,7 +84,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [ ] Named per-channel profiles / `--profile` + per-run overrides
 - [x] **Format profiles** (`eddy run --format tutorial|lesson|longform|podcast` raises the ceiling so the loop doesn't compress step-by-step content) (`formats.py`/`controller.py`/`cli.py`, +3 tests)
 - [x] **Audio-first ingest** (.wav/.mp3/.m4a/.flac/.aac… accepted so podcasters can `eddy transcribe`; `eddy run` on audio fails loud with a `eddy transcribe` hint, not a cryptic "no video stream") (`runs.py`, +4 tests)
-- [ ] Standalone `eddy shorts <source>` (mine clips without the full long loop) — scope check
+- [x] **Standalone `eddy shorts <source>`** (`mine_shorts`: transcribe -> ONE decision pass -> render shorts only, no iterative loop / no long render; `shorts` command now dual-mode: existing run dir = render stage, raw footage = standalone mine) (`controller.py`/`cli.py`, +1 orchestration test)
 - [ ] A/B title/thumbnail pick (`eddy pick`) + decision-template reuse
 - [ ] Multi-speaker/interview detection + warning
 - [ ] RTL/CJK caption note or guard
