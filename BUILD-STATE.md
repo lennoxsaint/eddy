@@ -87,7 +87,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Standalone `eddy shorts <source>`** (`mine_shorts`: transcribe -> ONE decision pass -> render shorts only, no iterative loop / no long render; `shorts` command now dual-mode: existing run dir = render stage, raw footage = standalone mine) (`controller.py`/`cli.py`, +1 orchestration test)
 - [ ] A/B title/thumbnail pick (`eddy pick`) + decision-template reuse
 - [x] **Multi-speaker/interview detection + warning** (heuristic over transcript cues + pause density, conservative/under-warns, low|medium confidence, never authoritative; non-blocking warning after transcribe in `autonomous_run` + `mine_shorts`; per-speaker editing stays out of scope) (`edit/speakers.py`/`controller.py`, +4 tests)
-- [ ] RTL/CJK caption note or guard
+- [x] **RTL/CJK caption guard** (burned word-captions do no bidi/shaping; detect RTL/CJK script in caption text and warn once — pointing at the v0.7 sidecar .srt/.vtt — instead of silently shipping reversed/tofu captions) (`render/scripts.py`/`render/captions.py`, +5 tests)
 
 ### v0.7 items (operability & safety — all autonomous-able)
 - [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)

@@ -7,6 +7,7 @@ future words dim — per the approved standard."""
 from __future__ import annotations
 
 import math
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -37,6 +38,7 @@ _FONT_DIRS = [
     "C:/Windows/Fonts",
 ]
 _font_warned = [False]
+_script_warned = [False]
 
 
 def _find_font() -> str | None:
@@ -64,8 +66,6 @@ def load_font(size: int) -> ImageFont.FreeTypeFont:
     # No system font: Pillow's load_default(size) is a real scalable font on modern Pillow (fine for
     # Latin; non-Latin needs a real font — v0.7). Warn once so it's not a silent quality drop.
     if not _font_warned[0]:
-        import sys
-
         print("[eddy] WARNING: no system TrueType font found; captions use Pillow's default font. "
               "Install a font (e.g. DejaVu) for best caption quality.", file=sys.stderr)
         _font_warned[0] = True
@@ -133,6 +133,13 @@ def caption_events(asset_dir: Path, output_words: list[dict]) -> list[dict]:
     """output_words carry OUTPUT-timeline start/end. One PNG per word-state."""
     cue_dir = asset_dir / "caption-states"
     cue_dir.mkdir(parents=True, exist_ok=True)
+    if not _script_warned[0]:  # honest guard: RTL/CJK can't render correctly in burned captions
+        from eddy.render.scripts import caption_script_warnings
+
+        text = " ".join(str(w.get("word", "")) for w in output_words)
+        for warning in caption_script_warnings(text, _find_font()):
+            print(f"[eddy] ⚠ {warning}", file=sys.stderr)
+        _script_warned[0] = True
     events: list[dict] = []
     prev_end = 0.0
     for ci, cue in enumerate(group_cues(output_words)):
