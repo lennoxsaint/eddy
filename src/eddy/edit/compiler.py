@@ -12,6 +12,7 @@ the model can repair against.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from eddy.config import GatesConfig, RenderConfig
@@ -110,6 +111,11 @@ def compile_edl(
 
     removes: list[tuple[float, float]] = []
     for start, end, label in decisions.all_remove_intervals():
+        if not (math.isfinite(start) and math.isfinite(end)):
+            # NaN/inf survives every comparison below (all NaN comparisons are False) and would
+            # become a real cut via max(0.0, nan)=0.0. Route it to the repair loop instead.
+            problems.append({"type": "non_finite_interval", "start_s": start, "end_s": end, "label": label})
+            continue
         if end <= start:
             problems.append({"type": "inverted_interval", "start_s": start, "end_s": end, "label": label})
             continue

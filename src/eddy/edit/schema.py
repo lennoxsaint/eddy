@@ -11,12 +11,21 @@ import json
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Tier = Literal["MANDATORY", "RECOMMENDED", "OPTIONAL"]
 
+# Models built from raw model output carry this: reject NaN/inf timestamps at validation.
+# Without it a `NaN` bound (which json.loads accepts) passes every compiler range guard
+# (all NaN comparisons are False) and silently deletes content from 0.0. Range/bounds checks
+# (end<=start, out-of-bounds) stay in the compiler, which routes them to the repair loop —
+# a non-finite value is the one class the compiler cannot catch, so it is rejected here.
+_REJECT_NONFINITE = ConfigDict(allow_inf_nan=False)
+
 
 class Cut(BaseModel):
+    model_config = _REJECT_NONFINITE
+
     start_s: float
     end_s: float
     quote: str = ""  # sanity anchor: roughly the removed text
@@ -25,6 +34,8 @@ class Cut(BaseModel):
 
 
 class Retake(BaseModel):
+    model_config = _REJECT_NONFINITE
+
     remove_start_s: float
     remove_end_s: float
     kept_take: Literal["last", "earlier"] = "last"
@@ -33,12 +44,16 @@ class Retake(BaseModel):
 
 
 class ProtectedMoment(BaseModel):
+    model_config = _REJECT_NONFINITE
+
     start_s: float
     end_s: float
     reason: str = ""
 
 
 class ShortsCandidate(BaseModel):
+    model_config = _REJECT_NONFINITE
+
     start_s: float
     end_s: float
     hook: str = ""
@@ -79,6 +94,8 @@ class EditDecisions(BaseModel):
 
 
 class EdlRange(BaseModel):
+    model_config = _REJECT_NONFINITE
+
     source: str = "camera"
     start: float
     end: float

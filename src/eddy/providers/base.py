@@ -29,6 +29,16 @@ class LLMProvider(Protocol):
     ) -> Any: ...
 
 
+def _reject_nonfinite(token: str):
+    # json.loads accepts bare NaN/Infinity/-Infinity by default; a NaN timestamp then
+    # passes every numeric guard downstream and silently deletes content. Reject at the source.
+    raise ProviderError(f"non-finite JSON constant {token!r} in model output")
+
+
+def _loads_strict(text: str) -> dict:
+    return json.loads(text, parse_constant=_reject_nonfinite)
+
+
 def extract_json(text: str) -> dict:
     """Pull the first JSON object out of model text (handles ```json fences)."""
     text = text.strip()
@@ -46,7 +56,7 @@ def extract_json(text: str) -> dict:
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                return json.loads(text[start : i + 1])
+                return _loads_strict(text[start : i + 1])
     raise ProviderError("unterminated JSON object in response")
 
 
