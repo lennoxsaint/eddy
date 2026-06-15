@@ -97,7 +97,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Release process** (`docs/RELEASE.md`: required-green gate [ruff+mypy+cov-floor+golden+matrix], local tag/pipx flow, signing/notarize [human-gate], update + rollback)
 - [x] **Support runbook + known-limits** (`docs/SUPPORT.md` triage: doctor→dry-run→bundle + symptom table; `docs/KNOWN-LIMITS.md` honest scope boundaries) (+4 doc tests)
 - [x] **EDD-84 disposition documented** (`docs/decision-log.md`: this build used BUILD-STATE.md not Linear; EDD-84 routed to human-gate reconciliation, not silently closed; referenced in KNOWN-LIMITS)
-- [ ] Soak/scale validation (multi-hour, many-shorts, queues) — opt-in test harness
+- [x] **Soak/scale validation** (opt-in `EDDY_SOAK=1` harness, like golden: ~3h transcript compile bounded <20s [no quadratic blowup], 500-candidate shorts cap, 1000-source batch queue w/ failure isolation, byte-identical recompile at scale — each with a wall-clock budget) (`tests/test_soak.py`, +4 tests)
 
 ### v0.7 items (operability & safety — all autonomous-able)
 - [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)
