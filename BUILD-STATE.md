@@ -88,7 +88,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [ ] Top-level error handler + crash log
 - [x] **`tests/conftest.py` + synthetic lavfi fixtures + markers** (needs_ffmpeg/e2e/slow; real-probe coverage) (`conftest.py`/`test_fixtures.py`, +5 tests)
 - [ ] Fixture-backed `eddy run` e2e
-- [ ] Unit tests across untested LOC (render/media/package/qa/doctor)
+- [x] **Unit tests across untested modules** (doctor/retakes/protect/pack/captions/copy/layout/simulate, +88 tests via an 8-agent self-verified Workflow fan-out)
 - [ ] Loop-resume integrity tests
 - [ ] Provider/judge contract tests
 - [ ] `compile_edl` Hypothesis fuzz
@@ -114,3 +114,6 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 cumulative (resume-surviving) model-call + per-process wall-clock budget (was dead config); suite 150 → 154 green.
 - v0.4 model pin (provider+model recorded per run, drift warning); suite 154 → 158 green.
 - v0.4 privacy honesty: --local-only/EDDY_OFFLINE forces local brain + whisper local_files_only + thumbnail skip + egress disclosure + PRIVACY.md/README fix; suite 158 → 162 green.
+- v0.4 MERGED to master, tagged v0.4 (review SHIP-WITH-NITS, nits cleared). v0.5 branch cut.
+- v0.5 QA detect fix (175→), duration resolution, whisper language, ingest gates, no-speech gate, conftest+fixtures: suite to 194.
+- v0.5 unit-test sweep (8-agent Workflow, self-verified): doctor/retakes/protect/pack/captions/copy/layout/simulate; +88 tests; suite 194 → 282 green, ruff+mypy clean.
