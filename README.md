@@ -32,7 +32,8 @@ eddy doctor                        # detects hardware, recommends a brain, write
 eddy run path/to/footage/          # camera.mp4 [+ screen.mp4 + mic.wav], or one composite .mp4
 ```
 
-Watch progress: `eddy status <run>`. Everything lands in `runs/<date-slug>/final/launch-kit/`.
+Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
+(configurable via `paths.runs_dir`). Reclaim scratch afterwards with `eddy clean <run>`.
 
 Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy shorts`, `eddy package`.
 

@@ -152,10 +152,14 @@ class GatesConfig(BaseModel):
 
 
 class PathsConfig(BaseModel):
-    runs_dir: str = "~/Eddy/runs"
+    runs_dir: str = "~/.eddy/runs"  # lowercase/hidden: avoids the ~/Eddy vs ~/eddy case collision
+
+
+CONFIG_SCHEMA_VERSION = 1
 
 
 class EddyConfig(BaseModel):
+    schema_version: int = CONFIG_SCHEMA_VERSION  # stamped so an old config can be migrated forward
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
     transcribe: TranscribeConfig = Field(default_factory=TranscribeConfig)
     loop: LoopConfig = Field(default_factory=LoopConfig)
@@ -180,12 +184,33 @@ def config_path() -> Path:
     return DEFAULT_USER_CONFIG
 
 
+def migrate_config(data: dict) -> dict:
+    """Forward-migrate an older config dict so a newer Eddy reads an older file (renames/moves go
+    here instead of hard-rejecting). v1 is the baseline; this stamps a missing schema_version."""
+    data = dict(data)
+    data.setdefault("schema_version", 1)
+    # future: if data["schema_version"] < N: rename/relocate fields, then bump
+    return data
+
+
 def load_config(path: Path | None = None) -> EddyConfig:
     p = path or config_path()
     if not p.exists():
         return EddyConfig()
-    doc = tomlkit.parse(p.read_text())
-    return EddyConfig.model_validate(doc.unwrap())
+    try:
+        doc = tomlkit.parse(p.read_text())
+        return EddyConfig.model_validate(migrate_config(doc.unwrap()))
+    except Exception as e:
+        # a malformed / out-of-date config must NOT brick every command (including doctor). Warn and
+        # fall back to defaults; `eddy doctor` can rewrite a clean config.
+        import sys
+
+        print(
+            f"[eddy] WARNING: could not load config at {p} ({type(e).__name__}); using defaults. "
+            "Run `eddy doctor` to rewrite it.",
+            file=sys.stderr,
+        )
+        return EddyConfig()
 
 
 def update_config_sections(sections: dict, path: Path | None = None) -> Path:
