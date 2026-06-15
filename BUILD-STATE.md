@@ -59,8 +59,8 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 | v0.5 robustness | `v0.5-robustness` | **DONE** — merged to master, tagged `v0.5` (suite 163→335 +golden; review SHIP-WITH-NITS, all nits cleared) |
 | v0.6 crossplatform | `v0.6-crossplatform` | **CODE DONE** — 9/9 autonomous items merged to master, tagged `v0.6` (review SHIP-WITH-NITS, fixed). Distribution VALIDATION (3-OS CI green, signed installer, publish) is 🔒 human-gate-blocked. |
 | v0.7 operability | `v0.7-operability` | **DONE** — 10/10 merged to master, tagged `v0.7` (review FIX-BEFORE-MERGE: 2 criticals + 2 important all fixed, re-verified). Note: corrective-control re-edit + NSFW-model moderation deferred (bigger/needs-API). |
-| v0.8 breadth | `v0.8-breadth` | **next** (autonomous: batch/queue, profiles, presets, editor export, audio-first, standalone shorts, RTL, A/B pick) |
-| v1.0 GA | `v1.0-ga` | pending |
+| v0.8 breadth | `v0.8-breadth` | **DONE** — 9/9 autonomous items merged to master, tagged `v0.8`, v0.8.0 pipx-installed (suite 405→439, ruff+mypy clean; review NO-CRITICAL: 2 important [EDL speed drift, profile bool precedence] + 2 nits all fixed). |
+| v1.0 GA | `v1.0-ga` | **next** (autonomous: coverage floor, reproducibility proof, no-egress test + offline wheelhouse, release process, support runbook, EDD-84, soak/scale) |
 
 ### v0.4 items
 - [x] **Model boundary** — reject non-finite timestamps at JSON/schema/compiler (`1283f5a`, +13 tests)
