@@ -55,8 +55,8 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 
 | Milestone | Branch | Status |
 |-----------|--------|--------|
-| v0.4 stabilize | `v0.4-stabilize` | **in progress** |
-| v0.5 robustness | `v0.5-robustness` | pending |
+| v0.4 stabilize | `v0.4-stabilize` | **DONE** — merged to master, tagged `v0.4` (suite 100→163, ruff+mypy clean, code-review SHIP-WITH-NITS) |
+| v0.5 robustness | `v0.5-robustness` | **next** |
 | v0.6 crossplatform | `v0.6-crossplatform` | pending |
 | v0.7 operability | `v0.7-operability` | pending |
 | v0.8 breadth | `v0.8-breadth` | pending |
