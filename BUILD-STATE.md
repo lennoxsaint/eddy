@@ -91,7 +91,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 
 ### v1.0 items (GA hardening — autonomous; signing/notarize/publish are human-gate)
 - [x] **Verifiable no-egress + active egress guard** (`--local-only`/`EDDY_OFFLINE` now ENFORCED at the syscall boundary: non-loopback TCP connects raise `EgressBlocked`; loopback/Ollama allowed; hermetic test proves resolving the offline brain attempts zero egress) (`netguard.py`/`cli.py`, +7 tests)
-- [ ] Coverage floor (pytest-cov gate) + required-green-before-tag wired into CI
+- [x] **Coverage floor (ratchet) + required-green-before-tag** (`[tool.coverage.report] fail_under=68` in pyproject; CI `pytest --cov=eddy` fails under it; current 68.8%; +2 cheap pure-logic tests) (`pyproject.toml`/`ci.yml`/`tests/test_render_long.py`)
 - [ ] Offline wheelhouse builder + airgap install docs
 - [ ] Reproducibility proof (same footage + pinned qwen = same edit; doc + check)
 - [ ] Release process (RELEASE.md: tag-on-release, signing/notarize steps [human-gate], update check)

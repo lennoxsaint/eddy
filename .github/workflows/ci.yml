@@ -28,7 +28,9 @@ jobs:
       - name: Mypy (types)
         run: mypy src/eddy
 
-      - name: Pytest (with coverage)
+      - name: Pytest (with coverage floor)
+        # --cov reads fail_under from [tool.coverage.report] in pyproject (the GA ratchet floor); the
+        # job fails if coverage regresses below it. This is the required-green gate before any tag.
         run: pytest -q --cov=eddy --cov-report=term-missing
 
 # v0.6 adds the 3-OS matrix (macOS/Windows/Linux) running a real per-OS render + a built-wheel
