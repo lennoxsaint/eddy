@@ -67,9 +67,9 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Atomic state/EDL writes + tolerant loaders** — `atomicio.py`, RunState/receipts tolerant (+6 tests)
 - [x] **`validate_against` recursive** (nested required + types + enums) (`base.py`, +8 tests)
 - [x] **Judge clamp to 1–10 + `.get()` defect keys + in-try processing** (`judge.py`, +7 tests)
-- [ ] Path-containment gate `is_relative_to` over all args
+- [x] **Path-containment gate `is_relative_to` over all outputs** (excl. `-i` inputs) (`ffmpeg.py`, +6 tests)
 - [ ] Slug re-hash + wire `--resume`
-- [ ] Apostrophe concat — shared `_concat_quote` helper
+- [x] **Apostrophe concat — shared `concat_quote` helper** (`ffmpeg.py`; segments+shorts) (+ tests above)
 - [ ] SIGINT child-kill + idempotent post-loop resume
 - [ ] Model-call + wall-clock budget
 - [ ] Git-derived version + correct receipt stamp
@@ -91,3 +91,4 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 atomic+tolerant run-state IO; suite 113 → 119 green.
 - v0.4 judge hardening (clamp 1–10, .get defects, in-try processing); suite 119 → 126 green.
 - v0.4 validate_against recursive (nested required/types/enums); suite 126 → 134 green.
+- v0.4 apostrophe concat (shared concat_quote) + path gate (is_relative_to, all outputs); suite 134 → 142 green.

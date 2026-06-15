@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import re
-import shlex
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -19,7 +18,7 @@ from PIL import Image, ImageDraw
 from eddy.config import load_config
 from eddy.edit.schema import load_decisions
 from eddy.loop.receipts import Receipts
-from eddy.media.ffmpeg import run_ffmpeg
+from eddy.media.ffmpeg import concat_quote, run_ffmpeg
 from eddy.media.probe import stream_summary
 from eddy.render import layout as L
 from eddy.render.captions import burn_captions, caption_events
@@ -214,7 +213,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         base = asset_dir / "base.mp4"
         concat_file = asset_dir / "layout.ffconcat"
         concat_file.write_text(
-            "ffconcat version 1.0\n" + "".join(f"file '{str(p).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n" for p in seg_paths)
+            "ffconcat version 1.0\n" + "".join(f"file {concat_quote(p)}\n" for p in seg_paths)
         )
         run_ffmpeg(
             ["-f", "concat", "-safe", "0", "-i", str(concat_file), "-c", "copy", "-movflags", "+faststart", str(base)],

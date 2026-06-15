@@ -16,20 +16,25 @@ class FfmpegError(RuntimeError):
     pass
 
 
+_OUTPUT_EXTS = (".mp4", ".wav", ".jpg", ".jpeg", ".png", ".srt", ".ass", ".vtt", ".mkv", ".m4a", ".mov", ".webp")
+
+
 def _assert_outputs_inside(argv: list[str], allowed_root: Path | None) -> None:
     if allowed_root is None:
         return
     root = allowed_root.resolve()
-    # Outputs are the args that are paths and follow ffmpeg output conventions:
-    # the last positional, and anything after -o style flags isn't used here, so we
-    # conservatively check every argument that is an existing-or-creatable path that
-    # the command would write: ffmpeg writes the final arg; -y doesn't change that.
-    candidates = [a for a in argv if a.endswith((".mp4", ".wav", ".jpg", ".png", ".srt", ".ass", ".mkv", ".m4a"))]
-    if not candidates:
-        return
-    out = Path(candidates[-1]).resolve()
-    if not str(out).startswith(str(root)):
-        raise FfmpegError(f"hard gate: refusing to write outside run dir: {out}")
+    # Check EVERY output path, not just the last (a split/multi-output command would bypass a
+    # last-only check), and use is_relative_to over resolved paths — a string `startswith` lets a
+    # sibling dir share a prefix (`/runs/ab` vs `/runs/abc`) escape the gate. Inputs (the arg right
+    # after -i) are excluded: source footage legitimately lives outside the run dir.
+    for j, a in enumerate(argv):
+        if not a.endswith(_OUTPUT_EXTS):
+            continue
+        if j > 0 and argv[j - 1] == "-i":
+            continue  # an input, not a write target
+        out = Path(a).resolve()
+        if not out.is_relative_to(root):
+            raise FfmpegError(f"hard gate: refusing to write outside run dir: {out}")
 
 
 def run_ffmpeg(
@@ -52,6 +57,16 @@ def run_ffmpeg(
     if proc.returncode != 0:
         raise FfmpegError(f"ffmpeg failed ({proc.returncode}): {' '.join(argv[:12])}…\n{proc.stderr[-2000:]}")
     return proc
+
+
+def concat_quote(path) -> str:
+    """Quote a path for an ffmpeg concat/ffconcat script — NOT shell quoting.
+
+    shlex.quote produces shell-style escaping the concat demuxer cannot parse, so any path
+    containing an apostrophe (a very common case) hard-fails the render. The demuxer wraps the
+    path in single quotes and writes a literal `'` as `'\\''`.
+    """
+    return "'" + str(path).replace("'", "'\\''") + "'"
 
 
 def run_ffprobe(args: list[str], timeout: int = 120) -> str:

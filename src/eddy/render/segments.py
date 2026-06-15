@@ -7,12 +7,11 @@ to kill pops, no double-encode at concat."""
 from __future__ import annotations
 
 import concurrent.futures
-import shlex
 from pathlib import Path
 
 from eddy.config import RenderConfig
 from eddy.edit.schema import Edl
-from eddy.media.ffmpeg import run_ffmpeg
+from eddy.media.ffmpeg import concat_quote, run_ffmpeg
 
 SEEK_PREROLL_S = 2.0
 
@@ -110,7 +109,7 @@ def render_edl(
         paths = list(pool.map(one, jobs))
 
     list_path = seg_dir / "concat.txt"
-    list_path.write_text("\n".join(f"file {shlex.quote(str(p))}" for p in paths) + "\n")
+    list_path.write_text("\n".join(f"file {concat_quote(p)}" for p in paths) + "\n")
     run_ffmpeg(
         ["-f", "concat", "-safe", "0", "-i", str(list_path), "-c", "copy", "-movflags", "+faststart", str(out_path)],
         run_dir=run_dir,
