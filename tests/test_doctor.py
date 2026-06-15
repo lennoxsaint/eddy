@@ -35,13 +35,23 @@ def test_local_model_with_enough_ram_picks_ollama():
     assert f"{LOCAL_TIER_MIN_RAM_GB}GB" in reason
 
 
-def test_local_model_but_low_ram_does_not_pick_ollama_falls_through():
-    # has a model but only 16GB RAM (< 32 floor): must NOT recommend local ollama,
-    # and with no creds it lands on the install-message ollama fallback.
-    found = make_found(ram_gb=16, models=["qwen2.5:32b"])
+def test_local_model_mid_ram_recommends_smaller_local_not_cloud():
+    # v0.6 tiered: 16-32GB + a model recommends a SMALLER local model (free + private),
+    # NOT a paid cloud provider (no hard 32GB cliff).
+    found = make_found(ram_gb=16, models=["qwen2.5:7b"])
     provider, reason = recommend(found)
     assert provider == "ollama"
-    assert "Install Ollama" in reason  # the fallback branch, not the local-tier branch
+    assert "smaller local model" in reason
+    assert "Install Ollama" not in reason  # it's the local tier, not the fallback
+
+
+def test_local_model_very_low_ram_falls_through_to_fallback():
+    # below the small floor (< 16GB), even with a model, fall through to the install/cloud guidance
+    found = make_found(ram_gb=8, models=["qwen2.5:7b"])
+    provider, reason = recommend(found)
+    assert provider == "ollama"
+    assert "Install Ollama" in reason
+    assert "light for a strong local model" in reason  # guided note for the light machine
 
 
 def test_enough_ram_but_no_models_falls_through_to_fallback():

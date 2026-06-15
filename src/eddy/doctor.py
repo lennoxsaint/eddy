@@ -20,8 +20,11 @@ PING_SCHEMA = {
     "properties": {"ok": {"type": "boolean"}, "echo": {"type": "string"}},
 }
 
-# Rough floor for running a useful local editorial model (27B q4 + render headroom).
+# Rough floor for a strong local editorial model (27B q4 + render headroom).
 LOCAL_TIER_MIN_RAM_GB = 32
+# A lighter machine can still run a smaller (~7-8B) local model — free + private, lower quality.
+# Below this, a cloud brain is usually smoother (no hard 32GB cliff to a paid provider).
+LOCAL_TIER_SMALL_RAM_GB = 16
 
 
 def _linux_ram_gb(meminfo: str) -> int | None:
@@ -113,10 +116,14 @@ def recommend(found: dict) -> tuple[str, str]:
     """Return (provider_name, reason)."""
     hw, models, creds = found["hardware"], found["ollama_models"], found["credentials"]
     ram = hw.get("ram_gb") or 0  # None (unmeasured) -> 0 so we don't claim the local tier we can't confirm
+    chip = hw.get("chip", "this machine")
     if models and ram >= LOCAL_TIER_MIN_RAM_GB:
+        return "ollama", f"{chip} with {ram}GB RAM runs a strong local model (27B) well — free unlimited editing."
+    if models and ram >= LOCAL_TIER_SMALL_RAM_GB:
+        # tiered: don't shove a 16-32GB machine onto a paid provider — a smaller local model is free + private
         return "ollama", (
-            f"{hw.get('chip', 'this machine')} with {ram}GB RAM runs a local model well — "
-            "free unlimited editing."
+            f"{chip} with {ram}GB RAM can run a smaller local model (~7-8B; lower quality than 27B) — "
+            "still free + private. 32GB+ unlocks the best local quality."
         )
     if creds["codex_cli"]:
         return "codex_cli", "No strong local setup, but the codex CLI is installed — your ChatGPT subscription powers editing at no extra cost."
@@ -126,9 +133,11 @@ def recommend(found: dict) -> tuple[str, str]:
         return "anthropic", "Anthropic API key found — cheapest capable Claude model will be used."
     if creds["openai_api"]:
         return "openai", "OpenAI API key found."
+    light = f" (your {ram}GB RAM is light for a strong local model — a cloud brain may be smoother)" if 0 < ram < LOCAL_TIER_SMALL_RAM_GB else ""
     return "ollama", (
-        "Nothing detected. Install Ollama (ollama.com) and pull a ~27B model, "
-        "or set ANTHROPIC_API_KEY / OPENAI_API_KEY, or install the codex/claude CLI."
+        "Nothing detected. Install Ollama (ollama.com) and run `ollama pull qwen3.6-27b` "
+        "(or a smaller model on <32GB RAM), or set ANTHROPIC_API_KEY / OPENAI_API_KEY, "
+        "or install the codex/claude CLI." + light
     )
 
 

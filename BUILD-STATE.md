@@ -102,7 +102,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] ⚙ **`eddy clean` (+ `--dry-run`) + disk-usage in `eddy status`** — prunes segment scratch/proxies/16k WAV, keeps deliverables + audit trail (`clean.py`/`cli.py`, +2 tests)
 - [ ] ⚙ Pinned deps + committed lockfile; reconcile requires-python
 - [ ] ⚙ Config/EDL schema migration (version-stamp + migrate-forward) + XDG runs_dir (~/Eddy vs ~/eddy)
-- [ ] ⚙ Guided Ollama onboarding + tiered local recommendation (not the 32GB cliff)
+- [x] ⚙ **Tiered local recommendation + guided pull** (16-32GB → smaller local model not cloud; `ollama pull` guidance; light-machine note) (`doctor.py`, tests updated)
 - [ ] ⚙ 3-OS CI matrix YAML + wheel smoke test (authored; runs once remote exists)
 - [ ] 🔒 Private GitHub remote (human-gate #3) — needed for the CI matrix to run live
 - [ ] 🔒 Code-signing certs (human-gate #2) — Apple Developer ID + Windows Authenticode
