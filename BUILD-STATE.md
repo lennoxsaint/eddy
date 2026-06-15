@@ -82,7 +82,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Fix QA detect filters** (silencedetect → `-af`, returncode check, fail-loud not false-pass) (`deterministic.py`, +6 tests)
 - [x] **Crash-proof duration resolution** (format → longest stream → typed unknown; fail-loud where needed) (`probe.py`, +6 tests)
 - [x] **Whisper language auto-detect + `--language` + mismatch/health warning** + dropped personal vocab prompt (`whisper.py`/`config.py`/`cli.py`/`controller.py`, +5 tests)
-- [ ] Ingest gates (accept webm/avi/ts; reject undecodable loud; probe-based multi-video disambiguation)
+- [x] **Ingest gates** (accept webm/avi/ts/mts/3gp/wmv/flv; decodability preflight fails loud on corrupt/0-byte/no-video) (`runs.py`/`controller.py`, +7 tests)
 - [ ] Empty/no-speech transcript is a first-class outcome
 - [ ] Live progress + ETA layer
 - [ ] Top-level error handler + crash log

@@ -10,7 +10,7 @@ from pathlib import Path
 from eddy.config import load_config
 from eddy.loop.receipts import Receipts
 
-VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".m4v"}
+VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".m4v", ".webm", ".avi", ".ts", ".mts", ".m2ts", ".3gp", ".wmv", ".flv"}
 
 
 class SourceError(RuntimeError):
@@ -115,6 +115,26 @@ def open_run(source: Path, slug: str | None = None, resume: bool = False) -> Pat
 
 def manifest(run_dir: Path) -> dict:
     return json.loads((Path(run_dir) / "manifest.json").read_text())
+
+
+def assert_sources_decodable(sources: dict[str, str]) -> None:
+    """Preflight: every video source must actually decode (a real video stream + duration). Fails
+    loud with an actionable message instead of a cryptic mid-pipeline ffmpeg crash on a corrupt,
+    truncated, 0-byte, or unsupported file. Run right after open_run, before transcription."""
+    from eddy.media.probe import stream_summary
+
+    for name, path in sources.items():
+        if name == "mic":
+            continue  # audio-only companion track; no video stream expected
+        p = Path(path)
+        try:
+            s = stream_summary(p)
+        except Exception as e:
+            raise SourceError(f"cannot decode {name} source {p}: {str(e)[:200]} — corrupt or unsupported?") from e
+        if s["video"] is None:
+            raise SourceError(f"{name} source {p} has no decodable video stream (audio-only or corrupt?)")
+        if name == "camera" and s["duration_s"] <= 0:
+            raise SourceError(f"camera source {p} has unknown/zero duration — corrupt or truncated?")
 
 
 def verify_sources_unmutated(run_dir: Path) -> dict:

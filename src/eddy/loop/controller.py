@@ -29,7 +29,7 @@ from eddy.qa.deterministic import save as save_qa
 from eddy.qa.judge import run_judge, run_ship_panel
 from eddy.qa.quality import quality_score
 from eddy.render.segments import render_edl
-from eddy.runs import open_run, verify_sources_unmutated
+from eddy.runs import assert_sources_decodable, manifest, open_run, verify_sources_unmutated
 from eddy.transcribe.pack import phrases as load_phrases
 from eddy.transcribe.whisper import transcribe_run, words_flat
 
@@ -372,6 +372,7 @@ def autonomous_run(
     """The product: footage in, launch kit out."""
     cfg = load_config()
     run_dir = open_run(source, slug=slug, resume=resume)
+    assert_sources_decodable(manifest(run_dir)["sources"])  # fail loud on corrupt/unsupported input
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
     print(f"run: {run_dir}")
