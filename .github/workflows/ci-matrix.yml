@@ -44,9 +44,9 @@ jobs:
         run: |
           python -m pip install build
           python -m build --wheel
-          python -m venv /tmp/eddy-smoke || python -m venv "$RUNNER_TEMP/eddy-smoke"
           VENV="${RUNNER_TEMP:-/tmp}/eddy-smoke"
-          if [ -f "$VENV/bin/python" ]; then PY="$VENV/bin/python"; else PY="$VENV/Scripts/python"; fi
+          python -m venv "$VENV"
+          if [ -x "$VENV/bin/python" ]; then PY="$VENV/bin/python"; else PY="$VENV/Scripts/python"; fi
           "$PY" -m pip install --upgrade pip
           "$PY" -m pip install dist/*.whl
           "$PY" -m eddy --version

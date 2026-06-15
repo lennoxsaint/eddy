@@ -142,8 +142,9 @@ def recommend(found: dict) -> tuple[str, str]:
 
 
 def _ffmpeg_major(version_output: str) -> int | None:
-    """Parse the major version from `ffmpeg -version` output ('ffmpeg version 8.0 ...' or
-    a distro string like 'n6.1.1' / '6.0-static'). Returns None if unparseable."""
+    """Parse the major version from `ffmpeg -version` output, which always carries the
+    'ffmpeg version ' prefix (e.g. 'ffmpeg version 8.0 ...', 'ffmpeg version n6.1.1 ...',
+    'ffmpeg version 7.0.2-static ...'). Returns None if that prefix isn't present."""
     m = re.search(r"ffmpeg version n?(\d+)", version_output)
     return int(m.group(1)) if m else None
 

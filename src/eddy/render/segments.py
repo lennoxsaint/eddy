@@ -63,8 +63,8 @@ def _segment_args(
         args += ["-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-c:a", "aac", "-b:a", "96k"]
     else:
         args += [
-            *video_encoder_args("7000k"),
-            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
+            *video_encoder_args("7000k"),  # includes -pix_fmt yuv420p
+            "-c:a", "aac", "-b:a", "160k",
         ]
     args += ["-movflags", "+faststart", str(out)]
     return args

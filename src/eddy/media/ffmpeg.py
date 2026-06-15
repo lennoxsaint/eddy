@@ -23,7 +23,8 @@ _ENCODER_PREFERENCE = ("h264_videotoolbox", "h264_nvenc", "h264_qsv", "libx264")
 def _available_encoders() -> frozenset[str]:
     try:
         out = subprocess.run([FFMPEG, "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=15)
-        return frozenset(re.findall(r"^\s*[A-Z.]{6}\s+(\S+)", out.stdout, re.MULTILINE))
+        # encoder names are lowercase [a-z0-9_]; this also excludes the legend lines (" V..... = Video")
+        return frozenset(re.findall(r"^\s*[A-Z.]{6}\s+([a-z0-9_]+)", out.stdout, re.MULTILINE))
     except Exception:
         return frozenset()
 
@@ -37,15 +38,18 @@ def resolve_video_encoder() -> str:
 
 
 def video_encoder_args(bitrate: str = "7000k") -> list[str]:
-    """`-c:v ...` args for the resolved encoder (audio/pix_fmt handled by the caller)."""
+    """`-c:v ...` args for the resolved encoder, with a uniform yuv420p pixel format for broad
+    player compatibility (nvenc/qsv don't always default to it; harmless on videotoolbox/libx264)."""
     enc = resolve_video_encoder()
     if enc == "h264_videotoolbox":
-        return ["-c:v", enc, "-allow_sw", "1", "-b:v", bitrate]
-    if enc == "h264_nvenc":
-        return ["-c:v", enc, "-preset", "p4", "-b:v", bitrate]
-    if enc == "h264_qsv":
-        return ["-c:v", enc, "-b:v", bitrate]
-    return ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p"]
+        args = ["-c:v", enc, "-allow_sw", "1", "-b:v", bitrate]
+    elif enc == "h264_nvenc":
+        args = ["-c:v", enc, "-preset", "p4", "-b:v", bitrate]
+    elif enc == "h264_qsv":
+        args = ["-c:v", enc, "-b:v", bitrate]
+    else:
+        args = ["-c:v", "libx264", "-preset", "medium", "-crf", "20"]
+    return args + ["-pix_fmt", "yuv420p"]
 
 
 class FfmpegError(RuntimeError):

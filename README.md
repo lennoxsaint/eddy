@@ -34,6 +34,7 @@ eddy run path/to/footage/          # camera.mp4 [+ screen.mp4 + mic.wav], or one
 
 Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
 (configurable via `paths.runs_dir`). Reclaim scratch afterwards with `eddy clean <run>`.
+(Pre-0.6 runs lived under `~/Eddy/runs`; move them if you want them under the new default.)
 
 Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy shorts`, `eddy package`.
 
