@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 
@@ -131,6 +132,48 @@ def recommend(found: dict) -> tuple[str, str]:
     )
 
 
+def _ffmpeg_major(version_output: str) -> int | None:
+    """Parse the major version from `ffmpeg -version` output ('ffmpeg version 8.0 ...' or
+    a distro string like 'n6.1.1' / '6.0-static'). Returns None if unparseable."""
+    m = re.search(r"ffmpeg version n?(\d+)", version_output)
+    return int(m.group(1)) if m else None
+
+
+def preflight() -> list[dict]:
+    """Environment checks a stranger needs BEFORE a 20GB model pull + a 50-min transcribe:
+    ffmpeg present & >=8, ffprobe present, a usable video encoder, and enough free disk."""
+    from eddy.media.ffmpeg import resolve_video_encoder
+
+    checks: list[dict] = []
+
+    ffmpeg = shutil.which("ffmpeg")
+    major = None
+    if ffmpeg:
+        try:
+            major = _ffmpeg_major(subprocess.run([ffmpeg, "-version"], capture_output=True, text=True, timeout=10).stdout)
+        except Exception:
+            major = None
+    ff_ok = bool(ffmpeg) and (major is None or major >= 8)
+    checks.append({"check": "ffmpeg", "ok": ff_ok,
+                   "detail": (f"v{major}" if major else "found") if ffmpeg else "NOT FOUND — install ffmpeg 8+"})
+
+    checks.append({"check": "ffprobe", "ok": shutil.which("ffprobe") is not None,
+                   "detail": "found" if shutil.which("ffprobe") else "NOT FOUND"})
+
+    enc = resolve_video_encoder() if ffmpeg else None
+    checks.append({"check": "video encoder", "ok": enc is not None, "detail": enc or "unavailable"})
+
+    try:
+        from pathlib import Path
+
+        free_gb = round(shutil.disk_usage(Path.home()).free / 2**30)
+        checks.append({"check": "free disk", "ok": free_gb >= 5, "detail": f"{free_gb}GB free"})
+    except Exception:
+        checks.append({"check": "free disk", "ok": True, "detail": "unknown"})
+
+    return checks
+
+
 def ping_provider(name: str) -> dict:
     from eddy.providers.base import get_provider
 
@@ -163,6 +206,10 @@ def run_doctor(ping: bool = False, all_providers: bool = False, write: bool = Tr
     creds = found["credentials"]
     typer.echo("brains      " + ", ".join(k for k, v in creds.items() if v) if any(creds.values()) else "brains      none detected")
     typer.echo(f"recommend   {provider} — {reason}")
+
+    for c in preflight():
+        mark = "ok  " if c["ok"] else "FAIL"
+        typer.echo(f"{c['check']:11} {mark} {c['detail']}")
 
     if write:
         sections: dict = {"provider": {"active": provider}}

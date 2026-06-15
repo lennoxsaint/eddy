@@ -98,7 +98,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] ⚙ **Runtime encoder resolver** (probe `ffmpeg -encoders`; videotoolbox/nvenc/qsv → libx264 fallback) — replaced hardcoded h264_videotoolbox at all 4 sites (`media/ffmpeg.py`+render, +7 tests)
 - [x] ⚙ **Cross-platform caption fonts** (macOS/Linux/Windows candidates + glob fallback + non-silent warning; Pillow default is real/scalable) (`captions.py`, +4 tests)
 - [x] ⚙ **Cross-platform hardware detection** (macOS sysctl / Linux /proc / Windows GlobalMemoryStatusEx + psutil fallback; unmeasured = None not 0) (`doctor.py`, +6 tests)
-- [ ] ⚙ doctor ffmpeg/ffprobe/encoder/free-disk preflight + `--dry-run`
+- [x] ⚙ **doctor preflight (ffmpeg>=8/ffprobe/encoder/free-disk) + `eddy run --dry-run`** (checks env + footage decodes, exits before the expensive pipeline) (`doctor.py`/`cli.py`, +4 tests)
 - [ ] ⚙ `eddy clean` + auto-prune non-chosen iterations + disk-usage in status
 - [ ] ⚙ Pinned deps + committed lockfile; reconcile requires-python
 - [ ] ⚙ Config/EDL schema migration (version-stamp + migrate-forward) + XDG runs_dir (~/Eddy vs ~/eddy)

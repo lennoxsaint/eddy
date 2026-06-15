@@ -56,12 +56,38 @@ def run(
         False, "--local-only", help="Fully on-device: local brain only, no model downloads, no cloud thumbnail APIs."
     ),
     language: Optional[str] = typer.Option(None, "--language", help="Force transcription language (e.g. en, es); default auto-detect."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Check environment + that the footage decodes, then exit (no transcribe/render)."),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
     if local_only:
         from eddy.privacy import set_offline
 
         set_offline(True)
+
+    if dry_run:
+        from eddy.doctor import preflight
+        from eddy.runs import assert_sources_decodable, discover_sources, sha256_file
+
+        ok = True
+        for c in preflight():
+            mark = "ok  " if c["ok"] else "FAIL"
+            typer.echo(f"{c['check']:13} {mark} {c['detail']}")
+            ok = ok and c["ok"]
+        try:
+            srcs = discover_sources(source)
+            assert_sources_decodable({k: str(v) for k, v in srcs.items()})
+            typer.echo(f"sources       ok   {', '.join(f'{k}={v.name}' for k, v in srcs.items())}")
+            # touch the hash path so a permission/IO problem surfaces now, not mid-run
+            sha256_file(next(iter(srcs.values())))
+        except Exception as e:
+            from eddy.errors import friendly_error
+
+            head, nxt = friendly_error(e)
+            typer.echo(f"sources       FAIL {head}\n              → {nxt}", err=True)
+            ok = False
+        typer.echo("\ndry run: " + ("OK — ready to run" if ok else "problems found (see FAIL above)"))
+        raise typer.Exit(0 if ok else 1)
+
     from eddy.loop.controller import autonomous_run
 
     try:
