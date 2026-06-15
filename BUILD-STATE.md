@@ -57,8 +57,8 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 |-----------|--------|--------|
 | v0.4 stabilize | `v0.4-stabilize` | **DONE** — merged to master, tagged `v0.4` (suite 100→163, ruff+mypy clean, code-review SHIP-WITH-NITS) |
 | v0.5 robustness | `v0.5-robustness` | **DONE** — merged to master, tagged `v0.5` (suite 163→335 +golden; review SHIP-WITH-NITS, all nits cleared) |
-| v0.6 crossplatform | `v0.6-crossplatform` | **next** |
-| v0.7 operability | `v0.7-operability` | pending |
+| v0.6 crossplatform | `v0.6-crossplatform` | **CODE DONE** — 9/9 autonomous items merged to master, tagged `v0.6` (review SHIP-WITH-NITS, fixed). Distribution VALIDATION (3-OS CI green, signed installer, publish) is 🔒 human-gate-blocked. |
+| v0.7 operability | `v0.7-operability` | **next** (autonomous: explainability/corrective-control/bundle/logging/cost/moderation/injection/SRT-VTT/purge/beacon) |
 | v0.8 breadth | `v0.8-breadth` | pending |
 | v1.0 GA | `v1.0-ga` | pending |
 
