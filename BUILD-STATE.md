@@ -75,7 +75,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Git-derived version + `eddy --version` + receipt stamp** (`__init__.py`/`cli.py`/`runs.py`, +3 tests)
 - [ ] Privacy honesty: `--local-only`/`EDDY_OFFLINE` + consent + `local_files_only` + disclosure
 - [x] **CI workflow (ruff+mypy+pytest+cov)** + made the codebase ruff/mypy clean (`.github/workflows/ci.yml`)
-- [ ] Pin/record editorial model per run
+- [x] **Pin/record editorial model per run + drift warning** (`controller.py`, +4 tests)
 - [ ] Legal drafts (LICENSE/EULA/AUP/NOTICE) → human-gate
 
 ## Human-gate batch (accumulating)

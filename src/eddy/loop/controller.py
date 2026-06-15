@@ -23,7 +23,7 @@ from eddy.loop.speed import speed_to_fit
 from eddy.loop.state import RunState
 from eddy.loop.trim import trim_to_fit
 from eddy.media.frames import boundary_contact_sheet
-from eddy.providers.base import get_editorial_provider
+from eddy.providers.base import _editorial_available, get_editorial_provider
 from eddy.qa.deterministic import run_deterministic
 from eddy.qa.deterministic import save as save_qa
 from eddy.qa.judge import run_judge, run_ship_panel
@@ -73,6 +73,46 @@ def _budget_exhausted(elapsed_s: float, model_calls: int, loop) -> bool:
     was dead config; this enforces a real cumulative ceiling. Checked at the iteration head AFTER at
     least one attempt, so a run always produces a best-attempt."""
     return elapsed_s > loop.max_wall_clock_minutes * 60 or model_calls >= loop.max_total_model_calls
+
+
+def _editorial_model_id(cfg) -> dict:
+    """The resolved editorial brain identity (provider + model string) for reproducibility."""
+    setting = cfg.provider.editorial
+    if setting == "auto":
+        chosen = _editorial_available(cfg) or cfg.provider.active
+    elif setting == "local":
+        chosen = cfg.provider.active
+    else:
+        chosen = setting
+    model = {
+        "ollama": cfg.provider.ollama.model,
+        "anthropic": cfg.provider.anthropic.model,
+        "openai": cfg.provider.openai.model,
+        "claude_cli": cfg.provider.claude_cli.model,
+        "codex_cli": cfg.provider.codex_cli.model,
+    }.get(chosen, "")
+    return {"provider": chosen, "model": model}
+
+
+def _record_model_pin(run_dir: Path, cfg, receipts) -> None:
+    """Record which editorial brain produced this run, and warn on drift. A cloud model can't be
+    frozen by digest (the golden suite pins local qwen instead), but recording provider+model and
+    flagging when a resumed/re-run uses a DIFFERENT brain than earlier iterations is the honest
+    reproducibility signal — 'it got worse on re-run' is usually a silent model change."""
+    pin = _editorial_model_id(cfg)
+    path = run_dir / "model-pin.json"
+    if path.exists():
+        try:
+            prior = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            prior = None
+        if prior is not None and prior != pin:
+            receipts.log("model_drift", prior=prior, current=pin)
+        return
+    from eddy.atomicio import atomic_write_text
+
+    atomic_write_text(path, json.dumps(pin, indent=1))
+    receipts.log("model_pin", **pin)
 
 
 def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int = 0) -> list[dict]:
@@ -140,6 +180,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
     provider = get_editorial_provider(cfg, receipts)  # beat map/decisions/revise/judge; mechanical stays local
+    _record_model_pin(run_dir, cfg, receipts)  # reproducibility: pin the brain, warn on drift
     target_s = (target_minutes or cfg.loop.default_target_minutes) * 60
     threshold = cfg.loop.judge_threshold
 
