@@ -36,6 +36,9 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
     chaps = chapters(edl, decisions, provider, receipts)
     desc = description(kept, chaps, provider, receipts)
     write_copy_artifacts(final_dir, title_list, desc, chaps)
+    # structured candidates so `eddy pick` can re-run the A/B selection standalone
+    final_dir.mkdir(parents=True, exist_ok=True)
+    (final_dir / "titles.json").write_text(json.dumps(title_list, indent=2))
 
     # thumbnails from sharp face frames at beat starts / high-energy moments
     final_video = final_dir / "video.mp4"
@@ -45,6 +48,11 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
         refs = face_reference_frames(final_video, moments, final_dir / "thumbnails" / "refs", run_dir)
         hint = title_list[0]["title"] if title_list else run_dir.name
         thumb_paths = generate_thumbnails(run_dir, refs, hint, cfg, receipts)
+
+    # A/B test picks (deterministic title rubric + honest thumbnail pairing)
+    from eddy.package.abpick import build_ab_pick
+
+    build_ab_pick(run_dir, titles=title_list)
 
     # transcript of the final cut
     (final_dir / "transcript.md").write_text(

@@ -207,6 +207,25 @@ def plan(run_dir: Path = typer.Argument(..., help="Run directory (runs/<date-slu
 
 
 @app.command()
+def pick(run_dir: Path = typer.Argument(..., help="Run directory (runs/<date-slug>)")) -> None:
+    """A/B pick: score the title candidates (deterministic rubric) + pair thumbnails -> AB-TEST.md."""
+    from eddy.package.abpick import build_ab_pick
+
+    out = build_ab_pick(run_dir)
+    import json as _json
+
+    res = _json.loads(out.read_text())
+    a, b = res["title"]["a"], res["title"]["b"]
+    if a:
+        typer.echo(f"A (score {a['score']}): {a['title']}")
+    if b:
+        typer.echo(f"B (score {b['score']}): {b['title']}")
+    if not a:
+        typer.echo("no title candidates found — run packaging first")
+    typer.echo(f"→ {out.parent / 'AB-TEST.md'}")
+
+
+@app.command()
 def render(
     run_dir: Path = typer.Argument(...),
     proxy: bool = typer.Option(False, "--proxy", help="480p proxy instead of final."),
