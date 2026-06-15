@@ -84,7 +84,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Whisper language auto-detect + `--language` + mismatch/health warning** + dropped personal vocab prompt (`whisper.py`/`config.py`/`cli.py`/`controller.py`, +5 tests)
 - [x] **Ingest gates** (accept webm/avi/ts/mts/3gp/wmv/flv; decodability preflight fails loud on corrupt/0-byte/no-video) (`runs.py`/`controller.py`, +7 tests)
 - [x] **Empty/no-speech is a first-class outcome** (fail fast, don't cache an empty transcript) (`whisper.py`, +2 tests)
-- [ ] Live progress + ETA layer
+- [x] **Live progress + ETA** (per-iteration cut N/M · quality · judge · over-ceiling · elapsed + ETA; transcribe banner; total elapsed) (`controller.py`, +3 tests)
 - [x] **Top-level error handler + crash log** (friendly "what happened + next step" + persisted traceback, nonzero exit) (`errors.py`/`cli.py`, +6 tests)
 - [x] **`tests/conftest.py` + synthetic lavfi fixtures + markers** (needs_ffmpeg/e2e/slow; real-probe coverage) (`conftest.py`/`test_fixtures.py`, +5 tests)
 - [x] **Fixture-backed render→QA e2e** (real ffmpeg render + deterministic gates on synthetic media, source unmutated) (`test_e2e_render.py`, +1). Full-run-with-stubbed-model e2e deferred to v0.5.x.

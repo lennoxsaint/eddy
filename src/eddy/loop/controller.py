@@ -75,6 +75,23 @@ def _budget_exhausted(elapsed_s: float, model_calls: int, loop) -> bool:
     return elapsed_s > loop.max_wall_clock_minutes * 60 or model_calls >= loop.max_total_model_calls
 
 
+def _fmt_dur(s: float) -> str:
+    s = int(max(0, s))
+    return f"{s // 60}m{s % 60:02d}s" if s >= 60 else f"{s}s"
+
+
+def _loop_progress(iteration: int, max_iter: int, quality: float, judge: float, over_s: float, elapsed_s: float) -> str:
+    """A one-line, human-readable progress + rough ETA for each loop iteration, so a multi-minute
+    run never looks frozen. ETA extrapolates from the average iteration time so far."""
+    eta = ""
+    if iteration > 0:
+        remaining = (elapsed_s / iteration) * max(0, max_iter - iteration)
+        if remaining > 0:
+            eta = f" · ~{_fmt_dur(remaining)} left (max)"
+    over = f" · {_fmt_dur(over_s)} over ceiling" if over_s > 0 else " · under ceiling"
+    return f"[eddy] cut {iteration}/{max_iter} · q{quality:.2f} judge{judge:.1f}{over} · {_fmt_dur(elapsed_s)} in{eta}"
+
+
 def _editorial_model_id(cfg) -> dict:
     """The resolved editorial brain identity (provider + model string) for reproducibility."""
     setting = cfg.provider.editorial
@@ -311,6 +328,10 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             judge_score=judge["weighted"], judge_unstable=judge.get("judge_unstable"),
             under_ceiling=under_ceiling, done=gates_ok and judge_ok and under_ceiling,
         )
+        print(_loop_progress(
+            iteration, cfg.loop.max_iterations, qual["quality"], judge["weighted"],
+            over_ceiling_s, time.time() - loop_start,
+        ))
 
         # clean-ship check runs BEFORE the plateau break so a passing iteration is never
         # thrown away by a plateau stop
@@ -375,9 +396,11 @@ def autonomous_run(
     assert_sources_decodable(manifest(run_dir)["sources"])  # fail loud on corrupt/unsupported input
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
+    run_t0 = time.time()
     print(f"run: {run_dir}")
 
     state.set_phase("transcribe")
+    print("[eddy] transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
 
     chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume)
@@ -488,5 +511,5 @@ def autonomous_run(
 
     verify_sources_unmutated(run_dir)
     state.set_phase("done")
-    print(f"launch kit: {run_dir / 'final'}")
+    print(f"[eddy] done in {_fmt_dur(time.time() - run_t0)} · launch kit: {run_dir / 'final'}")
     return run_dir
