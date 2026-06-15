@@ -89,8 +89,8 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **`tests/conftest.py` + synthetic lavfi fixtures + markers** (needs_ffmpeg/e2e/slow; real-probe coverage) (`conftest.py`/`test_fixtures.py`, +5 tests)
 - [ ] Fixture-backed `eddy run` e2e
 - [x] **Unit tests across untested modules** (doctor/retakes/protect/pack/captions/copy/layout/simulate, +88 tests via an 8-agent self-verified Workflow fan-out)
-- [ ] Loop-resume integrity tests
-- [ ] Provider/judge contract tests
+- [x] **Loop-resume integrity tests** (plateau/best persistence, recovered flag, model-pin/drift) (`test_loop_resume.py`, +7)
+- [x] **Provider contract tests** (ollama/anthropic/openai: text+schema, retry-once→ProviderError, NaN reject, key/timeout) (+28 via Workflow) — surfaced a real openai key/base_url passthrough gap (fixed next)
 - [x] **`compile_edl` Hypothesis fuzz** (finite/in-bounds/sorted/non-overlapping/positive invariants under random cuts + protections) (`test_compile_fuzz.py`, +2 property tests)
 - [ ] Golden editorial suite (pinned qwen q4)
 
