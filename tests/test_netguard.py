@@ -13,13 +13,12 @@ from eddy.netguard import EgressBlocked, _check, _is_loopback, install_egress_gu
 
 @pytest.fixture
 def restore_socket():
-    """Save/restore the global socket hooks so the guard can't leak into other tests."""
-    c, cc, inst = socket.socket.connect, socket.create_connection, ng._installed[0]
-    ng._installed[0] = False
+    """Install the guard via the real API, then uninstall in teardown so it can't leak into other
+    tests (teardown runs even if the test body raises)."""
+    from eddy.netguard import uninstall_egress_guard
+
     yield
-    socket.socket.connect = c
-    socket.create_connection = cc
-    ng._installed[0] = inst
+    uninstall_egress_guard()
 
 
 def test_loopback_classification():
@@ -49,6 +48,24 @@ def test_guard_blocks_create_connection(restore_socket):
     install_egress_guard()
     with pytest.raises(EgressBlocked):
         socket.create_connection(("example.com", 80))
+
+
+def test_guard_blocks_connect_ex(restore_socket):
+    # connect_ex is a distinct C method (non-blocking probe) — it must be guarded too, or it leaks
+    install_egress_guard()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    with pytest.raises(EgressBlocked):
+        s.connect_ex(("192.0.2.1", 80))  # TEST-NET-1, non-routable
+
+
+def test_uninstall_restores_originals(restore_socket):
+    import eddy.netguard as ngmod
+
+    original = socket.socket.connect
+    install_egress_guard()
+    assert socket.socket.connect is not original  # patched
+    ngmod.uninstall_egress_guard()
+    assert socket.socket.connect is original  # restored
 
 
 def test_guard_allows_loopback_through_to_real_connect(restore_socket):
@@ -84,3 +101,27 @@ def test_maybe_install_only_when_offline(monkeypatch, restore_socket):
     assert ng.maybe_install_egress_guard() is False  # online: no guard
     monkeypatch.setenv("EDDY_OFFLINE", "1")
     assert ng.maybe_install_egress_guard() is True
+
+
+def test_offline_refuses_cli_subprocess_brain(monkeypatch):
+    """C1: the in-process guard can't sandbox a child process, so offline mode must REFUSE a
+    cloud/CLI active provider rather than silently stream the transcript off-device."""
+    monkeypatch.setenv("EDDY_OFFLINE", "1")
+    from eddy.config import EddyConfig
+    from eddy.providers.base import ProviderError, get_editorial_provider
+
+    for active in ("claude_cli", "codex_cli", "anthropic", "openai"):
+        cfg = EddyConfig()
+        cfg.provider.active = active
+        with pytest.raises(ProviderError, match="off-device"):
+            get_editorial_provider(cfg)
+
+
+def test_offline_allows_ollama_brain(monkeypatch):
+    monkeypatch.setenv("EDDY_OFFLINE", "1")
+    from eddy.config import EddyConfig
+    from eddy.providers.base import get_editorial_provider
+
+    cfg = EddyConfig()
+    cfg.provider.active = "ollama"
+    assert get_editorial_provider(cfg).name == "ollama"  # on-device brain is fine offline

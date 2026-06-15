@@ -41,27 +41,51 @@ def _check(address: object) -> None:
 
 
 _installed = [False]
+_originals: dict = {}  # saved unpatched socket callables, for uninstall
 
 
 def install_egress_guard() -> None:
-    """Idempotently wrap socket connect paths so non-loopback TCP connections raise EgressBlocked."""
+    """Idempotently wrap socket connect paths so non-loopback TCP connections raise EgressBlocked.
+    Covers blocking connect, create_connection, and the non-blocking connect_ex.
+
+    NOTE: this is an IN-PROCESS guard. It cannot sandbox a child process — CLI-subprocess editorial
+    brains (claude_cli/codex_cli) are blocked from being selected at all under offline mode (see
+    get_editorial_provider), not by this guard."""
     if _installed[0]:
         return
     real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
     real_create = socket.create_connection
+    _originals.update(connect=real_connect, connect_ex=real_connect_ex, create_connection=real_create)
 
     def guarded_connect(self, address, *a, **k):  # type: ignore[no-untyped-def]
         if self.family in (socket.AF_INET, socket.AF_INET6):
             _check(address)
         return real_connect(self, address, *a, **k)
 
+    def guarded_connect_ex(self, address, *a, **k):  # type: ignore[no-untyped-def]
+        if self.family in (socket.AF_INET, socket.AF_INET6):
+            _check(address)
+        return real_connect_ex(self, address, *a, **k)
+
     def guarded_create(address, *a, **k):  # type: ignore[no-untyped-def]
         _check(address)
         return real_create(address, *a, **k)
 
     socket.socket.connect = guarded_connect  # type: ignore[method-assign,assignment]
+    socket.socket.connect_ex = guarded_connect_ex  # type: ignore[method-assign,assignment]
     socket.create_connection = guarded_create  # type: ignore[assignment]
     _installed[0] = True
+
+
+def uninstall_egress_guard() -> None:
+    """Restore the original socket callables (used by tests; the CLI never uninstalls mid-run)."""
+    if not _installed[0]:
+        return
+    socket.socket.connect = _originals["connect"]  # type: ignore[method-assign]
+    socket.socket.connect_ex = _originals["connect_ex"]  # type: ignore[method-assign]
+    socket.create_connection = _originals["create_connection"]  # type: ignore[assignment]
+    _installed[0] = False
 
 
 def maybe_install_egress_guard() -> bool:

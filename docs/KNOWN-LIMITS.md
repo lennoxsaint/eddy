@@ -28,6 +28,14 @@ defects; if one blocks you, that's a feature request.
   frozen. Bit-exact reproducibility requires the local qwen model at `temperature=0` + a fixed
   `seed` on the same model **digest** (see `docs/REPRODUCIBILITY.md`).
 
+## Offline / egress guard
+- **The egress guard is in-process only.** Under `--local-only`/`EDDY_OFFLINE` it blocks outbound
+  non-loopback connections from Eddy's own process (covers httpx + the Anthropic/OpenAI SDKs +
+  urllib; blocking `connect`, `connect_ex`, `create_connection`). It does **not** sandbox child
+  processes. CLI-subprocess editorial brains (`claude_cli`/`codex_cli`) run in a child with their
+  own socket stack — so offline mode **refuses to select them** (hard error) rather than trusting a
+  guard that can't reach them. It also does not cover raw UDP/QUIC (no Eddy code path uses them).
+
 ## Platform / distribution
 - **Cross-platform is authored + CI-gated, not yet hardware-dogfooded** on Windows/Linux from the
   maintainer's machine. The 3-OS CI matrix proves it once the private remote exists (human-gate).

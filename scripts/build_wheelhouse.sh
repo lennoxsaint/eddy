@@ -15,10 +15,13 @@ LOCK="$REPO_ROOT/requirements.lock"
 echo "[wheelhouse] python: $(python3 --version)  platform: $(python3 -c 'import platform;print(platform.platform(), platform.machine())')"
 mkdir -p "$OUT"
 
-# 1) the pinned dependency closure (reproducible — exact versions from the lockfile)
+# 1) the pinned dependency closure (reproducible — exact versions from the lockfile).
+#    --only-binary=:all: forces real platform WHEELS: if one is missing for this OS/arch the build
+#    fails HERE (on the connected machine) instead of silently shipping an sdist that needs a
+#    compiler + headers on the air-gapped box (which would defeat the no-network promise).
 if [[ -f "$LOCK" ]]; then
-  echo "[wheelhouse] downloading pinned deps from requirements.lock"
-  python3 -m pip download -r "$LOCK" -d "$OUT"
+  echo "[wheelhouse] downloading pinned deps (wheels only) from requirements.lock"
+  python3 -m pip download --only-binary=:all: -r "$LOCK" -d "$OUT"
 else
   echo "[wheelhouse] WARNING: requirements.lock missing — falling back to pyproject ranges (not reproducible)"
 fi

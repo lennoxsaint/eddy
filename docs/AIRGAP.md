@@ -1,8 +1,10 @@
 # Air-gapped / offline install
 
-Eddy is local-first: with `--local-only` (or `EDDY_OFFLINE=1`) nothing leaves the machine, and that
-promise is **enforced** at the syscall boundary — any non-loopback connection raises `EgressBlocked`
-(see `src/eddy/netguard.py`). This guide installs and runs Eddy on a machine with no internet.
+Eddy is local-first: with `--local-only` (or `EDDY_OFFLINE=1`) nothing leaves the machine. Eddy's
+own process is **enforced** to stay on-device — any outbound non-loopback TCP connection raises
+`EgressBlocked` (see `src/eddy/netguard.py`), and offline mode refuses to select a cloud/CLI brain
+that would run off-device. (The guard is in-process; it does not sandbox unrelated child processes —
+see `docs/KNOWN-LIMITS.md`.) This guide installs and runs Eddy on a machine with no internet.
 
 Three things must be staged from a connected machine, because none of them are fetched at runtime in
 offline mode:

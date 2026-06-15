@@ -42,17 +42,20 @@ def test_multihour_transcript_compiles_bounded():
 
 
 def test_many_shorts_candidates_capped_not_choked():
-    """Hundreds of short candidates: the selection cap (count*2, sorted by start) holds and stays cheap."""
+    """Hundreds of short candidates: the PRODUCTION selection cap holds and stays cheap at scale."""
     from eddy.config import EddyConfig
     from eddy.edit.schema import ShortsCandidate
+    from eddy.render.shorts import select_short_candidates  # the real shipped selector
 
     cfg = EddyConfig()
     cands = [ShortsCandidate(start_s=float(i), end_s=float(i) + 30.0, hook=f"h{i}") for i in range(500)]
+    # shuffle the input so we prove the function sorts, not the construction order
+    cands = cands[::-1]
     t0 = time.time()
-    selected = sorted(cands, key=lambda c: c.start_s)[: cfg.shorts.count * 2]  # mirrors render/shorts.py:165
+    selected = select_short_candidates(cands, cfg.shorts.count)
     elapsed = time.time() - t0
     assert len(selected) == cfg.shorts.count * 2
-    assert selected == sorted(selected, key=lambda c: c.start_s)  # ordering preserved
+    assert [c.start_s for c in selected] == sorted(c.start_s for c in selected)  # earliest-first
     assert elapsed < 1.0
 
 

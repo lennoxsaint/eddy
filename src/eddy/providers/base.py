@@ -185,13 +185,24 @@ def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
     from eddy.privacy import is_offline
 
     setting = cfg.provider.editorial
-    local = get_provider(cfg, cfg.provider.active, receipts=receipts)
     # --local-only / EDDY_OFFLINE: force the local brain so the transcript never leaves the
     # machine, regardless of editorial='auto' or a claude binary being on PATH.
     if is_offline():
+        # The in-process egress guard CANNOT sandbox a CLI-subprocess brain (claude_cli/codex_cli
+        # run in a child process with their own socket stack and stream the transcript to the cloud).
+        # If the *active* provider is itself a cloud/CLI brain, offline mode would silently leak —
+        # refuse loudly instead of pretending it's on-device.
+        if cfg.provider.active in _CLOUD_PROVIDERS:
+            raise ProviderError(
+                f"--local-only/EDDY_OFFLINE is set but provider.active={cfg.provider.active!r} is a "
+                f"cloud/CLI brain that sends the transcript off-device. Set provider.active to an "
+                f"on-device brain (e.g. 'ollama') for offline runs."
+            )
+        local = get_provider(cfg, cfg.provider.active, receipts=receipts)
         if receipts is not None:
             receipts.log("editorial_brain", chosen=cfg.provider.active, offline=True)
         return local
+    local = get_provider(cfg, cfg.provider.active, receipts=receipts)
     if setting == "local":
         chosen = cfg.provider.active
     elif setting == "auto":

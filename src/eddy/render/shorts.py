@@ -146,6 +146,12 @@ def _render_segment_dual(
     return out
 
 
+def select_short_candidates(candidates: list, count: int) -> list:
+    """Pick which short candidates to render: earliest-first, capped at 2x the target count (a small
+    over-pull so a few can fail QA and still hit the target). Extracted so it's testable at scale."""
+    return sorted(candidates, key=lambda c: c.start_s)[: count * 2]
+
+
 def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict]:
     run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
@@ -162,7 +168,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
     out_root = run_dir / "final" / "shorts"
     out_root.mkdir(parents=True, exist_ok=True)
 
-    candidates = sorted(decisions.shorts_candidates, key=lambda c: c.start_s)[: cfg.shorts.count * 2]
+    candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count)
     ledger: list[dict] = []
     rendered = 0
 
