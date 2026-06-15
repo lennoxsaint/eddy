@@ -173,9 +173,26 @@ def qa(
 @app.command()
 def status(run_dir: Path = typer.Argument(...)) -> None:
     """Show run state: iteration, gates, judge scores, artifacts."""
+    from eddy.clean import dir_size_bytes
     from eddy.loop.state import print_status
 
     print_status(run_dir)
+    typer.echo(f"disk_usage_mb: {round(dir_size_bytes(run_dir) / 2**20, 1)}")
+
+
+@app.command()
+def clean(
+    run_dir: Path = typer.Argument(..., help="Run directory to prune scratch from."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be freed without deleting."),
+) -> None:
+    """Reclaim disk: prune segment scratch / proxy renders / the 16k WAV, keeping deliverables."""
+    from eddy.clean import clean_run
+
+    info = clean_run(run_dir, dry_run=dry_run)
+    verb = "would free" if dry_run else "freed"
+    typer.echo(f"{verb} {info['freed_mb']}MB across {len(info['removed'])} item(s)")
+    for r in info["removed"]:
+        typer.echo(f"  {r}")
 
 
 if __name__ == "__main__":

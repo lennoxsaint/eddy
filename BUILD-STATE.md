@@ -99,7 +99,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] ⚙ **Cross-platform caption fonts** (macOS/Linux/Windows candidates + glob fallback + non-silent warning; Pillow default is real/scalable) (`captions.py`, +4 tests)
 - [x] ⚙ **Cross-platform hardware detection** (macOS sysctl / Linux /proc / Windows GlobalMemoryStatusEx + psutil fallback; unmeasured = None not 0) (`doctor.py`, +6 tests)
 - [x] ⚙ **doctor preflight (ffmpeg>=8/ffprobe/encoder/free-disk) + `eddy run --dry-run`** (checks env + footage decodes, exits before the expensive pipeline) (`doctor.py`/`cli.py`, +4 tests)
-- [ ] ⚙ `eddy clean` + auto-prune non-chosen iterations + disk-usage in status
+- [x] ⚙ **`eddy clean` (+ `--dry-run`) + disk-usage in `eddy status`** — prunes segment scratch/proxies/16k WAV, keeps deliverables + audit trail (`clean.py`/`cli.py`, +2 tests)
 - [ ] ⚙ Pinned deps + committed lockfile; reconcile requires-python
 - [ ] ⚙ Config/EDL schema migration (version-stamp + migrate-forward) + XDG runs_dir (~/Eddy vs ~/eddy)
 - [ ] ⚙ Guided Ollama onboarding + tiered local recommendation (not the 32GB cliff)
