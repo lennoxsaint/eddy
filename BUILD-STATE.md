@@ -100,10 +100,10 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] ⚙ **Cross-platform hardware detection** (macOS sysctl / Linux /proc / Windows GlobalMemoryStatusEx + psutil fallback; unmeasured = None not 0) (`doctor.py`, +6 tests)
 - [x] ⚙ **doctor preflight (ffmpeg>=8/ffprobe/encoder/free-disk) + `eddy run --dry-run`** (checks env + footage decodes, exits before the expensive pipeline) (`doctor.py`/`cli.py`, +4 tests)
 - [x] ⚙ **`eddy clean` (+ `--dry-run`) + disk-usage in `eddy status`** — prunes segment scratch/proxies/16k WAV, keeps deliverables + audit trail (`clean.py`/`cli.py`, +2 tests)
-- [ ] ⚙ Pinned deps + committed lockfile; reconcile requires-python
+- [x] ⚙ **Pinned deps (upper bounds) + committed `requirements.lock`** (47 runtime deps; mac-resolved — cross-platform uv.lock is a follow-up) (`pyproject.toml`)
 - [ ] ⚙ Config/EDL schema migration (version-stamp + migrate-forward) + XDG runs_dir (~/Eddy vs ~/eddy)
 - [x] ⚙ **Tiered local recommendation + guided pull** (16-32GB → smaller local model not cloud; `ollama pull` guidance; light-machine note) (`doctor.py`, tests updated)
-- [ ] ⚙ 3-OS CI matrix YAML + wheel smoke test (authored; runs once remote exists)
+- [x] ⚙ **3-OS CI matrix YAML + wheel smoke** authored (`ci-matrix.yml`: mac/ubuntu/windows real render + built-wheel `python -m eddy` smoke) + `__main__.py` — runs live once the remote exists (🔒 #3)
 - [ ] 🔒 Private GitHub remote (human-gate #3) — needed for the CI matrix to run live
 - [ ] 🔒 Code-signing certs (human-gate #2) — Apple Developer ID + Windows Authenticode
 - [ ] 🔒 Real install channel / publish (human-gate #4) — signed installer or PyPI
