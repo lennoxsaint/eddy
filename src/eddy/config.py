@@ -78,6 +78,12 @@ class LoopConfig(BaseModel):
     # maximizes quality with length as a ceiling constraint, not a target band.
     duration_band: tuple[float, float] = (0.8, 1.2)  # x target (advisory)
     default_target_minutes: float = 12.0  # advisory initial-cut preference
+    # v0.3.1 speed-to-fit: deterministic time-compression of draggy beats to close a residual
+    # gap to the ceiling that cutting alone can't. Off by default until proven on a dogfood.
+    enable_speed_ramp: bool = False
+    speed_ramp_max_multiplier: float = 1.4   # hard cap; atempo preserves pitch, but >~1.5 sounds rushed
+    speed_ramp_min_beat_s: float = 15.0      # don't bother speeding beats shorter than this
+    speed_ramp_max_wpm: float = 160.0        # only speed SLOW, long beats (fast beats are already paced)
 
 
 class RenderConfig(BaseModel):

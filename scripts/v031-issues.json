@@ -1,0 +1,38 @@
+[
+  {
+    "title": "v0.3.1-A: EdlRange.speed field (schema)",
+    "description": "schema.py: add speed: float = 1.0 to EdlRange (playback multiplier; 1.0 = normal). Back-compatible (defaulted) so old edl.json still loads. Foundation for per-segment time-compression."
+  },
+  {
+    "title": "v0.3.1-B: unified speed-aware source->output remap (compiler + chapters)",
+    "description": "compiler.py: add src_to_out(edl, raw_s) helper that divides BOTH the within-segment offset (raw_s - r.start) AND the cursor advance (r.end - r.start) by r.speed. Rewrite cut_transcript to apply the same /speed to out_start/out_end and cursor. package/copy.py chapters() out_time replaced by a call to src_to_out so the two EDL-based remaps can never diverge. Fixing only the duration sum (the naive read) silently desyncs captions/chapters inside every sped beat."
+  },
+  {
+    "title": "v0.3.1-C: duration sum divide-by-speed (compiler)",
+    "description": "compiler.py: total = sum((r.end - r.start)/r.speed for r in merged) so edl.total_duration_s is the true sped output length and av_drift validates with no gate change."
+  },
+  {
+    "title": "v0.3.1-D: renderer setpts/atempo per-segment speed",
+    "description": "render/segments.py: _segment_args takes speed; render_edl passes r.speed. video: append ,setpts=PTS/{speed} after the existing setpts=PTS-STARTPTS. audio: insert ,atempo={speed} AFTER the afades (so fade st stays in source seconds) and before asetpts. Per-segment re-encode already happens; -c copy concat of mixed-speed segments is fine."
+  },
+  {
+    "title": "v0.3.1-E: speed_to_fit deterministic pass (loop/speed.py NEW)",
+    "description": "speed_to_fit(edl, decisions, beat_density, cfg): no-op unless enable_speed_ramp and over ceiling. Join beat_density (kept_s/wpm) to x_eddy.beats (source spans) by label; eligible = kept_s>=min_beat_s AND wpm<max_wpm AND label not hook/outro/payoff/COLD_OPEN AND no protected_moment overlap. Greedy heaviest-first: range.speed=min(max_mult, S/(S-gap)); stop when duration<=ceiling. Recompute total. Assert speed<=cap. Log receipt incl. ceiling_missed_s. Reuse quality.py label vocab (_HOOK_LABELS/_OUTRO_LABELS/_PAYOFF_LABELS)."
+  },
+  {
+    "title": "v0.3.1-F: controller wire-in (post-loop, pre-ship-panel)",
+    "description": "controller.py autonomous_run: after loading edl + chosen_decisions and BEFORE the ship-panel block, call speed_to_fit using the chosen iter's sim-report beat_density; rewrite final/edl.json. Ship panel then reviews the sped edit (kept recomputed from sped edl). Cut-loop and _directive_from untouched."
+  },
+  {
+    "title": "v0.3.1-G: config flags (LoopConfig)",
+    "description": "config.py LoopConfig: enable_speed_ramp=False, speed_ramp_max_multiplier=1.4, speed_ramp_min_beat_s=15.0, speed_ramp_max_wpm=160.0. All defaulted; eddy.toml stays valid."
+  },
+  {
+    "title": "v0.3.1-H: unit tests (tests/test_speed.py NEW)",
+    "description": "pytest (no render): duration halves a range at 2.0x + exact mixed-speed sum; remap scales out_start/out_end inside a sped beat AND shifts later phrases earlier; chapters src_to_out agrees with cut_transcript; eligibility excludes fast/short/protected/hook/payoff beats; factor is minimal + never exceeds cap; ceiling_missed_s reported; enable_speed_ramp=False is a no-op; old edl.json (no speed) loads as 1.0."
+  },
+  {
+    "title": "v0.3.1-I: dogfood (flag ON) + av_drift + flip-default decision",
+    "description": "Reuse v0.3 transcript (cache hit). Run enable_speed_ramp=True on the dense fable-mythos source that floored ~33-39min. Verify: duration<=ceiling OR ceiling_missed_s logged; av_drift pass; ship panel reviewed sped cut; captions/chapters in sync inside sped beats; v0.3 behaviour intact. Then decide whether to flip enable_speed_ramp default to True."
+  }
+]

@@ -25,20 +25,40 @@ def _segment_args(
     fade_s: float,
     proxy_height: int | None,
     proxy_preset: str,
+    speed: float = 1.0,
 ) -> list[str]:
     duration = max(0.05, end - start)
     seek_start = max(0.0, start - SEEK_PREROLL_S)
     output_seek = start - seek_start
+    speed = speed or 1.0
 
     vf = "fps=30,setpts=PTS-STARTPTS"
     if proxy_height:
         vf = f"scale=-2:{proxy_height}," + vf
+    # v0.3.1 time-compression: the afades run on the source-rate stream (st in source seconds),
+    # so atempo is inserted AFTER them and the fade-out st needs no adjustment. setpts=PTS/speed
+    # compresses the video timeline to match. Both streams end at duration/speed.
     af = f"afade=t=in:st=0:d={fade_s:.3f},afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f},asetpts=PTS-STARTPTS"
+    if abs(speed - 1.0) > 1e-6:
+        # setpts compresses the timeline; the trailing fps=30 re-normalizes the sped video back
+        # to CFR 30 (dropping the now-redundant frames) so every segment shares one rate/timebase
+        # for the lossless -c copy concat AND the video lands on the same duration as the atempo
+        # audio. atempo follows the afades (which run on the source-rate stream, st in source secs).
+        vf = f"{vf},setpts=PTS/{speed:.6f},fps=30"
+        af = (
+            f"afade=t=in:st=0:d={fade_s:.3f},"
+            f"afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f},"
+            f"atempo={speed:.6f},asetpts=PTS-STARTPTS"
+        )
 
+    # The -t cap is an OUTPUT-duration limit. With setpts=PTS/speed, ffmpeg reads (cap * speed)
+    # of input to fill it, so the cap must be the OUTPUT length duration/speed — otherwise a sped
+    # segment reads `speed`x more source and emits no net compression (it stays `duration` long).
+    out_t = duration / speed
     args = ["-ss", f"{seek_start:.3f}", "-i", str(source)]
     if output_seek > 0:
         args += ["-ss", f"{output_seek:.3f}"]
-    args += ["-t", f"{duration:.3f}", "-map", "0:v:0", "-map", "0:a:0", "-vf", vf, "-af", af]
+    args += ["-t", f"{out_t:.3f}", "-map", "0:v:0", "-map", "0:a:0", "-vf", vf, "-af", af]
     if proxy_height:
         args += ["-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-c:a", "aac", "-b:a", "96k"]
     else:
@@ -66,7 +86,11 @@ def render_edl(
 
     def one(job: tuple[int, object]) -> Path:
         idx, r = job
-        seg_out = seg_dir / f"{idx:04d}.mp4"
+        # v0.3.1: fold the speed into the cache filename so a resume that newly enables speed-ramp
+        # re-renders instead of reusing a stale un-sped segment. 1.0x keeps the old byte-identical
+        # name (no churn for the default-off path).
+        sp = getattr(r, "speed", 1.0) or 1.0
+        seg_out = seg_dir / (f"{idx:04d}.mp4" if abs(sp - 1.0) < 1e-6 else f"{idx:04d}_s{int(round(sp * 1000)):04d}.mp4")
         if seg_out.exists() and seg_out.stat().st_size > 1024:
             return seg_out
         run_ffmpeg(
@@ -74,6 +98,7 @@ def render_edl(
                 source, seg_out, r.start, r.end, fade_s,
                 render_cfg.proxy_height if proxy else None,
                 render_cfg.proxy_preset,
+                getattr(r, "speed", 1.0),
             ),
             run_dir=run_dir,
             receipts=None,  # per-segment receipts are noise; the concat logs the render

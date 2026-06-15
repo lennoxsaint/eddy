@@ -87,6 +87,7 @@ class EdlRange(BaseModel):
     reason: str = ""
     start_handle_s: float = 0.0  # silence margin before first word (QA)
     end_handle_s: float = 0.0
+    speed: float = 1.0  # v0.3.1 playback multiplier (1.0 = normal; >1 plays faster/shorter)
 
 
 class Edl(BaseModel):

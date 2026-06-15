@@ -22,6 +22,7 @@ from eddy.edit.retakes import filler_candidates, retake_candidates
 from eddy.edit.schema import load_decisions, load_edl, save
 from eddy.edit.simulate import save_report, simulate
 from eddy.loop.receipts import Receipts
+from eddy.loop.speed import speed_to_fit
 from eddy.loop.state import RunState
 from eddy.media.frames import boundary_contact_sheet
 from eddy.providers.base import get_editorial_provider
@@ -265,12 +266,30 @@ def autonomous_run(
     edl = load_edl(chosen / "edl.json")
     chosen_decisions = load_decisions(chosen / "edit-decisions.json")
 
+    # v0.3.1 speed-to-fit: deterministically time-compress the heaviest slow, non-protected beats
+    # to close any residual gap to the length ceiling that cutting alone couldn't (off unless
+    # enable_speed_ramp). Runs ONCE here, before the ship panel + final render, so the panel and
+    # every downstream artifact (kept transcript, chapters, QA) reflect the actually-shipped cut.
+    if cfg.loop.enable_speed_ramp and (chosen / "sim-report.json").exists():
+        state.set_phase("speed_to_fit")
+        sim_for_speed = json.loads((chosen / "sim-report.json").read_text())
+        speed_info = speed_to_fit(edl, chosen_decisions, sim_for_speed.get("beat_density", []), cfg)
+        receipts.log("speed_to_fit", applied=speed_info["applied"],
+                     over_before_s=speed_info["over_before_s"], ceiling_missed_s=speed_info["ceiling_missed_s"],
+                     duration_before_s=speed_info["duration_before_s"], duration_after_s=speed_info["duration_after_s"])
+        if speed_info["applied"]:
+            print(f"speed-to-fit: {speed_info['duration_before_s']:.0f}s -> {speed_info['duration_after_s']:.0f}s "
+                  f"({len(speed_info['beats_sped'])} beats; ceiling miss {speed_info['ceiling_missed_s']:.0f}s)")
+            (run_dir / "final").mkdir(parents=True, exist_ok=True)
+            (run_dir / "final" / "speed-to-fit.json").write_text(json.dumps(speed_info, indent=1))
+
     # v0.3 final-ship panel: 3 independent lenses vote on the chosen best (once). Advisory —
     # records dissent to final/ship-panel.json but never blocks delivery.
     if cfg.loop.ship_panel and (chosen / "sim-report.json").exists():
         state.set_phase("ship_panel")
         provider = get_editorial_provider(cfg, receipts)
         sim = json.loads((chosen / "sim-report.json").read_text())
+        sim["duration_s"] = edl.total_duration_s  # honest: panel judges the sped, shipped duration
         kept = cut_transcript(edl, load_phrases(run_dir))
         try:
             panel = run_ship_panel(provider, receipts, sim, chosen_decisions, edl, kept, cfg)

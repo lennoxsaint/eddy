@@ -203,7 +203,9 @@ def compile_edl(
                     ),
                 )
 
-    total = sum(r.end - r.start for r in merged)
+    # v0.3.1: a sped range occupies (span / speed) output seconds. speed defaults to 1.0,
+    # so this is identical to the old naive sum for any un-sped edit.
+    total = sum((r.end - r.start) / (r.speed or 1.0) for r in merged)
     return Edl(
         sources={"camera": source_path},
         ranges=merged,
@@ -236,22 +238,40 @@ def _snap_to_words(
     return start, end, first["start"] - start, end - last["end"]
 
 
+def src_to_out(edl: Edl, raw_s: float) -> float | None:
+    """Map a source-timeline second to the output (edited) timeline, honoring per-range speed.
+
+    v0.3.1: a range played at `speed` occupies (span / speed) output seconds, so BOTH the
+    within-segment offset and the cursor advance divide by speed. Dividing only one (e.g. the
+    duration sum) silently desyncs anything mapped through here inside a sped beat. Returns None
+    when raw_s lands after the last kept range. This is the single source of truth for the
+    source->output mapping; cut_transcript() applies the identical rule for bulk phrase remap."""
+    cursor = 0.0
+    for r in edl.ranges:
+        sp = r.speed or 1.0
+        if raw_s <= r.end:
+            return cursor + max(0.0, raw_s - r.start) / sp
+        cursor += (r.end - r.start) / sp
+    return None
+
+
 def cut_transcript(edl: Edl, phrases: list[dict]) -> list[dict]:
-    """Phrases surviving the edit, with output-timeline timestamps."""
+    """Phrases surviving the edit, with output-timeline timestamps (speed-aware; see src_to_out)."""
     out = []
     cursor = 0.0
     for r in edl.ranges:
+        sp = r.speed or 1.0
         for p in phrases:
             mid = (p["start"] + p["end"]) / 2
             if r.start <= mid <= r.end:
                 out.append(
                     {
                         **p,
-                        "out_start": round(cursor + p["start"] - r.start, 2),
-                        "out_end": round(cursor + p["end"] - r.start, 2),
+                        "out_start": round(cursor + (p["start"] - r.start) / sp, 2),
+                        "out_end": round(cursor + (p["end"] - r.start) / sp, 2),
                     }
                 )
-        cursor += r.end - r.start
+        cursor += (r.end - r.start) / sp
     return out
 
 
