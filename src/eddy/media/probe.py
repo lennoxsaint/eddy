@@ -15,16 +15,47 @@ def probe(path: Path) -> dict:
     return json.loads(out)
 
 
+def _to_float(v) -> float | None:
+    try:
+        f = float(v)
+        return f if f > 0 else None
+    except (TypeError, ValueError):
+        return None  # missing, "N/A", or non-positive -> unknown
+
+
+def _resolve_duration(info: dict) -> float:
+    """format.duration -> longest stream.duration -> 0.0 (unknown). Never raises: some containers
+    (raw streams, fragmented mp4, webm without a global duration) omit format.duration or report
+    'N/A', which used to KeyError/ValueError and crash the run."""
+    d = _to_float((info.get("format") or {}).get("duration"))
+    if d is not None:
+        return d
+    best = 0.0
+    for s in info.get("streams") or []:
+        sd = _to_float(s.get("duration"))
+        if sd:
+            best = max(best, sd)
+    return best
+
+
 def duration_s(path: Path) -> float:
-    return float(probe(path)["format"]["duration"])
+    """Resolved source duration. The core pipeline genuinely needs it, so an unresolvable duration
+    fails loud with an actionable message rather than returning a silent 0 that breaks compile."""
+    d = _resolve_duration(probe(path))
+    if d <= 0:
+        from eddy.media.ffmpeg import FfmpegError
+
+        raise FfmpegError(f"could not determine duration of {path} — corrupt or unsupported container?")
+    return d
 
 
 def stream_summary(path: Path) -> dict:
     info = probe(path)
-    v = next((s for s in info["streams"] if s["codec_type"] == "video"), None)
-    a = next((s for s in info["streams"] if s["codec_type"] == "audio"), None)
+    streams = info.get("streams") or []
+    v = next((s for s in streams if s.get("codec_type") == "video"), None)
+    a = next((s for s in streams if s.get("codec_type") == "audio"), None)
     return {
-        "duration_s": float(info["format"]["duration"]),
+        "duration_s": _resolve_duration(info),  # 0.0 if unknown; QA gates on > 1, never crashes here
         "video": None
         if v is None
         else {
@@ -37,7 +68,7 @@ def stream_summary(path: Path) -> dict:
         if a is None
         else {
             "codec": a.get("codec_name"),
-            "sample_rate": int(a.get("sample_rate", 0)),
+            "sample_rate": int(_to_float(a.get("sample_rate")) or 0),
             "channels": a.get("channels"),
         },
     }
