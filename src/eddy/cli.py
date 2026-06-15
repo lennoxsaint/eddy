@@ -80,6 +80,11 @@ def run(
         from eddy.privacy import set_offline
 
         set_offline(True)
+    # enforce the offline promise at the syscall boundary (covers --local-only AND EDDY_OFFLINE=1)
+    from eddy.netguard import maybe_install_egress_guard
+
+    if maybe_install_egress_guard():
+        typer.echo("[eddy] --local-only: egress guard active — outbound connections are blocked.")
 
     if dry_run:
         from eddy.doctor import preflight

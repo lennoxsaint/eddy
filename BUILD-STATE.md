@@ -89,6 +89,16 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Multi-speaker/interview detection + warning** (heuristic over transcript cues + pause density, conservative/under-warns, low|medium confidence, never authoritative; non-blocking warning after transcribe in `autonomous_run` + `mine_shorts`; per-speaker editing stays out of scope) (`edit/speakers.py`/`controller.py`, +4 tests)
 - [x] **RTL/CJK caption guard** (burned word-captions do no bidi/shaping; detect RTL/CJK script in caption text and warn once — pointing at the v0.7 sidecar .srt/.vtt — instead of silently shipping reversed/tofu captions) (`render/scripts.py`/`render/captions.py`, +5 tests)
 
+### v1.0 items (GA hardening — autonomous; signing/notarize/publish are human-gate)
+- [x] **Verifiable no-egress + active egress guard** (`--local-only`/`EDDY_OFFLINE` now ENFORCED at the syscall boundary: non-loopback TCP connects raise `EgressBlocked`; loopback/Ollama allowed; hermetic test proves resolving the offline brain attempts zero egress) (`netguard.py`/`cli.py`, +7 tests)
+- [ ] Coverage floor (pytest-cov gate) + required-green-before-tag wired into CI
+- [ ] Offline wheelhouse builder + airgap install docs
+- [ ] Reproducibility proof (same footage + pinned qwen = same edit; doc + check)
+- [ ] Release process (RELEASE.md: tag-on-release, signing/notarize steps [human-gate], update check)
+- [ ] Support runbook + documented known-limits (SUPPORT.md / KNOWN-LIMITS.md)
+- [ ] EDD-84 addressed or documented
+- [ ] Soak/scale validation (multi-hour, many-shorts, queues) — opt-in test harness
+
 ### v0.7 items (operability & safety — all autonomous-able)
 - [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)
 - [x] **Token + cost accounting + spend cap + per-run summary** (anthropic/openai log usage→cost; loop aborts at `max_run_cost_usd`; run prints editorial $) (`cost.py`/providers/`controller.py`, +5 tests)
