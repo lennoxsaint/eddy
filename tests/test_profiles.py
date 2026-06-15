@@ -2,8 +2,14 @@
 language); an explicit CLI flag always wins. Unknown profile = hard error, not silent wrong defaults."""
 
 import pytest
+from typer.testing import CliRunner
 
+import eddy.config as cfgmod
+import eddy.loop.controller as ctrlmod
+from eddy.cli import app
 from eddy.config import EddyConfig, RunProfile, resolve_profile
+
+runner = CliRunner()
 
 
 def test_resolve_none_is_empty_profile():
@@ -52,3 +58,27 @@ def test_cli_flag_overrides_profile_precedence():
     cli_language = None
     eff_language = cli_language if cli_language is not None else prof.language
     assert eff_language == "es"
+
+
+def _patch_run(monkeypatch, tmp_path, profile):
+    captured: dict = {}
+    monkeypatch.setattr(ctrlmod, "autonomous_run", lambda **k: captured.update(k) or tmp_path)
+    monkeypatch.setattr(cfgmod, "load_config", lambda *a, **k: EddyConfig(profiles={"p": profile}))
+    src = tmp_path / "footage.mp4"
+    src.write_bytes(b"x")
+    return captured, src
+
+
+def test_profile_skip_shorts_applies_without_flag(monkeypatch, tmp_path):
+    captured, src = _patch_run(monkeypatch, tmp_path, RunProfile(skip_shorts=True))
+    r = runner.invoke(app, ["run", str(src), "--profile", "p"])
+    assert r.exit_code == 0, r.output
+    assert captured["skip_shorts"] is True  # profile applies when no flag given
+
+
+def test_no_skip_shorts_flag_overrides_profile(monkeypatch, tmp_path):
+    # the I2 fix: an explicit --no-skip-shorts must beat a profile's skip_shorts=True
+    captured, src = _patch_run(monkeypatch, tmp_path, RunProfile(skip_shorts=True))
+    r = runner.invoke(app, ["run", str(src), "--profile", "p", "--no-skip-shorts"])
+    assert r.exit_code == 0, r.output
+    assert captured["skip_shorts"] is False

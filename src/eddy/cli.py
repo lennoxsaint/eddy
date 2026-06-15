@@ -50,8 +50,8 @@ def run(
     target_minutes: Optional[float] = typer.Option(None, help="Target runtime for the long edit (minutes)."),
     slug: Optional[str] = typer.Option(None, help="Run slug; defaults to date + source name."),
     resume: bool = typer.Option(False, help="Resume an interrupted run for this source."),
-    skip_shorts: bool = typer.Option(False, help="Skip shorts rendering."),
-    skip_package: bool = typer.Option(False, help="Skip packaging (titles/thumbnails/description)."),
+    skip_shorts: Optional[bool] = typer.Option(None, "--skip-shorts/--no-skip-shorts", help="Skip shorts rendering (overrides the profile)."),
+    skip_package: Optional[bool] = typer.Option(None, "--skip-package/--no-skip-package", help="Skip packaging (overrides the profile)."),
     local_only: bool = typer.Option(
         False, "--local-only", help="Fully on-device: local brain only, no model downloads, no cloud thumbnail APIs."
     ),
@@ -72,8 +72,8 @@ def run(
     # effective options: an explicit CLI flag wins; otherwise fall back to the profile, then defaults.
     target_minutes = target_minutes if target_minutes is not None else prof.target_minutes
     language = language if language is not None else prof.language
-    skip_shorts = skip_shorts or bool(prof.skip_shorts)
-    skip_package = skip_package or bool(prof.skip_package)
+    skip_shorts = skip_shorts if skip_shorts is not None else bool(prof.skip_shorts)
+    skip_package = skip_package if skip_package is not None else bool(prof.skip_package)
     eff_format = format if format is not None else (prof.format or "default")
     ceiling_minutes = resolve_format(eff_format)["ceiling_minutes"]
     if local_only:

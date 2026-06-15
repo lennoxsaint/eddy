@@ -94,9 +94,11 @@ def score_title(title: str, rubric: dict = TITLE_AB_RUBRIC) -> dict:
 def pick_ab(titles: list[dict], rubric: dict = TITLE_AB_RUBRIC) -> dict:
     """Rank candidates; A = best, B = best candidate that diverges >= min_divergence from A.
     `titles` are dicts with a 'title' key (packaging's title candidates)."""
+    # secondary key on title text so score ties break deterministically regardless of the model's
+    # (nondeterministic) candidate ordering — keeps the whole pick reproducible run-to-run.
     scored = sorted(
         (score_title(t["title"], rubric) for t in titles if t.get("title")),
-        key=lambda s: s["score"], reverse=True,
+        key=lambda s: (-s["score"], s["title"]),
     )
     if not scored:
         return {"a": None, "b": None, "ranked": [], "note": "no title candidates"}

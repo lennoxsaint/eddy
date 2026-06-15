@@ -45,6 +45,14 @@ def test_pick_ab_empty():
     assert res["a"] is None and res["b"] is None
 
 
+def test_pick_ab_tiebreak_is_order_independent():
+    # structurally identical titles -> equal score -> A must be chosen the same way regardless of the
+    # model's (nondeterministic) candidate ordering (N1 fix: secondary sort key on title text)
+    t1 = {"title": "Stop Doing This One Thing Today"}
+    t2 = {"title": "Stop Doing That One Thing Today"}
+    assert pick_ab([t1, t2])["a"]["title"] == pick_ab([t2, t1])["a"]["title"]
+
+
 def test_pick_thumbnail_ab(tmp_path):
     assert pick_thumbnail_ab(tmp_path)["a"] is None  # none generated
     (tmp_path / "gemini-1.png").write_bytes(b"x")

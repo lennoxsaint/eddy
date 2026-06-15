@@ -14,7 +14,7 @@ from __future__ import annotations
 INTERVIEW_CUES = (
     "thanks for having me", "thanks for coming on", "thanks for joining", "welcome to the show",
     "welcome back to the", "my guest", "our guest", "joining me today", "joining us today",
-    "great question", "good question", "that's a great question", "tell me about", "tell us about",
+    "great question", "good question", "tell me about", "tell us about",
     "let me ask you", "i want to ask you", "how did you get", "what made you", "walk me through",
     "talk to me about", "appreciate you coming", "for the listeners", "for our listeners",
 )

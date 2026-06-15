@@ -36,3 +36,23 @@ def test_write_edl_creates_file(tmp_path):
     out = write_edl(_edl(), tmp_path, fps=30)
     assert out.name == "timeline.edl" and out.exists()
     assert "TITLE:" in out.read_text()
+
+
+def test_speed_ramp_record_duration_matches_rendered_video():
+    # a 3s source beat at 1.5x renders to 2s; the RECORD timeline must reflect 2s, not 3s (I1 fix)
+    edl = Edl(
+        sources={"camera": "/x/talk.mp4"},
+        ranges=[EdlRange(source="camera", start=0.0, end=3.0, speed=1.5)],
+        total_duration_s=2.0,
+    )
+    out = build_cmx3600(edl, fps=30)
+    event = next(ln for ln in out.splitlines() if ln and ln[0].isdigit())
+    # source in/out stay 0->3s; record out is 3/1.5 = 2s, NOT 3s
+    assert "00:00:00:00 00:00:03:00 00:00:00:00 00:00:02:00" in event
+    # a CMX3600 M2 motion-memory line documents the retime: 30fps * 1.5 = 45.0
+    assert "M2" in out and "45.0" in out
+
+
+def test_no_m2_line_for_normal_speed():
+    out = build_cmx3600(_edl(), fps=30)
+    assert "M2" not in out  # straight 1.0x cuts emit no motion-memory line

@@ -2,8 +2,10 @@
 
 Agencies finish in an NLE, not in Eddy's take-it-or-leave-it render. A CMX3600 EDL is the universal
 text interchange (Premiere, Resolve, FCP, Avid all import it): each kept EDL range becomes a cut
-event mapping a source in/out to a record (timeline) in/out. Speed ramps aren't representable in a
-basic EDL, so it's exported as a straight 1.0x cut list (the default path; speed-ramp is opt-in).
+event mapping a source in/out to a record (timeline) in/out. Retimed (speed != 1.0) events get the
+correct *record* duration — source_len / speed — so the timeline matches the rendered video.mp4,
+plus a CMX3600 M2 motion-memory line documenting the playback rate (NLEs that honor M2 conform the
+retime exactly; the record cut points align either way).
 """
 
 from __future__ import annotations
@@ -27,13 +29,18 @@ def build_cmx3600(edl: Edl, fps: int = 30, title: str = "EDDY EDIT", reel: str =
     lines = [f"TITLE: {title}", "FCM: NON-DROP FRAME", ""]
     rec = 0.0
     for i, r in enumerate(edl.ranges, 1):
-        length = max(0.0, r.end - r.start)
-        rec_in, rec_out = rec, rec + length
+        speed = r.speed if r.speed and r.speed > 0 else 1.0
+        src_len = max(0.0, r.end - r.start)
+        rec_len = src_len / speed  # record timeline must match the rendered (sped) video, not source len
+        rec_in, rec_out = rec, rec + rec_len
         lines.append(
             f"{i:03d}  {reel:<7} AA/V  C        "
             f"{_tc(r.start, fps)} {_tc(r.end, fps)} {_tc(rec_in, fps)} {_tc(rec_out, fps)}"
         )
         lines.append(f"* FROM CLIP NAME: {src_name}")
+        if abs(speed - 1.0) > 1e-6:
+            # CMX3600 motion-memory: projected playback rate = base fps * speed multiplier
+            lines.append(f"M2   {reel:<7} {fps * speed:>6.1f}        {_tc(r.start, fps)}")
         rec = rec_out
     return "\n".join(lines) + "\n"
 
