@@ -31,4 +31,15 @@ def _detect_version() -> str:
         return "0+unknown"
 
 
-__version__ = _detect_version()
+_version_cache: str | None = None
+
+
+def __getattr__(name: str) -> str:
+    # lazy + cached: don't fork `git describe` at import time (every CLI call / test collection
+    # would pay it). Resolved on first access to eddy.__version__, then memoized.
+    if name == "__version__":
+        global _version_cache
+        if _version_cache is None:
+            _version_cache = _detect_version()
+        return _version_cache
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

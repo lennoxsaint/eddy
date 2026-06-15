@@ -65,11 +65,34 @@ class TranscribeConfig(BaseModel):
 
 
 class LoopConfig(BaseModel):
-    max_iterations: int = 5
+    max_iterations: int = 15  # v0.3: raised from 5; plateau is the real brake
     judge_threshold: float = 8.0
+    plateau_rounds: int = 2  # v0.3: stop after K rounds with no best-quality gain
+    length_ceiling_minutes: float = 14.0  # v0.3: length guardrail (constraint, not a target)
+    quality_weight_objective: float = 0.6  # v0.3: hybrid quality = 0.6*objective + 0.4*critic
+    quality_weight_critic: float = 0.4
+    ship_panel: bool = True  # v0.3: 3-lens majority panel at final ship
+    ship_panel_size: int = 3
     max_model_calls_per_iteration: int = 4
-    duration_band: tuple[float, float] = (0.8, 1.2)  # x target
-    default_target_minutes: float = 12.0
+    # v0.3: duration_band / default_target_minutes are advisory only — the loop now
+    # maximizes quality with length as a ceiling constraint, not a target band.
+    duration_band: tuple[float, float] = (0.8, 1.2)  # x target (advisory)
+    default_target_minutes: float = 12.0  # advisory initial-cut preference
+    # v0.3.1 speed-to-fit: deterministic time-compression of draggy beats to close a residual
+    # gap to the ceiling that cutting alone can't. Off by default until proven on a dogfood.
+    enable_speed_ramp: bool = False
+    speed_ramp_max_multiplier: float = 1.4   # hard cap; atempo preserves pitch, but >~1.5 sounds rushed
+    speed_ramp_min_beat_s: float = 15.0      # don't bother speeding beats shorter than this
+    speed_ramp_max_wpm: float = 160.0        # only speed SLOW, long beats (fast beats are already paced)
+    # v0.3.2 aggressive cut (default path): keep the loop cutting toward the ceiling instead of
+    # plateau-quitting on a length-blind quality metric. Length is a SECOND convergence axis here —
+    # it gates the plateau but is never folded into quality_score (that reward-hacked in v0.3).
+    ceiling_tolerance_s: float = 5.0       # within this many seconds of the ceiling counts as "reached"
+    min_length_progress_s: float = 5.0     # a round must cut at least this much closer to count as progress
+    protection_budget_frac: float = 0.20   # model-declared protected_moments trimmed to <= this * source_s
+    # v0.3.2 deterministic trim-to-fit backstop (off by default; mirrors the speed-ramp posture)
+    enable_aggressive_trim: bool = False
+    trim_judge_tolerance: float = 0.5      # adopt a trim only if judge >= pre-trim baseline - this
 
 
 class RenderConfig(BaseModel):

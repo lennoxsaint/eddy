@@ -19,8 +19,10 @@ def test_version_is_nonempty_versionish_string():
 
 def test_version_reflects_git_tag_in_checkout():
     # this test runs from the git checkout, so the version should derive from `git describe`
-    # off a real tag (v0.x...), not the old hardcoded "0.1.0".
-    assert eddy.__version__ != "0.1.0"
+    # off a real tag (v0.x...), not the old hardcoded "0.1.0" and not the "0+unknown" fallback.
+    v = eddy.__version__
+    assert v != "0.1.0"
+    assert re.match(r"^\d+\.\d+", v)  # a real MAJOR.MINOR, not the unknown sentinel
 
 
 def test_cli_version_flag():

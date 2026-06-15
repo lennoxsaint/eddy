@@ -38,3 +38,29 @@ def setup_protections(phrases: list[dict], pad_s: float = 0.4) -> list[Protected
                 )
             )
     return out
+
+
+def enforce_protection_budget(
+    protected_moments: list[ProtectedMoment], source_s: float, budget_frac: float
+) -> tuple[list[ProtectedMoment], list[ProtectedMoment]]:
+    """Trim model-declared protections to a runtime budget. Returns (kept, dropped).
+
+    v0.3.2: the cutplan prompt asks for 'protected total well under 20%', but nothing enforced it —
+    the model routinely protects whole beats wall-to-wall, and the compiler's _clip_by_protected then
+    voids every cut that would take the majority of those spans, so the edit can never reach the
+    ceiling. Keep the SHORTEST (most specific, most likely load-bearing) protections until the
+    cumulative span hits the budget; drop the broadest (the over-protecting ones). The deterministic
+    setup_protections are added separately at compile time and are NOT subject to this budget."""
+    budget_s = max(0.0, budget_frac) * max(0.0, source_s)
+    ordered = sorted(protected_moments, key=lambda pm: pm.end_s - pm.start_s)
+    kept: list[ProtectedMoment] = []
+    dropped: list[ProtectedMoment] = []
+    used = 0.0
+    for pm in ordered:
+        span = max(0.0, pm.end_s - pm.start_s)
+        if used + span <= budget_s:
+            kept.append(pm)
+            used += span
+        else:
+            dropped.append(pm)
+    return kept, dropped

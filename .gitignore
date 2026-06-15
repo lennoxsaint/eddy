@@ -1,10 +1,12 @@
 .venv/
 runs/
 work/
+build/
 __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+.coverage
 .DS_Store
 eddy.toml.local
 .linear-key

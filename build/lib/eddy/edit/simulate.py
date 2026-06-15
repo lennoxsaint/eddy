@@ -39,6 +39,27 @@ def boundary_cards(edl: Edl, phrases: list[dict]) -> list[dict]:
     return cards
 
 
+def raw_beat_density(beats: list[dict], phrases: list[dict]) -> list[dict]:
+    """Pre-cut per-beat density: source span_s + raw words-per-minute, heaviest-first.
+
+    Unlike the post-cut beat_density (which needs a compiled EDL), this reads the raw transcript
+    against the beat map, so it can be handed to the model at iteration 1 — before any cut exists —
+    to flag the long, low-density 'reading the screen aloud' runs that are the structural-cut
+    candidates. A LOW raw_wpm over a LONG span_s is the signature of a draggy, compressible beat."""
+    out: list[dict] = []
+    for beat in beats:
+        bs, be = beat.get("start_s", 0.0), beat.get("end_s", 0.0)
+        span = be - bs
+        if span <= 0:
+            continue
+        in_beat = [p for p in phrases if bs <= p["start"] < be]
+        nwords = sum(len(p["text"].split()) for p in in_beat)
+        wpm = round(nwords / span * 60, 1) if span > 0 else 0.0
+        out.append({"label": beat.get("label", ""), "span_s": round(span, 1), "raw_wpm": wpm})
+    out.sort(key=lambda b: b["span_s"], reverse=True)
+    return out
+
+
 def simulate(
     edl: Edl,
     decisions: EditDecisions,
@@ -92,8 +113,12 @@ def simulate(
 
     duration = edl.total_duration_s
     lo, hi = cfg.loop.duration_band
+    ceiling_s = cfg.loop.length_ceiling_minutes * 60
+    # v0.3: duration is NO LONGER a gate. The loop maximizes quality with length as a
+    # ceiling constraint, so an over-ceiling iteration must still pass deterministic gates
+    # (otherwise the loop could never report "done" and would best-attempt at the cap every
+    # run). under_ceiling is advisory — it drives the compression directive, not pass/fail.
     verdicts = {
-        "duration_in_band": lo * target_s <= duration <= hi * target_s,
         "no_dead_air": not dead_air,
         "handles_safe": not thin_handles,
         "has_content": len(kept) > 0,
@@ -103,6 +128,9 @@ def simulate(
         "duration_s": duration,
         "target_s": target_s,
         "band_s": [round(lo * target_s, 1), round(hi * target_s, 1)],
+        "ceiling_s": round(ceiling_s, 1),
+        "under_ceiling": duration <= ceiling_s,
+        "duration_in_band": lo * target_s <= duration <= hi * target_s,  # advisory only
         "kept_phrases": len(kept),
         "ranges": len(edl.ranges),
         "removed_total_s": round(sum(max(0.0, b.start - a.end) for a, b in zip(edl.ranges, edl.ranges[1:])), 1),

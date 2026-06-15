@@ -203,7 +203,9 @@ def compile_edl(
                     ),
                 )
 
-    total = sum(r.end - r.start for r in merged)
+    # v0.3.1: a sped range occupies (span / speed) output seconds. speed defaults to 1.0,
+    # so this is identical to the old naive sum for any un-sped edit.
+    total = sum((r.end - r.start) / (r.speed or 1.0) for r in merged)
     return Edl(
         sources={"camera": source_path},
         ranges=merged,
@@ -236,22 +238,46 @@ def _snap_to_words(
     return start, end, first["start"] - start, end - last["end"]
 
 
+def src_to_out(edl: Edl, raw_s: float) -> float | None:
+    """Map a source-timeline second to its OUTPUT (edited-timeline) second, honoring per-range speed.
+
+    v0.3.1: a range played at `speed` occupies (span / speed) output seconds, so BOTH the
+    within-segment offset and the cursor advance divide by speed. Dividing only one (e.g. the
+    duration sum) silently desyncs anything mapped through here inside a sped beat.
+
+    The COLD_OPEN range is a duplicated payoff clip prepended OUT of source order; it still occupies
+    output time (so its duration is added to the cursor) but a beat's natural source position must
+    map to its BODY occurrence, not the teaser — otherwise any beat starting before the cold-open's
+    source end would wrongly resolve to ~0.0 (it precedes the prepended range in playback order). So
+    the cold-open is skipped as a RETURN target while still advancing the cursor. Returns None when
+    raw_s lands after the last body range. Used by chapters; cut_transcript() applies the same
+    /speed rule for bulk phrase remap (it maps by midpoint containment and keeps cold-open copies)."""
+    cursor = 0.0
+    for r in edl.ranges:
+        sp = r.speed or 1.0
+        if (r.beat or "").upper() != "COLD_OPEN" and raw_s <= r.end:
+            return cursor + max(0.0, raw_s - r.start) / sp
+        cursor += (r.end - r.start) / sp
+    return None
+
+
 def cut_transcript(edl: Edl, phrases: list[dict]) -> list[dict]:
-    """Phrases surviving the edit, with output-timeline timestamps."""
+    """Phrases surviving the edit, with output-timeline timestamps (speed-aware; see src_to_out)."""
     out = []
     cursor = 0.0
     for r in edl.ranges:
+        sp = r.speed or 1.0
         for p in phrases:
             mid = (p["start"] + p["end"]) / 2
             if r.start <= mid <= r.end:
                 out.append(
                     {
                         **p,
-                        "out_start": round(cursor + p["start"] - r.start, 2),
-                        "out_end": round(cursor + p["end"] - r.start, 2),
+                        "out_start": round(cursor + (p["start"] - r.start) / sp, 2),
+                        "out_end": round(cursor + (p["end"] - r.start) / sp, 2),
                     }
                 )
-        cursor += r.end - r.start
+        cursor += (r.end - r.start) / sp
     return out
 
 

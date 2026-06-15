@@ -95,6 +95,6 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 slug wrong-footage guard (re-hash on reopen) + --resume wired; suite 142 → 147 green.
 - v0.4 git-derived version (was stale 0.1.0) + eddy --version + receipt stamp; suite 147 → 150 green.
 - v0.4 CI: .github/workflows/ci.yml (ruff+mypy+pytest); cleaned 33 ruff issues (incl. moving controller.py imports) + 9 mypy errors to zero; suite stays 150 green. (CI runs live once the private remote exists — human-gate.)
-- v0.4 cumulative model-call + wall-clock budget (was dead config); suite 150 → 154 green.
+- v0.4 cumulative (resume-surviving) model-call + per-process wall-clock budget (was dead config); suite 150 → 154 green.
 - v0.4 model pin (provider+model recorded per run, drift warning); suite 154 → 158 green.
 - v0.4 privacy honesty: --local-only/EDDY_OFFLINE forces local brain + whisper local_files_only + thumbnail skip + egress disclosure + PRIVACY.md/README fix; suite 158 → 162 green.

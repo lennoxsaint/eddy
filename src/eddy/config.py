@@ -74,9 +74,11 @@ class LoopConfig(BaseModel):
     ship_panel: bool = True  # v0.3: 3-lens majority panel at final ship
     ship_panel_size: int = 3
     max_model_calls_per_iteration: int = 4
-    # v0.4 runaway guard (cumulative, enforced at the iteration head): a pathological source on a
-    # cloud brain could otherwise run up to max_iterations full-render rounds for hours at unbounded
-    # cost. Generous defaults — these catch true runaways, not legitimate long runs.
+    # v0.4 runaway guard, enforced at the iteration head: a pathological source on a cloud brain
+    # could otherwise run up to max_iterations full-render rounds for hours at unbounded cost.
+    # max_total_model_calls is CUMULATIVE across --resume (counted from receipts, a safe over-count
+    # since judge retries log extra lines); max_wall_clock_minutes is PER-PROCESS (resets on resume).
+    # Generous defaults — these catch true runaways, not legitimate long runs.
     max_total_model_calls: int = 60
     max_wall_clock_minutes: float = 120.0
     # v0.3: duration_band / default_target_minutes are advisory only — the loop now
