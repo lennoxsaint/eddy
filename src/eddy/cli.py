@@ -57,12 +57,25 @@ def run(
     ),
     language: Optional[str] = typer.Option(None, "--language", help="Force transcription language (e.g. en, es); default auto-detect."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Check environment + that the footage decodes, then exit (no transcribe/render)."),
-    format: str = typer.Option("default", "--format", help="Content profile: default | tutorial | lesson | longform | podcast (raises the length ceiling)."),
+    format: Optional[str] = typer.Option(None, "--format", help="Content profile: default | tutorial | lesson | longform | podcast (raises the length ceiling)."),
+    profile: Optional[str] = typer.Option(None, "--profile", help="Named per-channel profile from config [profiles]. Explicit flags override it."),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
+    from eddy.config import load_config, resolve_profile
     from eddy.formats import resolve_format
 
-    ceiling_minutes = resolve_format(format)["ceiling_minutes"]
+    try:
+        prof = resolve_profile(load_config(), profile)
+    except KeyError as e:
+        typer.echo(f"✗ {e}", err=True)
+        raise typer.Exit(1) from e
+    # effective options: an explicit CLI flag wins; otherwise fall back to the profile, then defaults.
+    target_minutes = target_minutes if target_minutes is not None else prof.target_minutes
+    language = language if language is not None else prof.language
+    skip_shorts = skip_shorts or bool(prof.skip_shorts)
+    skip_package = skip_package or bool(prof.skip_package)
+    eff_format = format if format is not None else (prof.format or "default")
+    ceiling_minutes = resolve_format(eff_format)["ceiling_minutes"]
     if local_only:
         from eddy.privacy import set_offline
 
@@ -155,6 +168,20 @@ def runs() -> None:
         return
     for r in rows:
         typer.echo(f"  {r['slug']:40} {r['phase']:24} best={r['best_iter']}")
+
+
+@app.command()
+def profiles() -> None:
+    """List configured per-channel run profiles (config [profiles])."""
+    from eddy.config import load_config
+
+    cfg = load_config()
+    if not cfg.profiles:
+        typer.echo("no profiles configured — add a [profiles.<name>] table to your eddy config")
+        return
+    for name, p in sorted(cfg.profiles.items()):
+        overrides = {k: v for k, v in p.model_dump().items() if v is not None}
+        typer.echo(f"  {name:20} {overrides or '(no overrides)'}")
 
 
 @app.command()

@@ -81,7 +81,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 ### v0.8 items (breadth — all autonomous-able)
 - [x] **Editor-native timeline export** (`final/timeline.edl` CMX3600 — import into Premiere/Resolve/FCP) (`nle_export.py`/`launch_kit.py`, +3 tests)
 - [x] **Batch/queue runner + `eddy runs`** (`eddy batch <root>` — many sources, per-item failure recovery, `--json` headless + nonzero exit on failures) (`batch.py`/`cli.py`, +4 tests)
-- [ ] Named per-channel profiles / `--profile` + per-run overrides
+- [x] **Named per-channel profiles / `--profile`** (config `[profiles.<name>]` → target_minutes/format/language/skip_shorts/skip_package run defaults; `eddy run --profile <name>` with explicit-flag-wins precedence; unknown profile = hard error; `eddy profiles` lists them) (`config.py`/`cli.py`, +5 tests)
 - [x] **Format profiles** (`eddy run --format tutorial|lesson|longform|podcast` raises the ceiling so the loop doesn't compress step-by-step content) (`formats.py`/`controller.py`/`cli.py`, +3 tests)
 - [x] **Audio-first ingest** (.wav/.mp3/.m4a/.flac/.aac… accepted so podcasters can `eddy transcribe`; `eddy run` on audio fails loud with a `eddy transcribe` hint, not a cryptic "no video stream") (`runs.py`, +4 tests)
 - [x] **Standalone `eddy shorts <source>`** (`mine_shorts`: transcribe -> ONE decision pass -> render shorts only, no iterative loop / no long render; `shorts` command now dual-mode: existing run dir = render stage, raw footage = standalone mine) (`controller.py`/`cli.py`, +1 orchestration test)

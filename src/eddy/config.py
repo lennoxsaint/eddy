@@ -167,6 +167,16 @@ class PathsConfig(BaseModel):
     runs_dir: str = "~/.eddy/runs"  # lowercase/hidden: avoids the ~/Eddy vs ~/eddy case collision
 
 
+class RunProfile(BaseModel):
+    """Named per-channel run defaults (e.g. one profile per YouTube channel). Only the fields you set
+    take effect; an explicit CLI flag on `eddy run` always overrides the profile."""
+    target_minutes: float | None = None
+    format: str | None = None         # tutorial|lesson|longform|podcast|default — maps to a ceiling
+    language: str | None = None       # force a transcription language for this channel
+    skip_shorts: bool | None = None
+    skip_package: bool | None = None
+
+
 CONFIG_SCHEMA_VERSION = 1
 
 
@@ -182,10 +192,23 @@ class EddyConfig(BaseModel):
     gates: GatesConfig = Field(default_factory=GatesConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
+    profiles: dict[str, RunProfile] = Field(default_factory=dict)  # named per-channel run defaults
 
     @property
     def runs_dir(self) -> Path:
         return Path(self.paths.runs_dir).expanduser()
+
+
+def resolve_profile(cfg: "EddyConfig", name: str | None) -> RunProfile:
+    """Look up a named run profile. None/empty -> an all-None profile (no overrides). An unknown
+    name is a hard error so a typo'd channel doesn't silently run with wrong defaults."""
+    if not name:
+        return RunProfile()
+    try:
+        return cfg.profiles[name]
+    except KeyError:
+        known = ", ".join(sorted(cfg.profiles)) or "(none configured)"
+        raise KeyError(f"unknown profile {name!r}; configured profiles: {known}") from None
 
 
 def config_path() -> Path:
