@@ -88,7 +88,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Prompt-injection hardening** (transcript data-fenced in the cut-planner + judge; injection patterns flagged to receipts; deterministic gates remain the backstop) (`safety.py`/`cutplan.py`/`judge.py`, +4 tests)
 - [ ] GDPR/CCPA purge tooling + documented retention posture
 - [ ] Opt-in anonymized failure beacon (stage/OS/ffmpeg/error-class only)
-- [ ] Remove hardcoded personal claude_local_guard / exit-43 Chrome-pairing from cli_subprocess
+- [x] **Generalized the personal Chrome-pairing guard** — exit-43 hardcoding replaced by configurable `transient_exit_codes` (empty default; no author-specific behavior shipped) (`cli_subprocess.py`/`config.py`, tests updated +1)
 
 ### v0.5 items
 - [x] **Fix QA detect filters** (silencedetect → `-af`, returncode check, fail-loud not false-pass) (`deterministic.py`, +6 tests)

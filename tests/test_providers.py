@@ -14,7 +14,26 @@ def _proc(returncode, stdout="", stderr=""):
 
 
 def _provider():
-    return CliProvider(CliProviderConfig(binary="claude"), name="claude_cli")
+    # 43 configured as a transient "re-run" exit code (generic; no hardcoded Chrome-pairing behavior)
+    return CliProvider(CliProviderConfig(binary="claude", transient_exit_codes=[43]), name="claude_cli")
+
+
+def test_unconfigured_transient_code_is_a_hard_failure(monkeypatch):
+    """Shipped default has no transient_exit_codes, so exit 43 is just a failure — no settle-retry.
+    Proves the personal Chrome-pairing behavior is gone by default."""
+    monkeypatch.setattr("eddy.providers.cli_subprocess.shutil.which", lambda _b: "/usr/bin/claude")
+    monkeypatch.setattr("eddy.providers.cli_subprocess.time.sleep", lambda _s: None)
+    calls = []
+
+    def fake_run(*_a, **_k):
+        calls.append(1)
+        return _proc(43, stderr="some error")
+
+    monkeypatch.setattr("eddy.providers.cli_subprocess.subprocess.run", fake_run)
+    prov = CliProvider(CliProviderConfig(binary="claude"), name="claude_cli")  # default: no transient codes
+    with pytest.raises(ProviderError, match="exited 43"):
+        prov.complete([{"role": "user", "content": "hi"}])
+    assert len(calls) == 2  # 2 real attempts, no free settle-retries
 
 
 def test_pairing_guard_settles_then_succeeds(monkeypatch):

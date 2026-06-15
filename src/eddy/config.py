@@ -43,6 +43,9 @@ class CliProviderConfig(BaseModel):
     enabled: bool = False
     binary: str = ""  # "codex" or "claude"
     model: str = ""  # optional model override flag
+    # exit codes a local CLI/wrapper uses to mean "transient, re-run" (e.g. a one-time auth/pairing
+    # settle). Empty by default — generic; users with such a wrapper configure their own codes.
+    transient_exit_codes: list[int] = Field(default_factory=list)
 
 
 class ProviderConfig(BaseModel):

@@ -14,12 +14,10 @@ from eddy.providers.base import ProviderError, extract_json, validate_against
 
 TIMEOUT_S = 1200
 
-# The local Claude pairing guard (claude_local_guard.sh) exits 43 the first time it
-# corrects Chrome pairing, asking the caller to re-run. This is a one-time settle, not a
-# real failure — retry it after a short pause WITHOUT spending the normal retry budget, so
-# a single pairing correction never wastes the editorial call and falls back to local q4.
-PAIRING_GUARD_EXIT = 43
-PAIRING_GUARD_MARKERS = ("Re-run the same command", "corrected Claude Chrome pairing")
+# Some local CLI wrappers exit with a "transient — re-run" code (e.g. a one-time auth/pairing
+# settle) rather than a real failure. When a user configures such codes (provider.<cli>.
+# transient_exit_codes), settle briefly and retry WITHOUT spending the normal retry budget, so a
+# single transient blip never wastes the editorial call. Empty by default — no hardcoded behavior.
 SETTLE_DELAY_S = 3.0
 MAX_SETTLE_RETRIES = 2
 
@@ -74,12 +72,10 @@ class CliProvider:
                 )
                 if proc.returncode != 0:
                     detail = (proc.stderr.strip() or proc.stdout.strip())[-500:]
-                    is_pairing_guard = proc.returncode == PAIRING_GUARD_EXIT or any(
-                        m in detail for m in PAIRING_GUARD_MARKERS
-                    )
-                    if is_pairing_guard and settle_used < MAX_SETTLE_RETRIES:
-                        # One-time pairing correction: pause for the guard to settle, then
-                        # retry without consuming the normal retry budget.
+                    is_transient = proc.returncode in self.cfg.transient_exit_codes
+                    if is_transient and settle_used < MAX_SETTLE_RETRIES:
+                        # configured transient code: pause to settle, then retry without
+                        # consuming the normal retry budget.
                         settle_used += 1
                         time.sleep(SETTLE_DELAY_S)
                         continue
