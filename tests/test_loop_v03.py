@@ -35,6 +35,43 @@ def test_gatepass_outranks_higher_quality_gatefail(tmp_path):
     assert s.best()["iteration"] == 2  # a passing edit always beats a failing one
 
 
+def test_gatepass_over_ceiling_prefers_closer_band(tmp_path):
+    # EDD-83: among gate-PASSING but over-ceiling cuts, a materially closer one wins even with
+    # slightly lower quality (v0.3 maximized quality here and shipped the LONGEST).
+    (tmp_path / "r").mkdir()
+    s = RunState(tmp_path / "r")
+    s.record_attempt(1, True, 0, 0, quality=5.556, over_ceiling_s=1694)  # band -14, longer, better q
+    s.record_attempt(2, True, 0, 0, quality=5.264, over_ceiling_s=1452)  # band -12, shorter, lower q
+    assert s.best()["iteration"] == 2  # closer band wins despite lower quality
+
+
+def test_gatepass_same_band_defers_to_quality(tmp_path):
+    # small length differences (same ~2-min band) still defer to quality — don't sacrifice quality
+    # to shave seconds off an already-over-ceiling cut.
+    (tmp_path / "r").mkdir()
+    s = RunState(tmp_path / "r")
+    s.record_attempt(1, True, 0, 0, quality=5.264, over_ceiling_s=1452)  # band -12
+    s.record_attempt(2, True, 0, 0, quality=5.372, over_ceiling_s=1491)  # band -12, higher q
+    assert s.best()["iteration"] == 2  # same band -> higher quality wins
+
+
+def test_under_ceiling_outranks_over_ceiling_gatepass(tmp_path):
+    (tmp_path / "r").mkdir()
+    s = RunState(tmp_path / "r")
+    s.record_attempt(1, True, 0, 0, quality=9.0, over_ceiling_s=600)  # over ceiling, high q
+    s.record_attempt(2, True, 0, 0, quality=5.0, over_ceiling_s=0)     # under ceiling (band 0)
+    assert s.best()["iteration"] == 2  # under-ceiling (band 0) beats any over-ceiling, regardless of q
+
+
+def test_compile_failed_stays_worst_feasible(tmp_path):
+    # a compile-failed attempt records over_ceiling_s=1e9 -> worst band -> never out-ranks a real cut
+    (tmp_path / "r").mkdir()
+    s = RunState(tmp_path / "r")
+    s.record_attempt(1, False, 0.0, 0, over_ceiling_s=1e9)                # compile-failed (no edl)
+    s.record_attempt(2, False, 5.0, 0, quality=4.0, over_ceiling_s=1500)  # real over-ceiling cut
+    assert s.best()["iteration"] == 2
+
+
 def test_plateau_state_persists(tmp_path):
     (tmp_path / "r").mkdir()
     s = RunState(tmp_path / "r")

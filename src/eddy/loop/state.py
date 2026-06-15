@@ -53,15 +53,20 @@ class RunState:
 
         def key(a: dict):
             gates = a["gates_passed"]
-            # v0.3: a gate-passing attempt always outranks a gate-failing one. Among
-            # gate-FAILING attempts, prefer the one closest to feasible (least over the
-            # ceiling) rather than the highest judge score (which used to ship the LONGEST
-            # cut). Then maximize quality, then prefer closer-to-target duration.
-            feasible = -a.get("over_ceiling_s", 0.0) if not gates else 0.0
+            # A gate-passing attempt always outranks a gate-failing one.
+            # v0.3.3 (EDD-83): within a gate level, rank closeness-to-ceiling in ~2-minute BANDS
+            # BEFORE quality, for BOTH gate levels. v0.3 only applied feasibility to gate-FAILING
+            # attempts, so among gate-PASSING but over-ceiling cuts it maximized quality and shipped
+            # the LONGEST one (the v0.3.2 dogfood shipped a 1694s-over cut over a 1452s-over cut that
+            # the loop had worked to reach). Banding (not raw seconds) means a materially shorter cut
+            # wins but small length differences still defer to quality — honoring "never sacrifice
+            # quality to force the number". Compile-failed attempts (over_ceiling_s=1e9) stay
+            # maximally infeasible. An under-ceiling attempt (band 0) outranks any over-ceiling one.
+            feasible_band = -round(max(0.0, a.get("over_ceiling_s", 0.0)) / 120.0)
             q = a.get("quality")
             if q is None:  # pre-v0.3 state.json — fall back to judge score
                 q = a.get("judge_score", 0.0)
-            return (gates, feasible, q, -a["duration_delta_s"])
+            return (gates, feasible_band, q, -a["duration_delta_s"])
 
         return max(self.data["attempts"], key=key)
 
