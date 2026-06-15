@@ -55,6 +55,7 @@ def run(
     local_only: bool = typer.Option(
         False, "--local-only", help="Fully on-device: local brain only, no model downloads, no cloud thumbnail APIs."
     ),
+    language: Optional[str] = typer.Option(None, "--language", help="Force transcription language (e.g. en, es); default auto-detect."),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
     if local_only:
@@ -70,6 +71,7 @@ def run(
         resume=resume,
         skip_shorts=skip_shorts,
         skip_package=skip_package,
+        language=language,
     )
 
 
@@ -77,13 +79,14 @@ def run(
 def transcribe(
     source: Path = typer.Argument(...),
     slug: Optional[str] = typer.Option(None),
+    language: Optional[str] = typer.Option(None, "--language", help="Force language (e.g. en, es); default auto-detect."),
 ) -> None:
     """Stage: word-level transcription + packed transcript + silence map."""
     from eddy.runs import open_run
     from eddy.transcribe.whisper import transcribe_run
 
     run_dir = open_run(source, slug=slug)
-    transcribe_run(run_dir)
+    transcribe_run(run_dir, language=language)
 
 
 @app.command()

@@ -367,6 +367,7 @@ def autonomous_run(
     resume: bool = False,
     skip_shorts: bool = False,
     skip_package: bool = False,
+    language: str | None = None,
 ) -> Path:
     """The product: footage in, launch kit out."""
     cfg = load_config()
@@ -376,7 +377,7 @@ def autonomous_run(
     print(f"run: {run_dir}")
 
     state.set_phase("transcribe")
-    transcribe_run(run_dir)
+    transcribe_run(run_dir, language=language)
 
     chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume)
     print(f"chosen iteration: {chosen.name}")

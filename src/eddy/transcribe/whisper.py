@@ -15,13 +15,21 @@ from eddy.loop.receipts import Receipts
 from eddy.media.ffmpeg import run_ffmpeg
 from eddy.runs import manifest
 
-INITIAL_PROMPT = (
-    "Vocabulary: Threadify, OpenClaw, Codex, Claude, ChatGPT, Descript, Skool, "
-    "Kit, Ollama, Eddy. Book4Short means Hook for Short."
-)
+def _language_note(requested: str | None, detected: str, mean_no_speech: float) -> dict | None:
+    """A non-silent health check on the transcript: warn if a FORCED language disagrees with what
+    Whisper detected (forcing the wrong language silently mistranscribes), or if speech is doubtful.
+    Returns None when healthy."""
+    notes = []
+    if requested and detected and requested != detected:
+        notes.append(f"forced language '{requested}' but audio detected as '{detected}' — transcript may be wrong")
+    if mean_no_speech > 0.6:
+        notes.append(f"high no-speech probability ({mean_no_speech:.2f}) — audio may be music/silence")
+    if not notes:
+        return None
+    return {"requested": requested, "detected": detected, "mean_no_speech_prob": round(mean_no_speech, 3), "notes": notes}
 
 
-def transcribe_run(run_dir: Path) -> Path:
+def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
     run_dir = Path(run_dir)
     cfg = load_config()
     m = manifest(run_dir)
@@ -53,13 +61,15 @@ def transcribe_run(run_dir: Path) -> Path:
         cfg.transcribe.model, device="auto", compute_type=cfg.transcribe.compute_type,
         local_files_only=is_offline(),
     )
+    # "" (config) or None -> auto-detect; --language / config forces a specific language.
+    lang = (language or cfg.transcribe.language) or None
     segments, info = model.transcribe(
         str(wav),
-        language=cfg.transcribe.language,
+        language=lang,
         word_timestamps=True,
         vad_filter=True,
         vad_parameters={"min_silence_duration_ms": 350},
-        initial_prompt=INITIAL_PROMPT,
+        initial_prompt=(cfg.transcribe.vocab_prompt or None),
     )
 
     payload = {
@@ -86,10 +96,16 @@ def transcribe_run(run_dir: Path) -> Path:
         )
 
     out.write_text(json.dumps(payload, indent=1))
+    segs = payload["segments"]
+    mean_no_speech = sum(s["no_speech_prob"] for s in segs) / len(segs) if segs else 1.0
+    health = _language_note(lang, info.language, mean_no_speech)
+    if health is not None:
+        receipts.log("transcript_health_warning", **health)
     receipts.log(
         "transcribe",
         cache="miss",
         model=cfg.transcribe.model,
+        language=info.language,
         audio_s=round(info.duration, 1),
         wall_s=round(time.time() - t0, 1),
         segments=len(payload["segments"]),

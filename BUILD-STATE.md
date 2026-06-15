@@ -81,7 +81,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 ### v0.5 items
 - [x] **Fix QA detect filters** (silencedetect → `-af`, returncode check, fail-loud not false-pass) (`deterministic.py`, +6 tests)
 - [x] **Crash-proof duration resolution** (format → longest stream → typed unknown; fail-loud where needed) (`probe.py`, +6 tests)
-- [ ] Whisper language auto-detect + `--language` + mismatch guard (remove hardcoded 'en')
+- [x] **Whisper language auto-detect + `--language` + mismatch/health warning** + dropped personal vocab prompt (`whisper.py`/`config.py`/`cli.py`/`controller.py`, +5 tests)
 - [ ] Ingest gates (accept webm/avi/ts; reject undecodable loud; probe-based multi-video disambiguation)
 - [ ] Empty/no-speech transcript is a first-class outcome
 - [ ] Live progress + ETA layer

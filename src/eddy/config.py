@@ -61,7 +61,8 @@ class TranscribeConfig(BaseModel):
     engine: str = "faster-whisper"
     model: str = "large-v3"
     compute_type: str = "int8"
-    language: str = "en"
+    language: str = ""  # "" = auto-detect; set to "en"/"es"/... or pass --language to force
+    vocab_prompt: str = ""  # optional domain vocabulary to bias transcription (was a hardcoded personal list)
 
 
 class LoopConfig(BaseModel):
