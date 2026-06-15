@@ -7,6 +7,7 @@ to kill pops, no double-encode at concat."""
 from __future__ import annotations
 
 import concurrent.futures
+import os
 from pathlib import Path
 
 from eddy.config import RenderConfig
@@ -92,9 +93,13 @@ def render_edl(
         seg_out = seg_dir / (f"{idx:04d}.mp4" if abs(sp - 1.0) < 1e-6 else f"{idx:04d}_s{int(round(sp * 1000)):04d}.mp4")
         if seg_out.exists() and seg_out.stat().st_size > 1024:
             return seg_out
+        # render to a .partial sibling, then os.replace on success: a SIGKILL/Ctrl-C mid-render
+        # leaves a .partial (ignored by the cache check above), never a truncated final segment
+        # that --resume would blindly reuse.
+        partial = seg_out.with_name(f"{seg_out.stem}.partial{seg_out.suffix}")
         run_ffmpeg(
             _segment_args(
-                source, seg_out, r.start, r.end, fade_s,
+                source, partial, r.start, r.end, fade_s,
                 render_cfg.proxy_height if proxy else None,
                 render_cfg.proxy_preset,
                 getattr(r, "speed", 1.0),
@@ -102,6 +107,7 @@ def render_edl(
             run_dir=run_dir,
             receipts=None,  # per-segment receipts are noise; the concat logs the render
         )
+        os.replace(partial, seg_out)
         return seg_out
 
     jobs = list(enumerate(edl.ranges))

@@ -70,7 +70,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Path-containment gate `is_relative_to` over all outputs** (excl. `-i` inputs) (`ffmpeg.py`, +6 tests)
 - [x] **Slug re-hash (wrong-footage guard) + wire `--resume`** (`runs.py`, +5 tests)
 - [x] **Apostrophe concat — shared `concat_quote` helper** (`ffmpeg.py`; segments+shorts) (+ tests above)
-- [ ] SIGINT child-kill + idempotent post-loop resume
+- [x] **Interrupt-safe segment render (.partial + os.replace)** — kills the truncated-segment-reuse hazard (`segments.py`, +1 test). (ffmpeg children already die with the process group on Ctrl-C; full post-loop phase idempotency deferred to a v0.4.x follow-up — resume re-running post-loop phases is wasteful, not incorrect, now that segments are atomic+cached.)
 - [x] **Model-call + wall-clock budget** (cumulative, iteration-head, ships best-effort) (`config.py`/`controller.py`, +4 tests)
 - [x] **Git-derived version + `eddy --version` + receipt stamp** (`__init__.py`/`cli.py`/`runs.py`, +3 tests)
 - [x] **Privacy honesty: `--local-only`/`EDDY_OFFLINE` + `local_files_only` + egress disclosure + PRIVACY.md/README** (`privacy.py`+5 files, +4 tests) — interactive one-time consent prompt deferred to v0.7 onboarding (logged egress disclosure is the v0.4 floor)
