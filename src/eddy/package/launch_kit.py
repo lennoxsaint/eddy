@@ -11,6 +11,7 @@ from eddy.edit.schema import load_decisions, load_edl
 from eddy.loop.receipts import Receipts
 from eddy.media.frames import face_reference_frames
 from eddy.package.copy import chapters, chapters_block, description, titles, write_copy_artifacts
+from eddy.package.review import build_review
 from eddy.package.thumbnails import generate_thumbnails
 from eddy.providers.base import get_provider
 from eddy.render.long import latest_iteration_dir
@@ -66,11 +67,14 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
     shorts = json.loads(shorts_ledger.read_text()) if shorts_ledger.exists() else []
     qa_final = final_dir / "qa-final.json"
     qa = json.loads(qa_final.read_text()) if qa_final.exists() else {}
+    # plain-language "review these moments" note for a non-engineer creator
+    review = build_review(run_dir, iter_dir, edl.total_duration_s, cfg.loop.length_ceiling_minutes * 60)
 
     index = [
         f"# Launch Kit — {run_dir.name}",
         "",
         "- **Video:** `final/video.mp4`" + (" (final QA: PASS)" if qa.get("pass") else " (final QA: CHECK qa-final.json)"),
+        "- **Review notes:** `final/REVIEW.md`" + (f" ({review['flagged']} moment(s) flagged)" if review["flagged"] else " (clean)"),
         f"- **Titles:** `final/titles.md` ({len(title_list)} candidates, top: \"{title_list[0]['title'] if title_list else '—'}\")",
         "- **Description + chapters:** `final/description.md`, `final/chapters.txt`",
         f"- **Shorts:** {sum(1 for s in shorts if s.get('status') == 'rendered')} rendered in `final/shorts/`",

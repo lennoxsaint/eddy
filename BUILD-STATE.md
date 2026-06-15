@@ -83,7 +83,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Token + cost accounting + spend cap + per-run summary** (anthropic/openai log usage→cost; loop aborts at `max_run_cost_usd`; run prints editorial $) (`cost.py`/providers/`controller.py`, +5 tests)
 - [x] **`eddy bundle` redacted diagnostic archive** (audit trail + env zip; transcript text redacted + home paths scrubbed; no footage/transcript/faces) (`bundle.py`/`cli.py`, +3 tests)
 - [ ] Structured logging (per-run eddy.log, --verbose/--quiet) replacing raw print()
-- [ ] Creator-facing failure/explanation in launch kit ("unsure about these N moments" + over-ceiling banner)
+- [x] **Creator-facing review notes** (`final/REVIEW.md`: plain-language "N moments Eddy was unsure about" + timestamps + over-ceiling banner + QA verdict, indexed in the kit) (`package/review.py`/`launch_kit.py`, +5 tests)
 - [ ] Output moderation/likeness gate before thumbnails/titles + AI-generated disclosure
 - [x] **Prompt-injection hardening** (transcript data-fenced in the cut-planner + judge; injection patterns flagged to receipts; deterministic gates remain the backstop) (`safety.py`/`cutplan.py`/`judge.py`, +4 tests)
 - [ ] GDPR/CCPA purge tooling + documented retention posture
