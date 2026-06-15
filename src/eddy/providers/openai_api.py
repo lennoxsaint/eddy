@@ -12,8 +12,9 @@ from eddy.providers.base import ProviderError, extract_json, validate_against
 class OpenAIProvider:
     name = "openai"
 
-    def __init__(self, cfg: OpenAIConfig):
+    def __init__(self, cfg: OpenAIConfig, receipts=None):
         self.cfg = cfg
+        self.receipts = receipts
 
     def complete(
         self,
@@ -60,6 +61,12 @@ class OpenAIProvider:
             try:
                 resp = client.chat.completions.create(**kwargs)
                 text = resp.choices[0].message.content or ""
+                u = getattr(resp, "usage", None)
+                if u is not None:
+                    from eddy.cost import log_cost
+
+                    log_cost(self.receipts, "openai", self.cfg.model,
+                             getattr(u, "prompt_tokens", 0) or 0, getattr(u, "completion_tokens", 0) or 0)
                 if schema is None:
                     return text
                 return validate_against(schema, extract_json(text))

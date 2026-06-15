@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from eddy.config import load_config
+from eddy.cost import run_cost_summary
 from eddy.edit.compiler import CompileError, cut_transcript
 from eddy.edit.cutplan import (
     beat_map,
@@ -240,11 +241,15 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         # model-call budget is spent and ship best-effort. Model calls are counted from receipts
         # (model_call = decisions/beat-map, judge = critic) so the count survives --resume.
         if iteration > start_iter:
-            model_calls = sum(1 for e in receipts.read() if e.get("event") in ("model_call", "judge"))
-            if _budget_exhausted(time.time() - loop_start, model_calls, cfg.loop):
+            events = receipts.read()
+            model_calls = sum(1 for e in events if e.get("event") in ("model_call", "judge"))
+            spend = run_cost_summary(events)["total_usd"]
+            cap = cfg.loop.max_run_cost_usd
+            if _budget_exhausted(time.time() - loop_start, model_calls, cfg.loop) or (cap > 0 and spend >= cap):
                 receipts.log(
                     "budget_exhausted", iteration=iteration,
                     elapsed_s=round(time.time() - loop_start, 1), model_calls=model_calls,
+                    spend_usd=spend, cap_usd=cap,
                 )
                 break
         iter_dir = run_dir / "iterations" / f"{iteration:02d}"
@@ -510,6 +515,9 @@ def autonomous_run(
             print(f"packaging failed (continuing): {e}")
 
     verify_sources_unmutated(run_dir)
+    cost = run_cost_summary(receipts.read())
+    receipts.log("run_cost", **cost)
     state.set_phase("done")
-    print(f"[eddy] done in {_fmt_dur(time.time() - run_t0)} · launch kit: {run_dir / 'final'}")
+    cost_note = f" · editorial cost ${cost['total_usd']} ({cost['calls']} paid calls)" if cost["total_usd"] > 0 else " · $0 (local brain)"
+    print(f"[eddy] done in {_fmt_dur(time.time() - run_t0)}{cost_note} · launch kit: {run_dir / 'final'}")
     return run_dir

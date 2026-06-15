@@ -118,7 +118,7 @@ def validate_against(schema: dict, data: dict) -> dict:
     return data
 
 
-def get_provider(cfg: EddyConfig, name: str | None = None) -> LLMProvider:
+def get_provider(cfg: EddyConfig, name: str | None = None, receipts=None) -> LLMProvider:
     active = name or cfg.provider.active
     if active == "ollama":
         from eddy.providers.ollama import OllamaProvider
@@ -127,11 +127,11 @@ def get_provider(cfg: EddyConfig, name: str | None = None) -> LLMProvider:
     if active == "anthropic":
         from eddy.providers.anthropic_api import AnthropicProvider
 
-        return AnthropicProvider(cfg.provider.anthropic)
+        return AnthropicProvider(cfg.provider.anthropic, receipts=receipts)
     if active == "openai":
         from eddy.providers.openai_api import OpenAIProvider
 
-        return OpenAIProvider(cfg.provider.openai)
+        return OpenAIProvider(cfg.provider.openai, receipts=receipts)
     if active == "codex_cli":
         from eddy.providers.cli_subprocess import CliProvider
 
@@ -185,7 +185,7 @@ def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
     from eddy.privacy import is_offline
 
     setting = cfg.provider.editorial
-    local = get_provider(cfg, cfg.provider.active)
+    local = get_provider(cfg, cfg.provider.active, receipts=receipts)
     # --local-only / EDDY_OFFLINE: force the local brain so the transcript never leaves the
     # machine, regardless of editorial='auto' or a claude binary being on PATH.
     if is_offline():
@@ -202,7 +202,7 @@ def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
         if receipts is not None:
             receipts.log("editorial_brain", chosen=chosen, upgraded=False)
         return local
-    primary = get_provider(cfg, chosen)
+    primary = get_provider(cfg, chosen, receipts=receipts)
     if receipts is not None:
         # honest disclosure: a cloud brain means the transcript is sent off-device.
         receipts.log(

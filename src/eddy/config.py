@@ -83,6 +83,7 @@ class LoopConfig(BaseModel):
     # Generous defaults — these catch true runaways, not legitimate long runs.
     max_total_model_calls: int = 60
     max_wall_clock_minutes: float = 120.0
+    max_run_cost_usd: float = 0.0  # cumulative paid-API spend cap; 0 = unlimited (local/subscription = free)
     # v0.3: duration_band / default_target_minutes are advisory only — the loop now
     # maximizes quality with length as a ceiling constraint, not a target band.
     duration_band: tuple[float, float] = (0.8, 1.2)  # x target (advisory)

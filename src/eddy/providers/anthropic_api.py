@@ -12,8 +12,9 @@ from eddy.providers.base import ProviderError, extract_json, validate_against
 class AnthropicProvider:
     name = "anthropic"
 
-    def __init__(self, cfg: AnthropicConfig):
+    def __init__(self, cfg: AnthropicConfig, receipts=None):
         self.cfg = cfg
+        self.receipts = receipts
 
     def complete(
         self,
@@ -51,6 +52,12 @@ class AnthropicProvider:
                     messages=msgs,  # type: ignore[arg-type]  # plain dicts; SDK wants MessageParam
                 )
                 text = "".join(b.text for b in resp.content if b.type == "text")
+                u = getattr(resp, "usage", None)
+                if u is not None:
+                    from eddy.cost import log_cost
+
+                    log_cost(self.receipts, "anthropic", self.cfg.model,
+                             getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0)
                 if schema is None:
                     return text
                 return validate_against(schema, extract_json(text))

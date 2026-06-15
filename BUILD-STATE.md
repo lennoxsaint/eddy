@@ -80,7 +80,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 
 ### v0.7 items (operability & safety — all autonomous-able)
 - [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)
-- [ ] Token + cost accounting across providers + spend cap + per-run cost summary
+- [x] **Token + cost accounting + spend cap + per-run summary** (anthropic/openai log usage→cost; loop aborts at `max_run_cost_usd`; run prints editorial $) (`cost.py`/providers/`controller.py`, +5 tests)
 - [ ] `eddy bundle` redacted diagnostic archive (manifest/state/receipts/versions, PII-stripped)
 - [ ] Structured logging (per-run eddy.log, --verbose/--quiet) replacing raw print()
 - [ ] Creator-facing failure/explanation in launch kit ("unsure about these N moments" + over-ceiling banner)
