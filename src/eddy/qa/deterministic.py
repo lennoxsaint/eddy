@@ -32,25 +32,37 @@ def av_drift(video: Path, edl: Edl, max_drift_s: float) -> dict:
     }
 
 
-def _detect(video: Path, run_dir: Path, vf: str, tag: str) -> list[str]:
-    """Run a -vf/af detect filter and return matching stderr lines."""
+def _detect(video: Path, run_dir: Path, filt: str, tag: str, audio: bool = False) -> list[str]:
+    """Run a detect filter and return matching stderr lines.
+
+    Routes audio filters (silencedetect) to -af and video filters (black/freeze) to -vf — the old
+    heuristic sent silencedetect to -vf, where it errored, and the non-zero exit was ignored, so the
+    dead-air/silent-motion gates silently PASSED on a failed probe. A failed detect now raises so the
+    gate fails loud (caught per-gate) instead of false-passing."""
     import subprocess
 
-    from eddy.media.ffmpeg import FFMPEG
+    from eddy.media.ffmpeg import FFMPEG, FfmpegError
 
+    flag = "-af" if audio else "-vf"
     proc = subprocess.run(
-        [FFMPEG, "-hide_banner", "-i", str(video), "-vf" if "detect" in vf and not vf.startswith("a") else "-af",
-         vf, "-f", "null", "-"],
+        [FFMPEG, "-hide_banner", "-i", str(video), flag, filt, "-f", "null", "-"],
         capture_output=True, text=True, timeout=1800,
     )
+    if proc.returncode != 0:
+        raise FfmpegError(f"detect '{tag}' failed ({proc.returncode}): {proc.stderr[-500:]}")
     return [ln for ln in proc.stderr.splitlines() if tag in ln]
 
 
 def black_or_frozen(video: Path, run_dir: Path) -> dict:
-    black = _detect(video, run_dir, "blackdetect=d=0.5:pix_th=0.10", "blackdetect")
-    # screen-share content sits visually static for long stretches while the
-    # creator talks — only a 60s+ freeze indicates a genuinely stuck render
-    freeze = _detect(video, run_dir, "freezedetect=n=-60dB:d=60", "freeze_start")
+    from eddy.media.ffmpeg import FfmpegError
+
+    try:
+        black = _detect(video, run_dir, "blackdetect=d=0.5:pix_th=0.10", "blackdetect")
+        # screen-share content sits visually static for long stretches while the
+        # creator talks — only a 60s+ freeze indicates a genuinely stuck render
+        freeze = _detect(video, run_dir, "freezedetect=n=-60dB:d=60", "freeze_start")
+    except FfmpegError as e:
+        return {"gate": "black_or_frozen", "pass": False, "error": str(e)[:300]}
     return {
         "gate": "black_or_frozen",
         "pass": not black and not freeze,
@@ -60,7 +72,12 @@ def black_or_frozen(video: Path, run_dir: Path) -> dict:
 
 
 def silence_gate(video: Path, run_dir: Path, max_dead_air_s: float) -> dict:
-    lines = _detect(video, run_dir, "silencedetect=noise=-35dB:d=" + f"{max_dead_air_s}", "silence_duration")
+    from eddy.media.ffmpeg import FfmpegError
+
+    try:
+        lines = _detect(video, run_dir, f"silencedetect=noise=-35dB:d={max_dead_air_s}", "silence_duration", audio=True)
+    except FfmpegError as e:
+        return {"gate": "no_dead_air", "pass": False, "error": str(e)[:300]}
     spans = []
     for ln in lines:
         m = re.search(r"silence_duration: ([\d.]+)", ln)
@@ -81,7 +98,12 @@ def silent_motion_gate(
     live inside protected moments, so we allow up to `protected_allow` such spans; one
     extra grace for a natural trailing pause. Anything beyond that FAILS — independent
     of the (advisory) judge."""
-    lines = _detect(video, run_dir, f"silencedetect=noise={noise_db}dB:d={max_silence_s}", "silence_duration")
+    from eddy.media.ffmpeg import FfmpegError
+
+    try:
+        lines = _detect(video, run_dir, f"silencedetect=noise={noise_db}dB:d={max_silence_s}", "silence_duration", audio=True)
+    except FfmpegError as e:
+        return {"gate": "silent_motion", "pass": False, "error": str(e)[:300]}
     spans = []
     for ln in lines:
         m = re.search(r"silence_duration: ([\d.]+)", ln)

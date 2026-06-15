@@ -78,6 +78,22 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Pin/record editorial model per run + drift warning** (`controller.py`, +4 tests)
 - [x] **Legal drafts (LICENSE + EULA.md + AUP.md + THIRD-PARTY-NOTICES.md)** — DRAFTs for your + lawyer review → human-gate #1
 
+### v0.5 items
+- [x] **Fix QA detect filters** (silencedetect → `-af`, returncode check, fail-loud not false-pass) (`deterministic.py`, +6 tests)
+- [ ] Crash-proof duration resolution (format → stream → typed unknown)
+- [ ] Whisper language auto-detect + `--language` + mismatch guard (remove hardcoded 'en')
+- [ ] Ingest gates (accept webm/avi/ts; reject undecodable loud; probe-based multi-video disambiguation)
+- [ ] Empty/no-speech transcript is a first-class outcome
+- [ ] Live progress + ETA layer
+- [ ] Top-level error handler + crash log
+- [ ] `tests/conftest.py` + committed tiny synthetic lavfi fixtures
+- [ ] Fixture-backed `eddy run` e2e
+- [ ] Unit tests across untested LOC (render/media/package/qa/doctor)
+- [ ] Loop-resume integrity tests
+- [ ] Provider/judge contract tests
+- [ ] `compile_edl` Hypothesis fuzz
+- [ ] Golden editorial suite (pinned qwen q4)
+
 ## Human-gate batch (accumulating)
 1. Legal sign-off — commercial EULA + AUP + third-party NOTICE; ffmpeg LGPL build + qwen/Whisper commercial-use rights.
 2. Code-signing certs — Apple Developer ID + Windows Authenticode.
