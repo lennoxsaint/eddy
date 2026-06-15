@@ -97,7 +97,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 ### v0.6 items (autonomous-able marked ⚙; human-gate marked 🔒)
 - [x] ⚙ **Runtime encoder resolver** (probe `ffmpeg -encoders`; videotoolbox/nvenc/qsv → libx264 fallback) — replaced hardcoded h264_videotoolbox at all 4 sites (`media/ffmpeg.py`+render, +7 tests)
 - [x] ⚙ **Cross-platform caption fonts** (macOS/Linux/Windows candidates + glob fallback + non-silent warning; Pillow default is real/scalable) (`captions.py`, +4 tests)
-- [ ] ⚙ Cross-platform hardware detection in doctor (psutil/proc/WMI; treat failure as unknown not 0)
+- [x] ⚙ **Cross-platform hardware detection** (macOS sysctl / Linux /proc / Windows GlobalMemoryStatusEx + psutil fallback; unmeasured = None not 0) (`doctor.py`, +6 tests)
 - [ ] ⚙ doctor ffmpeg/ffprobe/encoder/free-disk preflight + `--dry-run`
 - [ ] ⚙ `eddy clean` + auto-prune non-chosen iterations + disk-usage in status
 - [ ] ⚙ Pinned deps + committed lockfile; reconcile requires-python

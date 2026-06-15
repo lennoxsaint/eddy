@@ -23,17 +23,65 @@ PING_SCHEMA = {
 LOCAL_TIER_MIN_RAM_GB = 32
 
 
-def _mac_hardware() -> dict:
-    info: dict = {"platform": platform.system(), "machine": platform.machine()}
+def _linux_ram_gb(meminfo: str) -> int | None:
+    for line in meminfo.splitlines():
+        if line.startswith("MemTotal:"):
+            try:
+                return round(int(line.split()[1]) / 2**20)  # kB -> GiB
+            except (ValueError, IndexError):
+                return None
+    return None
+
+
+def _linux_chip(cpuinfo: str) -> str:
+    for line in cpuinfo.splitlines():
+        if line.lower().startswith("model name"):
+            return line.split(":", 1)[1].strip()
+    return "unknown"
+
+
+def _detect_hardware() -> dict:
+    """Cross-platform hardware readout. Unknown RAM is None (NOT 0) so the recommender doesn't
+    silently mis-tier a real machine it just couldn't measure."""
+    info: dict = {"platform": platform.system(), "machine": platform.machine(), "chip": "unknown", "ram_gb": None}
+    system = platform.system()
     try:
-        info["chip"] = subprocess.run(
-            ["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True
-        ).stdout.strip()
-        mem = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True)
-        info["ram_gb"] = round(int(mem.stdout.strip()) / 2**30)
+        if system == "Darwin":
+            info["chip"] = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True
+            ).stdout.strip() or "unknown"
+            mem = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True)
+            info["ram_gb"] = round(int(mem.stdout.strip()) / 2**30)
+        elif system == "Linux":
+            from pathlib import Path as _P
+
+            info["ram_gb"] = _linux_ram_gb(_P("/proc/meminfo").read_text())
+            info["chip"] = _linux_chip(_P("/proc/cpuinfo").read_text())
+        elif system == "Windows":
+            import ctypes
+
+            class _MS(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            ms = _MS()
+            ms.dwLength = ctypes.sizeof(_MS)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms))  # type: ignore[attr-defined]
+            info["ram_gb"] = round(ms.ullTotalPhys / 2**30)
+            info["chip"] = platform.processor() or "unknown"
     except Exception:
-        info.setdefault("chip", "unknown")
-        info.setdefault("ram_gb", 0)
+        pass  # leave chip='unknown', ram_gb=None — honest "couldn't measure"
+    # psutil, if installed, is a clean cross-platform RAM source when the above couldn't measure
+    if info["ram_gb"] is None:
+        try:
+            import psutil
+
+            info["ram_gb"] = round(psutil.virtual_memory().total / 2**30)
+        except Exception:
+            pass
     return info
 
 
@@ -48,7 +96,7 @@ def _ollama_models(base_url: str) -> list[str]:
 
 def detect() -> dict:
     cfg = load_config()
-    hw = _mac_hardware()
+    hw = _detect_hardware()
     ollama_models = _ollama_models(cfg.provider.ollama.base_url)
     creds = {
         "anthropic_api": bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")),
@@ -63,9 +111,10 @@ def detect() -> dict:
 def recommend(found: dict) -> tuple[str, str]:
     """Return (provider_name, reason)."""
     hw, models, creds = found["hardware"], found["ollama_models"], found["credentials"]
-    if models and hw.get("ram_gb", 0) >= LOCAL_TIER_MIN_RAM_GB:
+    ram = hw.get("ram_gb") or 0  # None (unmeasured) -> 0 so we don't claim the local tier we can't confirm
+    if models and ram >= LOCAL_TIER_MIN_RAM_GB:
         return "ollama", (
-            f"{hw.get('chip', 'this machine')} with {hw['ram_gb']}GB RAM runs a local model well — "
+            f"{hw.get('chip', 'this machine')} with {ram}GB RAM runs a local model well — "
             "free unlimited editing."
         )
     if creds["codex_cli"]:
