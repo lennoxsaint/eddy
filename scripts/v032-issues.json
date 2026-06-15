@@ -1,0 +1,42 @@
+[
+  {
+    "title": "v0.3.2-A: config flags (LoopConfig)",
+    "description": "config.py LoopConfig: ceiling_tolerance_s=5.0, min_length_progress_s=5.0, protection_budget_frac=0.20 (default-path), enable_aggressive_trim=False + trim_judge_tolerance=0.5 (backstop). All defaulted; eddy.toml stays valid. Foundation for every other issue."
+  },
+  {
+    "title": "v0.3.2-B: feasibility-gated plateau (controller + state)",
+    "description": "Root cause: the loop plateau-stops on flat quality, and quality is blind to length, so it quits ~20min over ceiling. Fix: add length as a SECOND convergence axis WITHOUT folding it into quality_score. controller.py edit_loop: track best_over (min over_ceiling_s) alongside prev_best_q; q_improved OR len_improved (over>ceiling_tolerance_s AND over<best_over-min_length_progress_s) resets no_improve, else increment; plateau still fires at plateau_rounds. state.py set_plateau persists best_over for resume. No ranking change (state.best already prefers feasibility among gate-failing)."
+  },
+  {
+    "title": "v0.3.2-C: raw_beat_density helper (simulate)",
+    "description": "simulate.py: new raw_beat_density(beats, phrases) -> per-beat {label, span_s, raw_wpm} heaviest-first, computed pre-cut (no EDL needed) so it can feed iteration-1 context. Sibling to the existing post-cut beat_density."
+  },
+  {
+    "title": "v0.3.2-D: LENGTH BUDGET + raw-density injection + prompt reframe",
+    "description": "cutplan.py initial_decisions: inject a LENGTH BUDGET block (full source ~X min; ceiling 14 min; remove ~M min / P%; keep protected total under 20% ~Ys) + BEAT DENSITY (raw) block from raw_beat_density. prompts/cutplan.md: one paragraph on using LENGTH BUDGET + BEAT DENSITY to choose protections and cuts; reframe the ceiling as a firm limit (soften the tier-OPTIONAL 'only if still over target' wording). Gives the model the feasibility scale + density map BEFORE it commits to protections."
+  },
+  {
+    "title": "v0.3.2-E: directive escalation (over_ceiling_streak)",
+    "description": "controller.py: track over_ceiling_streak (consecutive iterations still over ceiling) in edit_loop; pass to _directive_from(qa, judge, sim, over_ceiling_streak). Scale the over-ceiling drop_beat reason: streak1=current; streak2=name more heavy beats + restate exact remove ~Xs; streak3+=blunt 'cut the N weakest beats entirely, some roughness acceptable, ceiling firm except protected hook/payoff/CTA'. Under-ceiling path unchanged."
+  },
+  {
+    "title": "v0.3.2-F: enforce_protection_budget (protect + cutplan)",
+    "description": "protect.py: new enforce_protection_budget(protected_moments, source_s, budget_frac) -> sort by span ascending, keep most-specific until cumulative <= budget_frac*source_s, drop the broadest (the ones that void cuts). cutplan.py compile_with_repair: apply to MODEL-declared protected_moments only (deterministic setup_protections exempt) before compile_edl; on drop, append a directive so the next revision re-declares only load-bearing moments. The 20% budget is stated in the prompt but never enforced today."
+  },
+  {
+    "title": "v0.3.2-G: trim_to_fit deterministic backstop (loop/trim.py NEW)",
+    "description": "loop/trim.py (modeled on loop/speed.py): trim_to_fit(edl, decisions, sim_report, run_dir, provider, receipts, cfg). No-op unless enable_aggressive_trim and over ceiling. Select WHOLE lowest-value beats (high wpm*kept_s) by r.beat label; EXCLUDE any beat overlapping protected_moment or labeled hook/payoff/outro/CTA/cold_open (reuse speed.py _PROTECTED_LABEL_TOKENS). Greedy smallest set to reach ceiling (else residual). Validate ONCE: re-simulate + proxy render + run_deterministic + run_judge + run_ship_panel; ADOPT only if gates pass AND judge>=baseline-trim_judge_tolerance AND panel ships AND no new orphans, else REVERT wholesale. Log final/trim-to-fit.json + ceiling_missed_s."
+  },
+  {
+    "title": "v0.3.2-H: controller wire-in + ordering (autonomous_run)",
+    "description": "controller.py autonomous_run: insert trim_to_fit AFTER edl/chosen_decisions load and BEFORE the speed_to_fit block, guarded by enable_aggressive_trim. Order: loop (cuts) -> trim-to-fit (cuts) -> speed_to_fit (speed) -> ship panel -> render. Cut before speed: exhaust cutting before speeding. Existing advisory ship panel still runs once on the final edl."
+  },
+  {
+    "title": "v0.3.2-I: unit tests (tests/test_aggressive_cut.py NEW)",
+    "description": "pytest (no model): feasibility-gated plateau (flat-quality+dropping-duration does NOT stop; both-flat DOES; within tolerance stops; never exceeds max_iterations); enforce_protection_budget (over-budget trimmed keeping most-specific; under-budget untouched; setup_protections exempt); raw_beat_density (correct wpm/span, heaviest-first); directive escalation (streak1/2/3 progressively harsher; under-ceiling unchanged); trim_to_fit selection (lowest-value whole beats; never protected/hook/payoff/cold_open; revert restores exact pre-trim EDL; residual logged). Render-level: trimmed EDL passes av_drift (reuse test_speed lavfi harness)."
+  },
+  {
+    "title": "v0.3.2-J: dogfood (default ON) + backstop dogfood + trust-default decision",
+    "description": "Reuse fable-mythos transcript (cache hit). Run default path ON: confirm duration reaches <=14min OR ceiling_missed_s logged with reason; judge>=8.0; zero orphans; clean ship panel; cold_open/silence/studio-sound intact. Second run enable_aggressive_trim=True to exercise the backstop adopt/revert. Honesty: do NOT claim ceiling reached if ceiling_missed_s>tolerance. Then decide whether the default loop changes are trusted."
+  }
+]

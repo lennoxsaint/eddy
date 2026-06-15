@@ -39,6 +39,27 @@ def boundary_cards(edl: Edl, phrases: list[dict]) -> list[dict]:
     return cards
 
 
+def raw_beat_density(beats: list[dict], phrases: list[dict]) -> list[dict]:
+    """Pre-cut per-beat density: source span_s + raw words-per-minute, heaviest-first.
+
+    Unlike the post-cut beat_density (which needs a compiled EDL), this reads the raw transcript
+    against the beat map, so it can be handed to the model at iteration 1 — before any cut exists —
+    to flag the long, low-density 'reading the screen aloud' runs that are the structural-cut
+    candidates. A LOW raw_wpm over a LONG span_s is the signature of a draggy, compressible beat."""
+    out: list[dict] = []
+    for beat in beats:
+        bs, be = beat.get("start_s", 0.0), beat.get("end_s", 0.0)
+        span = be - bs
+        if span <= 0:
+            continue
+        in_beat = [p for p in phrases if bs <= p["start"] < be]
+        nwords = sum(len(p["text"].split()) for p in in_beat)
+        wpm = round(nwords / span * 60, 1) if span > 0 else 0.0
+        out.append({"label": beat.get("label", ""), "span_s": round(span, 1), "raw_wpm": wpm})
+    out.sort(key=lambda b: b["span_s"], reverse=True)
+    return out
+
+
 def simulate(
     edl: Edl,
     decisions: EditDecisions,

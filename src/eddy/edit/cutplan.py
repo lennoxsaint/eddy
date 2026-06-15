@@ -9,7 +9,7 @@ from pathlib import Path
 
 from eddy.config import EddyConfig, load_config
 from eddy.edit.compiler import CompileError, compile_edl
-from eddy.edit.protect import setup_protections
+from eddy.edit.protect import enforce_protection_budget, setup_protections
 from eddy.edit.schema import EditDecisions, EddyMeta, save
 from eddy.loop.receipts import Receipts
 from eddy.media.probe import duration_s as probe_duration
@@ -152,11 +152,44 @@ def initial_decisions(
     retake_hints: list[dict],
     filler_hints: list[dict],
     beats: list[dict],
+    cfg: EddyConfig,
 ) -> EditDecisions:
+    from eddy.edit.simulate import raw_beat_density
+
     prompt = (PROMPTS / "cutplan.md").read_text()
     phrases = load_phrases(run_dir)
+    # v0.3.2: hand the model the feasibility scale + density map UP FRONT, before it commits to
+    # protections, so it cuts toward the ceiling instead of treating length as optional polish.
+    # The loop's plateau used to quit ~20min over the ceiling because the model under-cut from
+    # the first pass; this makes the size of the task explicit on iteration 1.
+    ceiling_s = cfg.loop.length_ceiling_minutes * 60
+    # use the same source duration the protection budget enforces against (probe of the camera
+    # source), so the budget the model is TOLD matches the one compile_with_repair applies. Falls
+    # back to the last spoken word if the manifest/source can't be probed.
+    try:
+        content_s = probe_duration(Path(manifest(run_dir)["sources"]["camera"]))
+    except Exception:
+        content_s = phrases[-1]["end"] if phrases else target_s
+    remove_s = max(0.0, content_s - ceiling_s)
+    pct = (remove_s / content_s * 100) if content_s > 0 else 0.0
+    protect_budget_s = cfg.loop.protection_budget_frac * content_s
+    length_budget = (
+        f"LENGTH BUDGET (firm):\n"
+        f"- Raw source is ~{content_s / 60:.0f} min ({content_s:.0f}s). HARD CEILING: "
+        f"{cfg.loop.length_ceiling_minutes:.0f} min ({ceiling_s:.0f}s).\n"
+        f"- To land under the ceiling you must remove roughly {remove_s:.0f}s "
+        f"(~{pct:.0f}% of the runtime). Cutting is the primary lever — reaching the ceiling is "
+        f"expected unless it would require cutting protected hook/payoff/CTA.\n"
+        f"- Protect at most ~{protect_budget_s:.0f}s total "
+        f"({cfg.loop.protection_budget_frac * 100:.0f}% of runtime); broad protections void your own cuts."
+    )
+    density = raw_beat_density(beats, phrases)
+    density_lines = "\n".join(f"- {b['label']}: {b['span_s']:.0f}s @ {b['raw_wpm']:.0f}wpm" for b in density)
     content = (
         f"{prompt}\n\n"
+        f"{length_budget}\n\n"
+        f"BEAT DENSITY (raw, heaviest span first; long span + LOW wpm = draggy screen-reading, cut hardest):\n"
+        f"{density_lines}\n\n"
         f"TARGET RUNTIME: {target_s:.0f} seconds\n\n"
         f"BEAT MAP:\n{json.dumps(beats, indent=1)}\n\n"
         f"RETAKE CANDIDATES (machine hints, adjudicate each):\n{json.dumps(retake_hints[:25], indent=1)}\n\n"
@@ -211,6 +244,22 @@ def compile_with_repair(
     extra_protected = setup_protections(load_phrases(run_dir))
 
     for attempt in range(3):
+        # v0.3.2: enforce the protection budget the prompt asks for but never checked, on EVERY
+        # (re)compile. Over-broad model protections void its own cuts (the compiler drops any cut
+        # taking the majority of a protected span), so the edit can never reach the ceiling. This
+        # must run inside the loop: revise_decisions (the repair path below) rebuilds
+        # protected_moments from raw model output, so enforcing only once would let a repair restore
+        # over-broad protections. Idempotent — a sub-budget set is returned untouched. The
+        # deterministic setup_protections are added separately at compile and exempt from the budget.
+        kept_prot, dropped_prot = enforce_protection_budget(
+            list(decisions.protected_moments), dur, cfg.loop.protection_budget_frac
+        )
+        if dropped_prot:
+            decisions.protected_moments = kept_prot
+            receipts.log(
+                "protection_budget", source_s=round(dur), budget_frac=cfg.loop.protection_budget_frac,
+                kept=len(kept_prot), dropped=len(dropped_prot),
+            )
         try:
             edl = compile_edl(
                 decisions, words, src, dur, cfg.render, cfg.gates,
@@ -242,7 +291,7 @@ def plan_run(run_dir: Path, target_minutes: float | None = None):
     beats = beat_map(run_dir, provider, receipts)
     decisions = initial_decisions(
         run_dir, provider, receipts, target_s,
-        retake_candidates(words), filler_candidates(words), beats,
+        retake_candidates(words), filler_candidates(words), beats, cfg,
     )
     decisions, edl = compile_with_repair(run_dir, decisions, provider, receipts, cfg)
 

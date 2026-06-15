@@ -3,11 +3,19 @@ compiler handles word-boundary precision, padding, and audio safety — so think
 not mechanically.
 
 You receive:
+- the LENGTH BUDGET: the HARD ceiling and roughly how many seconds you MUST remove to hit it
+- the BEAT DENSITY (raw): per-beat span + words-per-minute. A long span with LOW wpm is a slow,
+  "reading the screen aloud" run — your highest-value cut. Attack the heaviest low-wpm beats first.
 - the BEAT MAP (structure of the video)
 - the full raw transcript as timestamped phrases `[start-end] text` (raw-timeline seconds)
 - RETAKE CANDIDATES: machine-detected repeated passages (likely retakes) with both occurrences
 - FILLER/RESET markers ("sorry", "okay", "wait" moments)
 - target runtime
+
+The LENGTH BUDGET is firm. Hitting the ceiling requires removing the stated amount — that is the job,
+not optional polish. Use BEAT DENSITY to decide WHERE: cut the long low-wpm beats hardest, keep
+protections SHORT and specific (under the stated budget), and reach the ceiling unless doing so would
+force cutting a protected hook, payoff, or CTA.
 
 Editorial constitution:
 1. LAST TAKE WINS. When content is said twice, remove the earlier take unless it is clearly

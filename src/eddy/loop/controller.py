@@ -12,6 +12,35 @@ from eddy.edit.compiler import CompileError, cut_transcript
 
 class EditLoopError(RuntimeError):
     """Raised when the loop cannot produce any compilable edit to ship."""
+
+
+def _made_progress(cur_best_q: float, prev_best_q: float, over_ceiling_s: float, best_over: float, loop) -> bool:
+    """v0.3.2 feasibility-gated plateau: the loop made progress this round if EITHER edit quality
+    improved OR the cut got materially closer to the ceiling while still over it. Length is the
+    second convergence axis — it gates the plateau but is never folded into the quality score (a
+    length term reward-hacked in v0.3). Returns True to reset the no-improve counter."""
+    q_improved = cur_best_q > prev_best_q + 1e-6
+    len_improved = (
+        over_ceiling_s > loop.ceiling_tolerance_s
+        and over_ceiling_s < best_over - loop.min_length_progress_s
+    )
+    return q_improved or len_improved
+
+
+def _plateau_step(no_improve: int, prev_best_q: float, best_over: float, cur_best_q: float,
+                  over_ceiling_s: float, loop) -> tuple[int, float, float, bool]:
+    """One feasibility-gated plateau step. Returns (no_improve, prev_best_q, best_over, should_stop).
+
+    ORDER IS LOAD-BEARING: progress is judged against the PRE-update best_over (so this round's own
+    cut counts as length progress, and on iteration 1 the 1e9 best_over sentinel makes the first
+    over-ceiling cut count), THEN best_over absorbs this round. Moving the best_over update before
+    the _made_progress call silently reintroduces the v0.3 quality-only plateau (the ~20min-over
+    floor). Extracted so this order is unit-tested, not just the helper."""
+    progressed = _made_progress(cur_best_q, prev_best_q, over_ceiling_s, best_over, loop)
+    no_improve = 0 if progressed else no_improve + 1
+    prev_best_q = max(prev_best_q, cur_best_q)
+    best_over = min(best_over, over_ceiling_s)
+    return no_improve, prev_best_q, best_over, no_improve >= loop.plateau_rounds
 from eddy.edit.cutplan import (
     beat_map,
     compile_with_repair,
@@ -24,6 +53,7 @@ from eddy.edit.simulate import save_report, simulate
 from eddy.loop.receipts import Receipts
 from eddy.loop.speed import speed_to_fit
 from eddy.loop.state import RunState
+from eddy.loop.trim import trim_to_fit
 from eddy.media.frames import boundary_contact_sheet
 from eddy.providers.base import get_editorial_provider
 from eddy.qa.deterministic import run_deterministic
@@ -36,8 +66,13 @@ from eddy.transcribe.pack import phrases as load_phrases
 from eddy.transcribe.whisper import transcribe_run, words_flat
 
 
-def _directive_from(qa: dict, judge: dict, sim: dict) -> list[dict]:
-    """Typed fix ops: deterministic defects mapped by code, judge defects passed through."""
+def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int = 0) -> list[dict]:
+    """Typed fix ops: deterministic defects mapped by code, judge defects passed through.
+
+    v0.3.2: when the cut is still over the ceiling, the drop_beat directive ESCALATES with
+    over_ceiling_streak (consecutive rounds over) — naming more heavy beats and getting blunter —
+    so a model that keeps under-cutting is pushed harder instead of receiving the identical nudge
+    every round (which is what let the loop plateau ~20min over the ceiling)."""
     directive: list[dict] = []
     for span in (sim.get("dead_air") or [])[:5]:
         directive.append(
@@ -48,21 +83,28 @@ def _directive_from(qa: dict, judge: dict, sim: dict) -> list[dict]:
     ceiling_s = sim.get("ceiling_s", sim.get("target_s", 0))
     if not sim.get("under_ceiling", True):
         over = sim["duration_s"] - ceiling_s
-        heavy = sim.get("beat_density", [])[:4]
+        n_heavy = 4 if over_ceiling_streak <= 1 else (6 if over_ceiling_streak == 2 else 8)
+        heavy = sim.get("beat_density", [])[:n_heavy]
         heavy_hint = "; ".join(f"{b['label']} ({b['kept_s']:.0f}s @ {b['wpm']:.0f}wpm)" for b in heavy)
-        directive.append(
-            {
-                "op": "drop_beat",
-                "reason": (
-                    f"video is {over:.0f}s OVER the {ceiling_s:.0f}s ceiling ({sim['duration_s']:.0f}s). "
-                    f"Trims will not get there — remove roughly {over:.0f}s of content structurally. "
-                    f"The longest beats are: {heavy_hint}. Attack these first: where a beat is the creator "
-                    "reading on-screen text/lists aloud, keep the intro line + the top 3 most important items and "
-                    "CUT THE REST (as ordinary cuts — no new ops); collapse repeated explanations to their best "
-                    "telling; cut the weakest beats entirely. Keep hook, payoffs, CTA."
-                ),
-            }
+        reason = (
+            f"video is {over:.0f}s OVER the {ceiling_s:.0f}s ceiling ({sim['duration_s']:.0f}s). "
+            f"Trims will not get there — remove roughly {over:.0f}s of content structurally. "
+            f"The longest beats are: {heavy_hint}. Attack these first: where a beat is the creator "
+            "reading on-screen text/lists aloud, keep the intro line + the top 3 most important items and "
+            "CUT THE REST (as ordinary cuts — no new ops); collapse repeated explanations to their best "
+            "telling; cut the weakest beats entirely. Keep hook, payoffs, CTA."
         )
+        if over_ceiling_streak >= 2:
+            reason += (
+                f" This is round {over_ceiling_streak} STILL over the ceiling — your last cut was not "
+                "aggressive enough. Be bolder: cut the listed beats much harder."
+            )
+        if over_ceiling_streak >= 3:
+            reason += (
+                " The ceiling is firm. Cut the weakest 2-3 beats ENTIRELY and accept some roughness; "
+                "the only content off-limits is a protected hook, payoff, or CTA."
+            )
+        directive.append({"op": "drop_beat", "reason": reason})
     else:
         # under ceiling: still nudge compression of information-light, fast-narrated runs so
         # the pacing quality signal can climb without a length violation
@@ -114,6 +156,9 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     # v0.3: plateau state survives resume so a resumed run doesn't re-run the full cap
     prev_best_q = state.data.get("prev_best_q", -1.0)
     no_improve = state.data.get("no_improve", 0)
+    # v0.3.2: min over_ceiling_s seen — the length convergence axis (1e9 sentinel = none yet)
+    best_over = state.data.get("best_over", 1e9)
+    over_ceiling_streak = state.data.get("over_ceiling_streak", 0)
     if resume and state.data["iteration"] >= 1:
         prev_dir = run_dir / "iterations" / f"{state.data['iteration']:02d}"
         if (prev_dir / "edit-decisions.json").exists():
@@ -131,7 +176,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             if decisions is None:
                 decisions = initial_decisions(
                     run_dir, provider, receipts, target_s,
-                    retake_candidates(words), filler_candidates(words), beats,
+                    retake_candidates(words), filler_candidates(words), beats, cfg,
                 )
             else:
                 # v0.3 branch-from-best: revise the BEST-so-far decisions using that best's
@@ -150,7 +195,12 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             decisions, edl = compile_with_repair(run_dir, decisions, provider, receipts, cfg)
         except CompileError as e:
             receipts.log("iteration_failed", iteration=iteration, problems=e.problems[:5])
-            state.record_attempt(iteration, False, 0.0, target_s)
+            # over_ceiling_s=1e9 so a non-compilable attempt (no edl.json) sorts as maximally
+            # INFEASIBLE in state.best() and can never out-rank a real over-ceiling cut. Without
+            # this it records 0.0 -> ranks as perfectly feasible -> best() may pick it and the run
+            # aborts on the missing edl.json, discarding good cuts. v0.3.2's keep-cutting posture
+            # runs more iterations, so an intermittent compile failure is likelier to poison best().
+            state.record_attempt(iteration, False, 0.0, target_s, over_ceiling_s=1e9)
             directive = [{"op": "restore", "defect": p, "reason": "compile failed"} for p in e.problems[:8]]
             continue
 
@@ -186,6 +236,9 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         judge_ok = (not judge.get("judge_unstable")) and judge["weighted"] >= threshold
         under_ceiling = edl.total_duration_s <= ceiling_s
         over_ceiling_s = max(0.0, edl.total_duration_s - ceiling_s)
+        # v0.3.2: consecutive rounds still over the ceiling drive directive escalation
+        over_ceiling_streak = 0 if under_ceiling else over_ceiling_streak + 1
+        state.data["over_ceiling_streak"] = over_ceiling_streak
         state.record_attempt(
             iteration, gates_ok, judge["weighted"], edl.total_duration_s - target_s,
             quality=qual["quality"], components=qual["components"],
@@ -203,18 +256,26 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             state.set_phase("loop_done")
             return iter_dir
 
-        directive = _directive_from(qa, judge, sim)
+        directive = _directive_from(qa, judge, sim, over_ceiling_streak)
         (iter_dir / "revision-directive.json").write_text(json.dumps(directive, indent=1))
 
-        # v0.3 plateau: stop when best quality hasn't improved for plateau_rounds rounds
+        # v0.3.2 feasibility-gated plateau: stop only when NEITHER edit-quality NOR length is still
+        # improving. The v0.3 plateau keyed solely on quality, but quality is deliberately blind to
+        # length (a length term reward-hacked) — so the loop quit ~20min over the ceiling. Length is
+        # now a SECOND convergence axis: while still materially over the ceiling AND each round cuts
+        # meaningfully closer, keep going even if quality is flat. Once length progress stalls too
+        # (the model can't cut more without quality collapse) or we're within tolerance, plateau and
+        # ship best-effort. quality_score itself is untouched.
         cur_best_q = state.best().get("quality") or 0.0
-        if cur_best_q > prev_best_q + 1e-6:
-            no_improve, prev_best_q = 0, cur_best_q
-        else:
-            no_improve += 1
-        state.set_plateau(no_improve, prev_best_q)
-        if no_improve >= cfg.loop.plateau_rounds:
-            receipts.log("plateau_stop", iteration=iteration, best_quality=cur_best_q, rounds=no_improve)
+        no_improve, prev_best_q, best_over, should_stop = _plateau_step(
+            no_improve, prev_best_q, best_over, cur_best_q, over_ceiling_s, cfg.loop
+        )
+        state.set_plateau(no_improve, prev_best_q, best_over)
+        if should_stop:
+            receipts.log(
+                "plateau_stop", iteration=iteration, best_quality=cur_best_q,
+                over_ceiling_s=round(over_ceiling_s, 1), rounds=no_improve,
+            )
             break
 
     best = state.best()
@@ -266,6 +327,24 @@ def autonomous_run(
     edl = load_edl(chosen / "edl.json")
     chosen_decisions = load_decisions(chosen / "edit-decisions.json")
 
+    # v0.3.2 trim-to-fit: deterministic whole-beat CUTTING backstop for a residual gap the
+    # model-driven loop couldn't close. Runs BEFORE speed-to-fit (exhaust cutting before speeding —
+    # removing dead-weight beats beats rushing kept content) and re-judges its own trim, reverting
+    # wholesale if it regressed. Off unless enable_aggressive_trim. Mutates edl in place on adopt.
+    if cfg.loop.enable_aggressive_trim and (chosen / "sim-report.json").exists():
+        state.set_phase("trim_to_fit")
+        provider = get_editorial_provider(cfg, receipts)
+        sim_for_trim = json.loads((chosen / "sim-report.json").read_text())
+        trim_info = trim_to_fit(edl, chosen_decisions, sim_for_trim, run_dir, chosen, provider, receipts, cfg)
+        if trim_info["applied"]:
+            (run_dir / "final").mkdir(parents=True, exist_ok=True)
+            (run_dir / "final" / "trim-to-fit.json").write_text(json.dumps(trim_info, indent=1))
+            if trim_info["adopted"]:
+                print(f"trim-to-fit: {trim_info['duration_before_s']:.0f}s -> {trim_info['duration_after_s']:.0f}s "
+                      f"({len(trim_info['beats_dropped'])} beats; ceiling miss {trim_info['ceiling_missed_s']:.0f}s)")
+            else:
+                print(f"trim-to-fit reverted ({trim_info['revert_reason']}) — keeping pre-trim cut")
+
     # v0.3.1 speed-to-fit: deterministically time-compress the heaviest slow, non-protected beats
     # to close any residual gap to the length ceiling that cutting alone couldn't (off unless
     # enable_speed_ramp). Runs ONCE here, before the ship panel + final render, so the panel and
@@ -288,8 +367,12 @@ def autonomous_run(
     if cfg.loop.ship_panel and (chosen / "sim-report.json").exists():
         state.set_phase("ship_panel")
         provider = get_editorial_provider(cfg, receipts)
-        sim = json.loads((chosen / "sim-report.json").read_text())
-        sim["duration_s"] = edl.total_duration_s  # honest: panel judges the sped, shipped duration
+        # v0.3.2: re-simulate the FINAL edl so the panel judges the actually-shipped boundary cards.
+        # trim-to-fit removes whole beats (new splices) and speed-to-fit changes durations, so the
+        # cached pre-backstop sim-report would feed the panel stale evidence. No-op cost when neither
+        # backstop ran (re-simulate is deterministic, no model calls).
+        cached_sim = json.loads((chosen / "sim-report.json").read_text())
+        sim = simulate(edl, chosen_decisions, load_phrases(run_dir), cfg, cached_sim.get("target_s", edl.total_duration_s))
         kept = cut_transcript(edl, load_phrases(run_dir))
         try:
             panel = run_ship_panel(provider, receipts, sim, chosen_decisions, edl, kept, cfg)

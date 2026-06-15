@@ -65,9 +65,13 @@ class RunState:
 
         return max(self.data["attempts"], key=key)
 
-    def set_plateau(self, no_improve: int, prev_best_q: float) -> None:
+    def set_plateau(self, no_improve: int, prev_best_q: float, best_over: float | None = None) -> None:
         self.data["no_improve"] = no_improve
         self.data["prev_best_q"] = prev_best_q
+        # v0.3.2: min over_ceiling_s seen so far — the length convergence axis the
+        # feasibility-gated plateau reads (persisted so --resume keeps the streak honest).
+        if best_over is not None:
+            self.data["best_over"] = best_over
         self.save()
 
     def set_phase(self, phase: str) -> None:
