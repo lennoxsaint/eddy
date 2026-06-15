@@ -9,6 +9,7 @@ from eddy.config import EddyConfig
 from eddy.edit.schema import EditDecisions, Edl
 from eddy.loop.receipts import Receipts
 from eddy.providers.base import ProviderError
+from eddy.safety import fence
 
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 
@@ -104,7 +105,7 @@ def evidence_packet(sim_report: dict, decisions: EditDecisions, edl: Edl, kept_p
         f"STATS:\n{json.dumps(stats, indent=1)}\n\n"
         f"BOUNDARY CARDS ({len(cards)}):\n" + "\n".join(cards) + "\n\n"
         "WHAT WAS LOST (chunks >20s):\n" + "\n".join(f"- {r}" for r in removed_big[:20]) + "\n\n"
-        "CUT TRANSCRIPT:\n" + "\n".join(lines)
+        + fence("CUT TRANSCRIPT", "\n".join(lines))
     )
 
 

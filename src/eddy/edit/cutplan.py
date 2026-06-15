@@ -14,6 +14,7 @@ from eddy.edit.schema import EditDecisions, EddyMeta, save
 from eddy.loop.receipts import Receipts
 from eddy.media.probe import duration_s as probe_duration
 from eddy.providers.base import ProviderError, get_editorial_provider
+from eddy.safety import detect_injection, fence
 from eddy.runs import manifest
 from eddy.transcribe.pack import audio_silence_map
 from eddy.transcribe.pack import phrases as load_phrases
@@ -194,8 +195,10 @@ def initial_decisions(
         f"BEAT MAP:\n{json.dumps(beats, indent=1)}\n\n"
         f"RETAKE CANDIDATES (machine hints, adjudicate each):\n{json.dumps(retake_hints[:25], indent=1)}\n\n"
         f"FILLER/RESET MARKERS:\n{json.dumps(filler_hints[:15], indent=1)}\n\n"
-        f"TRANSCRIPT:\n{packed_lines(phrases)}"
+        f"{fence('TRANSCRIPT', packed_lines(phrases))}"
     )
+    if flags := detect_injection(packed_lines(phrases)):
+        receipts.log("prompt_injection_flagged", stage="cutplan", patterns=flags[:5])
     raw = _call(provider, receipts, "cutplan", [{"role": "user", "content": content}], DECISIONS_SCHEMA)
     decisions = EditDecisions.model_validate({**raw, "target_runtime_seconds": target_s})
     decisions.x_eddy = EddyMeta(iteration=1, beats=beats)
@@ -217,7 +220,7 @@ def revise_decisions(
         f"{prompt}\n\n"
         f"YOUR PREVIOUS DECISIONS:\n{prev_json}\n\n"
         f"REVISION DIRECTIVE:\n{json.dumps(directive, indent=1)}\n\n"
-        f"TRANSCRIPT:\n{packed_lines(phrases)}"
+        f"{fence('TRANSCRIPT', packed_lines(phrases))}"
     )
     raw = _call(provider, receipts, f"revise_iter{iteration}", [{"role": "user", "content": content}], DECISIONS_SCHEMA)
     decisions = EditDecisions.model_validate(

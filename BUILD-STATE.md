@@ -85,7 +85,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [ ] Structured logging (per-run eddy.log, --verbose/--quiet) replacing raw print()
 - [ ] Creator-facing failure/explanation in launch kit ("unsure about these N moments" + over-ceiling banner)
 - [ ] Output moderation/likeness gate before thumbnails/titles + AI-generated disclosure
-- [ ] Prompt-injection hardening (transcript as data into the cut planner + judge)
+- [x] **Prompt-injection hardening** (transcript data-fenced in the cut-planner + judge; injection patterns flagged to receipts; deterministic gates remain the backstop) (`safety.py`/`cutplan.py`/`judge.py`, +4 tests)
 - [ ] GDPR/CCPA purge tooling + documented retention posture
 - [ ] Opt-in anonymized failure beacon (stage/OS/ffmpeg/error-class only)
 - [ ] Remove hardcoded personal claude_local_guard / exit-43 Chrome-pairing from cli_subprocess
