@@ -76,6 +76,18 @@ def test_remap_cursor_advance_divides_by_speed():
     assert round(src_to_out(edl, 12.0), 2) == 7.0
 
 
+def test_src_to_out_skips_cold_open_reorder():
+    # COLD_OPEN is a later-source clip prepended OUT of source order. An early body beat must map to
+    # its BODY position (shifted by the cold-open's output duration), not collapse to ~0 because it
+    # precedes the prepended range in playback order. The cold-open still advances the cursor.
+    edl = mk_edl([
+        EdlRange(start=100, end=110, beat="COLD_OPEN"),  # 10s teaser at the front
+        EdlRange(start=0, end=50),                        # body, in source order
+        EdlRange(start=100, end=110),                     # the payoff again, natural position
+    ])
+    assert src_to_out(edl, 20.0) == 30.0  # cold_open(10) + (20-0); the bug returned 0.0
+
+
 # ---- eligibility safety rail ---------------------------------------------------------
 
 def _eligibility_world():

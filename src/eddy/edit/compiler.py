@@ -239,17 +239,23 @@ def _snap_to_words(
 
 
 def src_to_out(edl: Edl, raw_s: float) -> float | None:
-    """Map a source-timeline second to the output (edited) timeline, honoring per-range speed.
+    """Map a source-timeline second to its OUTPUT (edited-timeline) second, honoring per-range speed.
 
     v0.3.1: a range played at `speed` occupies (span / speed) output seconds, so BOTH the
     within-segment offset and the cursor advance divide by speed. Dividing only one (e.g. the
-    duration sum) silently desyncs anything mapped through here inside a sped beat. Returns None
-    when raw_s lands after the last kept range. This is the single source of truth for the
-    source->output mapping; cut_transcript() applies the identical rule for bulk phrase remap."""
+    duration sum) silently desyncs anything mapped through here inside a sped beat.
+
+    The COLD_OPEN range is a duplicated payoff clip prepended OUT of source order; it still occupies
+    output time (so its duration is added to the cursor) but a beat's natural source position must
+    map to its BODY occurrence, not the teaser — otherwise any beat starting before the cold-open's
+    source end would wrongly resolve to ~0.0 (it precedes the prepended range in playback order). So
+    the cold-open is skipped as a RETURN target while still advancing the cursor. Returns None when
+    raw_s lands after the last body range. Used by chapters; cut_transcript() applies the same
+    /speed rule for bulk phrase remap (it maps by midpoint containment and keeps cold-open copies)."""
     cursor = 0.0
     for r in edl.ranges:
         sp = r.speed or 1.0
-        if raw_s <= r.end:
+        if (r.beat or "").upper() != "COLD_OPEN" and raw_s <= r.end:
             return cursor + max(0.0, raw_s - r.start) / sp
         cursor += (r.end - r.start) / sp
     return None
