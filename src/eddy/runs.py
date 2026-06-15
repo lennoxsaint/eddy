@@ -11,6 +11,7 @@ from eddy.config import load_config
 from eddy.loop.receipts import Receipts
 
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".m4v", ".webm", ".avi", ".ts", ".mts", ".m2ts", ".3gp", ".wmv", ".flv"}
+AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus", ".wma", ".aiff", ".aif"}
 
 
 class SourceError(RuntimeError):
@@ -30,8 +31,11 @@ def discover_sources(source: Path) -> dict[str, Path]:
     composite is the baseline case."""
     source = source.expanduser().resolve()
     if source.is_file():
-        if source.suffix.lower() not in VIDEO_EXTS:
-            raise SourceError(f"not a video file: {source}")
+        ext = source.suffix.lower()
+        if ext not in VIDEO_EXTS and ext not in AUDIO_EXTS:
+            raise SourceError(f"not a video/audio file: {source}")
+        # audio-only sources are accepted so podcasters can `eddy transcribe`; `eddy run` still
+        # needs a video stream and will fail loud at the decodability preflight (with a clear hint).
         return {"camera": source}
     if not source.is_dir():
         raise SourceError(f"source not found: {source}")
@@ -45,7 +49,7 @@ def discover_sources(source: Path) -> dict[str, Path]:
                 found.setdefault("screen", p)
             elif any(k in stem for k in ("camera", "cam", "webcam", "face", "talking")):
                 found.setdefault("camera", p)
-        elif p.suffix.lower() in {".wav", ".m4a"} and "mic" in stem:
+        elif p.suffix.lower() in AUDIO_EXTS and "mic" in stem:
             found.setdefault("mic", p)
     if "camera" not in found:
         videos = [p for p in files if p.suffix.lower() in VIDEO_EXTS]
@@ -132,6 +136,11 @@ def assert_sources_decodable(sources: dict[str, str]) -> None:
         except Exception as e:
             raise SourceError(f"cannot decode {name} source {p}: {str(e)[:200]} — corrupt or unsupported?") from e
         if s["video"] is None:
+            if p.suffix.lower() in AUDIO_EXTS:
+                raise SourceError(
+                    f"{name} source {p} is audio-only — `eddy run` edits video. "
+                    f"Run `eddy transcribe {p}` for the transcript, or provide a video source."
+                )
             raise SourceError(f"{name} source {p} has no decodable video stream (audio-only or corrupt?)")
         if s["duration_s"] <= 0:
             raise SourceError(f"{name} source {p} has unknown/zero duration — corrupt or truncated?")

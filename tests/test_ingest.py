@@ -3,7 +3,7 @@ loud with an actionable message instead of crashing mid-pipeline."""
 
 import pytest
 
-from eddy.runs import VIDEO_EXTS, SourceError, assert_sources_decodable, discover_sources
+from eddy.runs import AUDIO_EXTS, VIDEO_EXTS, SourceError, assert_sources_decodable, discover_sources
 
 
 def test_video_exts_includes_common_formats():
@@ -63,3 +63,31 @@ def test_decodable_skips_mic(monkeypatch):
                         lambda p: seen.append(str(p)) or _summary(video={"w": 1}))
     assert_sources_decodable({"camera": "/x/cam.mp4", "mic": "/x/mic.wav"})
     assert "/x/mic.wav" not in seen  # audio-only mic isn't checked for a video stream
+
+
+# v0.8: audio-first ingest — podcasters can `eddy transcribe` an .mp3/.wav, and `eddy run` on
+# audio fails with a transcribe hint instead of a cryptic "no video stream".
+
+
+def test_audio_exts_includes_common_formats():
+    for ext in (".mp3", ".wav", ".m4a", ".flac", ".aac"):
+        assert ext in AUDIO_EXTS
+
+
+def test_discover_accepts_audio_file(tmp_path):
+    a = tmp_path / "episode.mp3"
+    a.write_bytes(b"x")
+    assert discover_sources(a) == {"camera": a}  # transcribe reads the "camera" source
+
+
+def test_discover_still_rejects_non_media(tmp_path):
+    f = tmp_path / "notes.txt"
+    f.write_bytes(b"x")
+    with pytest.raises(SourceError, match="not a video/audio file"):
+        discover_sources(f)
+
+
+def test_run_on_audio_hints_transcribe(monkeypatch):
+    monkeypatch.setattr("eddy.media.probe.stream_summary", lambda p: _summary(video=None))
+    with pytest.raises(SourceError, match="audio-only.*transcribe"):
+        assert_sources_decodable({"camera": "/x/episode.mp3"})
