@@ -12,7 +12,7 @@ from pathlib import Path
 
 from eddy.config import RenderConfig
 from eddy.edit.schema import Edl, EdlRange
-from eddy.media.ffmpeg import concat_quote, run_ffmpeg
+from eddy.media.ffmpeg import concat_quote, run_ffmpeg, video_encoder_args
 
 SEEK_PREROLL_S = 2.0
 
@@ -63,7 +63,7 @@ def _segment_args(
         args += ["-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-c:a", "aac", "-b:a", "96k"]
     else:
         args += [
-            "-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "7000k",
+            *video_encoder_args("7000k"),
             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
         ]
     args += ["-movflags", "+faststart", str(out)]

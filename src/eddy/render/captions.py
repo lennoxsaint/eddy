@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from eddy.media.ffmpeg import run_ffmpeg
+from eddy.media.ffmpeg import run_ffmpeg, video_encoder_args
 from eddy.render import layout as L
 
 FONT_CANDIDATES = [
@@ -138,7 +138,7 @@ def burn_captions(base: Path, final: Path, events: list[dict], total_duration: f
             "-i", str(base), "-i", str(layer),
             "-filter_complex", f"[0:v][1:v]overlay=0:{L.CAPTION_Y if caption_y is None else caption_y}:format=auto[v]",
             "-map", "[v]", "-map", "0:a",
-            "-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "7500k",
+            *video_encoder_args("7500k"),
             "-c:a", "copy", "-shortest", "-movflags", "+faststart",
             "-t", f"{total_duration:.3f}", str(final),
         ],

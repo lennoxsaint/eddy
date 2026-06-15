@@ -3,6 +3,8 @@ asserts all output paths stay inside the run directory (hard gate)."""
 
 from __future__ import annotations
 
+import functools
+import re
 import shutil
 import subprocess
 import time
@@ -10,6 +12,40 @@ from pathlib import Path
 
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
+
+# Cross-platform H.264 encoder selection. The renderer hardcoded h264_videotoolbox (macOS-only),
+# so every Windows/Linux user got a working proxy then no shippable output. Probe what ffmpeg
+# actually has and prefer a hardware encoder, falling back to libx264 (software, universal).
+_ENCODER_PREFERENCE = ("h264_videotoolbox", "h264_nvenc", "h264_qsv", "libx264")
+
+
+@functools.lru_cache(maxsize=1)
+def _available_encoders() -> frozenset[str]:
+    try:
+        out = subprocess.run([FFMPEG, "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=15)
+        return frozenset(re.findall(r"^\s*[A-Z.]{6}\s+(\S+)", out.stdout, re.MULTILINE))
+    except Exception:
+        return frozenset()
+
+
+def resolve_video_encoder() -> str:
+    avail = _available_encoders()
+    for enc in _ENCODER_PREFERENCE:
+        if enc in avail:
+            return enc
+    return "libx264"  # present in any full ffmpeg build; safe universal default
+
+
+def video_encoder_args(bitrate: str = "7000k") -> list[str]:
+    """`-c:v ...` args for the resolved encoder (audio/pix_fmt handled by the caller)."""
+    enc = resolve_video_encoder()
+    if enc == "h264_videotoolbox":
+        return ["-c:v", enc, "-allow_sw", "1", "-b:v", bitrate]
+    if enc == "h264_nvenc":
+        return ["-c:v", enc, "-preset", "p4", "-b:v", bitrate]
+    if enc == "h264_qsv":
+        return ["-c:v", enc, "-b:v", bitrate]
+    return ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p"]
 
 
 class FfmpegError(RuntimeError):

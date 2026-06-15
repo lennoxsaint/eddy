@@ -94,6 +94,20 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **`compile_edl` Hypothesis fuzz** (finite/in-bounds/sorted/non-overlapping/positive invariants under random cuts + protections) (`test_compile_fuzz.py`, +2 property tests)
 - [x] **Golden editorial suite** (opt-in EDDY_GOLDEN, pinned local qwen, tolerance assertions) — VERIFIED green against the real qwen36-27b-codex:q4 in 16.8s (`test_golden.py`, +1)
 
+### v0.6 items (autonomous-able marked ⚙; human-gate marked 🔒)
+- [x] ⚙ **Runtime encoder resolver** (probe `ffmpeg -encoders`; videotoolbox/nvenc/qsv → libx264 fallback) — replaced hardcoded h264_videotoolbox at all 4 sites (`media/ffmpeg.py`+render, +7 tests)
+- [ ] ⚙ Cross-platform caption fonts (Win/Linux paths + bundled fallback)
+- [ ] ⚙ Cross-platform hardware detection in doctor (psutil/proc/WMI; treat failure as unknown not 0)
+- [ ] ⚙ doctor ffmpeg/ffprobe/encoder/free-disk preflight + `--dry-run`
+- [ ] ⚙ `eddy clean` + auto-prune non-chosen iterations + disk-usage in status
+- [ ] ⚙ Pinned deps + committed lockfile; reconcile requires-python
+- [ ] ⚙ Config/EDL schema migration (version-stamp + migrate-forward) + XDG runs_dir (~/Eddy vs ~/eddy)
+- [ ] ⚙ Guided Ollama onboarding + tiered local recommendation (not the 32GB cliff)
+- [ ] ⚙ 3-OS CI matrix YAML + wheel smoke test (authored; runs once remote exists)
+- [ ] 🔒 Private GitHub remote (human-gate #3) — needed for the CI matrix to run live
+- [ ] 🔒 Code-signing certs (human-gate #2) — Apple Developer ID + Windows Authenticode
+- [ ] 🔒 Real install channel / publish (human-gate #4) — signed installer or PyPI
+
 ## Human-gate batch (accumulating)
 1. Legal sign-off — commercial EULA + AUP + third-party NOTICE; ffmpeg LGPL build + qwen/Whisper commercial-use rights.
 2. Code-signing certs — Apple Developer ID + Windows Authenticode.

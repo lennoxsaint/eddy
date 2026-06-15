@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw
 from eddy.config import load_config
 from eddy.edit.schema import load_decisions
 from eddy.loop.receipts import Receipts
-from eddy.media.ffmpeg import concat_quote, run_ffmpeg
+from eddy.media.ffmpeg import concat_quote, run_ffmpeg, video_encoder_args
 from eddy.media.probe import stream_summary
 from eddy.render import layout as L
 from eddy.render.captions import burn_captions, caption_events
@@ -106,7 +106,7 @@ def _render_segment_single(
             "-i", str(mask),
             "-filter_complex", graph,
             "-map", "[v]", "-map", "[a]",
-            "-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "7500k", "-r", "25",
+            *video_encoder_args("7500k"), "-r", "25",
             "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
         ],
         run_dir=run_dir,
@@ -138,7 +138,7 @@ def _render_segment_dual(
             "-i", str(screen_mask), "-i", str(face_mask),
             "-filter_complex", graph,
             "-map", "[v]", "-map", "[a]",
-            "-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "7500k", "-r", "25",
+            *video_encoder_args("7500k"), "-r", "25",
             "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
         ],
         run_dir=run_dir,
