@@ -64,7 +64,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 
 ### v0.4 items
 - [x] **Model boundary** — reject non-finite timestamps at JSON/schema/compiler (`1283f5a`, +13 tests)
-- [ ] Atomic state/receipts writes + tolerant loaders
+- [x] **Atomic state/EDL writes + tolerant loaders** — `atomicio.py`, RunState/receipts tolerant (+6 tests)
 - [ ] `validate_against` recursive (types + nested required)
 - [ ] Judge clamp to 1–10 + `.get()` defect keys
 - [ ] Path-containment gate `is_relative_to` over all args
@@ -88,3 +88,4 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 
 ## Log
 - v0.4 model-boundary fix committed `1283f5a`; suite 100 → 113 green.
+- v0.4 atomic+tolerant run-state IO; suite 113 → 119 green.

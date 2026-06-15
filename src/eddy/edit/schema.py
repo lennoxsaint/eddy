@@ -138,7 +138,10 @@ def load_decisions(path: Path) -> EditDecisions:
 
 
 def save(model: BaseModel, path: Path) -> None:
-    Path(path).write_text(json.dumps(model.model_dump(), indent=1))
+    # atomic: a torn edl.json / edit-decisions.json would break --resume of this iteration
+    from eddy.atomicio import atomic_write_text
+
+    atomic_write_text(path, json.dumps(model.model_dump(), indent=1))
 
 
 def load_edl(path: Path) -> Edl:

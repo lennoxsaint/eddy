@@ -5,19 +5,36 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from eddy.atomicio import atomic_write_text
+
+_DEFAULT_STATE = {"iteration": 0, "attempts": [], "best_iter": None, "phase": "created"}
+
 
 class RunState:
     def __init__(self, run_dir: Path):
         self.run_dir = Path(run_dir)
         self.path = self.run_dir / "state.json"
-        self.data = (
-            json.loads(self.path.read_text())
-            if self.path.exists()
-            else {"iteration": 0, "attempts": [], "best_iter": None, "phase": "created"}
-        )
+        self.recovered = False
+        self.data = self._read_or_default()
+
+    def _read_or_default(self) -> dict:
+        # Tolerant load: a state.json torn by a crash mid-write must not make --resume
+        # raise JSONDecodeError and lose hours of work. Fall back to a fresh state and flag it
+        # so the caller can log a recovery; resuming from scratch beats crashing.
+        if not self.path.exists():
+            return dict(_DEFAULT_STATE)
+        try:
+            data = json.loads(self.path.read_text())
+        except (json.JSONDecodeError, OSError, ValueError):
+            self.recovered = True
+            return dict(_DEFAULT_STATE)
+        if not isinstance(data, dict):
+            self.recovered = True
+            return dict(_DEFAULT_STATE)
+        return data
 
     def save(self) -> None:
-        self.path.write_text(json.dumps(self.data, indent=1))
+        atomic_write_text(self.path, json.dumps(self.data, indent=1))
 
     def record_attempt(
         self,

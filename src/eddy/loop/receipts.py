@@ -19,4 +19,12 @@ class Receipts:
     def read(self) -> list[dict]:
         if not self.path.exists():
             return []
-        return [json.loads(line) for line in self.path.read_text().splitlines() if line.strip()]
+        out: list[dict] = []
+        for line in self.path.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue  # skip a torn final line from an interrupted append
+        return out
