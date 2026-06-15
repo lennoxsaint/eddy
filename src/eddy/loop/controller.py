@@ -4,6 +4,7 @@ until done (or best attempt after max iterations), then final render + shorts + 
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from eddy.config import load_config
@@ -64,6 +65,14 @@ def _plateau_step(no_improve: int, prev_best_q: float, best_over: float, cur_bes
     prev_best_q = max(prev_best_q, cur_best_q)
     best_over = min(best_over, over_ceiling_s)
     return no_improve, prev_best_q, best_over, no_improve >= loop.plateau_rounds
+
+
+def _budget_exhausted(elapsed_s: float, model_calls: int, loop) -> bool:
+    """v0.4 runaway guard: True once the cumulative wall-clock OR model-call budget is spent, so the
+    loop stops and ships best-effort instead of running unbounded time/cost. max_model_calls_per_iteration
+    was dead config; this enforces a real cumulative ceiling. Checked at the iteration head AFTER at
+    least one attempt, so a run always produces a best-attempt."""
+    return elapsed_s > loop.max_wall_clock_minutes * 60 or model_calls >= loop.max_total_model_calls
 
 
 def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int = 0) -> list[dict]:
@@ -150,6 +159,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         target_s = round(feasible_s * 0.8)
 
     ceiling_s = cfg.loop.length_ceiling_minutes * 60
+    loop_start = time.time()
     decisions = None
     start_iter = 1
     directive: list[dict] = []
@@ -168,6 +178,17 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             if directive_path.exists():
                 directive = json.loads(directive_path.read_text())
     for iteration in range(start_iter, cfg.loop.max_iterations + 1):
+        # v0.4 runaway guard: after at least one attempt, stop if the cumulative wall-clock or
+        # model-call budget is spent and ship best-effort. Model calls are counted from receipts
+        # (model_call = decisions/beat-map, judge = critic) so the count survives --resume.
+        if iteration > start_iter:
+            model_calls = sum(1 for e in receipts.read() if e.get("event") in ("model_call", "judge"))
+            if _budget_exhausted(time.time() - loop_start, model_calls, cfg.loop):
+                receipts.log(
+                    "budget_exhausted", iteration=iteration,
+                    elapsed_s=round(time.time() - loop_start, 1), model_calls=model_calls,
+                )
+                break
         iter_dir = run_dir / "iterations" / f"{iteration:02d}"
         iter_dir.mkdir(parents=True, exist_ok=True)
         state.set_phase(f"iteration_{iteration}")

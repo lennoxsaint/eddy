@@ -71,7 +71,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Slug re-hash (wrong-footage guard) + wire `--resume`** (`runs.py`, +5 tests)
 - [x] **Apostrophe concat — shared `concat_quote` helper** (`ffmpeg.py`; segments+shorts) (+ tests above)
 - [ ] SIGINT child-kill + idempotent post-loop resume
-- [ ] Model-call + wall-clock budget
+- [x] **Model-call + wall-clock budget** (cumulative, iteration-head, ships best-effort) (`config.py`/`controller.py`, +4 tests)
 - [x] **Git-derived version + `eddy --version` + receipt stamp** (`__init__.py`/`cli.py`/`runs.py`, +3 tests)
 - [ ] Privacy honesty: `--local-only`/`EDDY_OFFLINE` + consent + `local_files_only` + disclosure
 - [x] **CI workflow (ruff+mypy+pytest+cov)** + made the codebase ruff/mypy clean (`.github/workflows/ci.yml`)
@@ -95,3 +95,4 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 slug wrong-footage guard (re-hash on reopen) + --resume wired; suite 142 → 147 green.
 - v0.4 git-derived version (was stale 0.1.0) + eddy --version + receipt stamp; suite 147 → 150 green.
 - v0.4 CI: .github/workflows/ci.yml (ruff+mypy+pytest); cleaned 33 ruff issues (incl. moving controller.py imports) + 9 mypy errors to zero; suite stays 150 green. (CI runs live once the private remote exists — human-gate.)
+- v0.4 cumulative model-call + wall-clock budget (was dead config); suite 150 → 154 green.
