@@ -49,6 +49,10 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
     (final_dir / "transcript.md").write_text(
         "\n".join(f"[{p['out_start']:.1f}] {p['text']}" for p in kept) + "\n"
     )
+    # sidecar subtitles (.srt + .vtt) — accessibility + SEO for the long video
+    from eddy.render.subtitles import write_subtitles
+
+    subs = write_subtitles(kept, final_dir, stem="subtitles")
 
     # benchmark-format conversion for objective diffs
     (final_dir / "edit-decisions.benchmark.json").write_text(
@@ -73,6 +77,7 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
         f"- **Thumbnails:** {len(thumb_paths)} candidates in `final/thumbnails/`"
         + ("" if thumb_paths else " (skipped — see receipts)"),
         "- **Final transcript:** `final/transcript.md`",
+        f"- **Subtitles:** `final/subtitles.srt`, `final/subtitles.vtt` ({subs['cues']} cues)",
         "- **Receipts:** `receipts.jsonl`",
         "",
         "## Chapters",

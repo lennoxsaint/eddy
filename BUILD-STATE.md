@@ -78,6 +78,18 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Pin/record editorial model per run + drift warning** (`controller.py`, +4 tests)
 - [x] **Legal drafts (LICENSE + EULA.md + AUP.md + THIRD-PARTY-NOTICES.md)** — DRAFTs for your + lawyer review → human-gate #1
 
+### v0.7 items (operability & safety — all autonomous-able)
+- [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)
+- [ ] Token + cost accounting across providers + spend cap + per-run cost summary
+- [ ] `eddy bundle` redacted diagnostic archive (manifest/state/receipts/versions, PII-stripped)
+- [ ] Structured logging (per-run eddy.log, --verbose/--quiet) replacing raw print()
+- [ ] Creator-facing failure/explanation in launch kit ("unsure about these N moments" + over-ceiling banner)
+- [ ] Output moderation/likeness gate before thumbnails/titles + AI-generated disclosure
+- [ ] Prompt-injection hardening (transcript as data into the cut planner + judge)
+- [ ] GDPR/CCPA purge tooling + documented retention posture
+- [ ] Opt-in anonymized failure beacon (stage/OS/ffmpeg/error-class only)
+- [ ] Remove hardcoded personal claude_local_guard / exit-43 Chrome-pairing from cli_subprocess
+
 ### v0.5 items
 - [x] **Fix QA detect filters** (silencedetect → `-af`, returncode check, fail-loud not false-pass) (`deterministic.py`, +6 tests)
 - [x] **Crash-proof duration resolution** (format → longest stream → typed unknown; fail-loud where needed) (`probe.py`, +6 tests)
