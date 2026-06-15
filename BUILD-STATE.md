@@ -86,7 +86,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Empty/no-speech is a first-class outcome** (fail fast, don't cache an empty transcript) (`whisper.py`, +2 tests)
 - [ ] Live progress + ETA layer
 - [ ] Top-level error handler + crash log
-- [ ] `tests/conftest.py` + committed tiny synthetic lavfi fixtures
+- [x] **`tests/conftest.py` + synthetic lavfi fixtures + markers** (needs_ffmpeg/e2e/slow; real-probe coverage) (`conftest.py`/`test_fixtures.py`, +5 tests)
 - [ ] Fixture-backed `eddy run` e2e
 - [ ] Unit tests across untested LOC (render/media/package/qa/doctor)
 - [ ] Loop-resume integrity tests
