@@ -109,7 +109,17 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
     out.write_text(json.dumps(payload, indent=1))
     segs = payload["segments"]
     mean_no_speech = sum(s["no_speech_prob"] for s in segs) / len(segs) if segs else 1.0
-    health = _language_note(lang, info.language, mean_no_speech)
+    # When a language is FORCED, info.language is just the forced value, so an INDEPENDENT detect
+    # pass is needed for a real mismatch warning (detect_language reads ~30s — cheap, forced-only).
+    detected = info.language
+    if lang is not None:
+        try:
+            from faster_whisper.audio import decode_audio
+
+            detected = model.detect_language(decode_audio(str(wav)))[0]
+        except Exception:
+            pass  # best-effort; fall back to info.language (mismatch check then no-ops)
+    health = _language_note(lang, detected, mean_no_speech)
     if health is not None:
         receipts.log("transcript_health_warning", **health)
     receipts.log(

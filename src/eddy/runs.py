@@ -133,8 +133,8 @@ def assert_sources_decodable(sources: dict[str, str]) -> None:
             raise SourceError(f"cannot decode {name} source {p}: {str(e)[:200]} — corrupt or unsupported?") from e
         if s["video"] is None:
             raise SourceError(f"{name} source {p} has no decodable video stream (audio-only or corrupt?)")
-        if name == "camera" and s["duration_s"] <= 0:
-            raise SourceError(f"camera source {p} has unknown/zero duration — corrupt or truncated?")
+        if s["duration_s"] <= 0:
+            raise SourceError(f"{name} source {p} has unknown/zero duration — corrupt or truncated?")
 
 
 def verify_sources_unmutated(run_dir: Path) -> dict:

@@ -74,9 +74,11 @@ def stream_summary(path: Path) -> dict:
     }
 
 
-def eval_fps(rate: str) -> float:
+def eval_fps(rate: str | None) -> float:
+    # ffprobe can emit avg_frame_rate: null (-> None, since .get default only fills MISSING keys),
+    # which used to crash on None.split(). Coerce + catch AttributeError.
     try:
-        num, den = rate.split("/")
+        num, den = str(rate or "0/1").split("/")
         return round(int(num) / int(den), 3) if int(den) else 0.0
-    except (ValueError, ZeroDivisionError):
+    except (ValueError, ZeroDivisionError, AttributeError):
         return 0.0

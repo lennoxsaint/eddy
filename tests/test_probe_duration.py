@@ -7,7 +7,22 @@ import pytest
 
 from eddy.media import probe
 from eddy.media.ffmpeg import FfmpegError
-from eddy.media.probe import _resolve_duration, duration_s, stream_summary
+from eddy.media.probe import _resolve_duration, duration_s, eval_fps, stream_summary
+
+
+def test_eval_fps_handles_null_and_garbage():
+    assert eval_fps(None) == 0.0      # ffprobe avg_frame_rate: null must not crash
+    assert eval_fps("0/0") == 0.0
+    assert eval_fps("30/1") == 30.0
+    assert eval_fps("garbage") == 0.0
+
+
+def test_stream_summary_handles_null_fps(monkeypatch):
+    monkeypatch.setattr(probe, "probe", lambda p: {
+        "format": {"duration": "10"},
+        "streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080, "avg_frame_rate": None}],
+    })
+    assert stream_summary(Path("x.mp4"))["video"]["fps"] == 0.0  # null fps -> 0.0, no crash
 
 
 def test_resolve_prefers_format_duration():

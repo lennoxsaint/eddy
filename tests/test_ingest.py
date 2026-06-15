@@ -38,6 +38,16 @@ def test_decodable_raises_on_zero_duration_camera(monkeypatch):
         assert_sources_decodable({"camera": "/x/cam.mp4"})
 
 
+def test_decodable_raises_on_zero_duration_screen(monkeypatch):
+    # the preflight checks EVERY video source's duration, not just camera
+    monkeypatch.setattr(
+        "eddy.media.probe.stream_summary",
+        lambda p: _summary(video={"width": 1}, dur=(0.0 if "screen" in str(p) else 30.0)),
+    )
+    with pytest.raises(SourceError, match="duration"):
+        assert_sources_decodable({"camera": "/x/cam.mp4", "screen": "/x/screen.mp4"})
+
+
 def test_decodable_raises_on_probe_error(monkeypatch):
     def boom(p):
         raise RuntimeError("ffprobe exploded")
