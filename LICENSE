@@ -1,3 +1,12 @@
 Copyright (c) 2026 Lennox Saint. All rights reserved.
 
-Pre-release software. Not yet licensed for redistribution.
+Eddy is commercial, proprietary software distributed under an End-User License Agreement
+(see EULA.md) and an Acceptable Use Policy (see AUP.md). Use is permitted only under those
+terms. It is not open source and may not be copied, redistributed, sublicensed, or
+reverse-engineered except as expressly allowed by the EULA.
+
+Eddy bundles and depends on third-party components under their own licenses; see
+THIRD-PARTY-NOTICES.md.
+
+NOTE: EULA.md, AUP.md, and THIRD-PARTY-NOTICES.md are DRAFTS pending legal review and the
+owner's sign-off before any external distribution (tracked as a human-gate item).

@@ -76,7 +76,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Privacy honesty: `--local-only`/`EDDY_OFFLINE` + `local_files_only` + egress disclosure + PRIVACY.md/README** (`privacy.py`+5 files, +4 tests) — interactive one-time consent prompt deferred to v0.7 onboarding (logged egress disclosure is the v0.4 floor)
 - [x] **CI workflow (ruff+mypy+pytest+cov)** + made the codebase ruff/mypy clean (`.github/workflows/ci.yml`)
 - [x] **Pin/record editorial model per run + drift warning** (`controller.py`, +4 tests)
-- [ ] Legal drafts (LICENSE/EULA/AUP/NOTICE) → human-gate
+- [x] **Legal drafts (LICENSE + EULA.md + AUP.md + THIRD-PARTY-NOTICES.md)** — DRAFTs for your + lawyer review → human-gate #1
 
 ## Human-gate batch (accumulating)
 1. Legal sign-off — commercial EULA + AUP + third-party NOTICE; ffmpeg LGPL build + qwen/Whisper commercial-use rights.
