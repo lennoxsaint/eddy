@@ -87,7 +87,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [ ] Live progress + ETA layer
 - [x] **Top-level error handler + crash log** (friendly "what happened + next step" + persisted traceback, nonzero exit) (`errors.py`/`cli.py`, +6 tests)
 - [x] **`tests/conftest.py` + synthetic lavfi fixtures + markers** (needs_ffmpeg/e2e/slow; real-probe coverage) (`conftest.py`/`test_fixtures.py`, +5 tests)
-- [ ] Fixture-backed `eddy run` e2e
+- [x] **Fixture-backed render→QA e2e** (real ffmpeg render + deterministic gates on synthetic media, source unmutated) (`test_e2e_render.py`, +1). Full-run-with-stubbed-model e2e deferred to v0.5.x.
 - [x] **Unit tests across untested modules** (doctor/retakes/protect/pack/captions/copy/layout/simulate, +88 tests via an 8-agent self-verified Workflow fan-out)
 - [x] **Loop-resume integrity tests** (plateau/best persistence, recovered flag, model-pin/drift) (`test_loop_resume.py`, +7)
 - [x] **Provider contract tests** (ollama/anthropic/openai: text+schema, retry-once→ProviderError, NaN reject, key/timeout) (+28 via Workflow) — surfaced a real openai key/base_url passthrough gap (fixed next)
