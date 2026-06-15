@@ -18,14 +18,17 @@ from pathlib import Path
 # keys whose string values carry transcript-derived content (PII)
 _REDACT_KEYS = {
     "quote", "text", "summary", "reason", "hook", "title", "description",
-    "before_text", "after_text", "removed_summary", "prompt", "fix_note", "label",
+    "before_text", "after_text", "removed_summary", "prompt", "fix_note", "label", "error",
 }
-# match the WHOLE home-rooted path (incl. filename), since a footage filename can itself be sensitive
-_HOME_PATH = re.compile(r"(/Users/[^\s\"]+|/home/[^\s\"]+|C:\\Users\\[^\s\"]+)")
+# scrub ANY absolute path, not just home roots — footage often lives on /Volumes, /mnt, an external
+# SSD or a NAS, and the filename itself can be sensitive. Over-redacting paths is the safe choice
+# for a diagnostic archive.
+# the path must START at a boundary (not preceded by a word char/dot) so a relative "a/b" isn't hit
+_ABS_PATH = re.compile(r"(?<![\w.])(/[^\s\"]+|[A-Za-z]:\\[^\s\"]+)")
 
 
 def _scrub(s: str) -> str:
-    return _HOME_PATH.sub("[home]", s)
+    return _ABS_PATH.sub("[path]", s)
 
 
 def _redact(obj):

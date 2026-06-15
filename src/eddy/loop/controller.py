@@ -76,6 +76,12 @@ def _budget_exhausted(elapsed_s: float, model_calls: int, loop) -> bool:
     return elapsed_s > loop.max_wall_clock_minutes * 60 or model_calls >= loop.max_total_model_calls
 
 
+def _cost_cap_hit(spend_usd: float, cap_usd: float) -> bool:
+    """v0.7 spend guard: True once cumulative paid-API spend reaches a positive cap (0 = unlimited).
+    Checked at the iteration head (iter 2+), so the cap can overshoot by ~one iteration."""
+    return cap_usd > 0 and spend_usd >= cap_usd
+
+
 def _fmt_dur(s: float) -> str:
     s = int(max(0, s))
     return f"{s // 60}m{s % 60:02d}s" if s >= 60 else f"{s}s"
@@ -245,7 +251,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             model_calls = sum(1 for e in events if e.get("event") in ("model_call", "judge"))
             spend = run_cost_summary(events)["total_usd"]
             cap = cfg.loop.max_run_cost_usd
-            if _budget_exhausted(time.time() - loop_start, model_calls, cfg.loop) or (cap > 0 and spend >= cap):
+            if _budget_exhausted(time.time() - loop_start, model_calls, cfg.loop) or _cost_cap_hit(spend, cap):
                 receipts.log(
                     "budget_exhausted", iteration=iteration,
                     elapsed_s=round(time.time() - loop_start, 1), model_calls=model_calls,

@@ -1,9 +1,14 @@
 """v0.7: GDPR/CCPA purge — remove PII (transcript, face frames, caption text); --full erases all."""
 
+import pytest
+
 from eddy.clean import purge_run
+from eddy.runs import SourceError
 
 
 def _seed(run_dir):
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "manifest.json").write_text("{}")  # makes it look like a real run (for --full guard)
     (run_dir / "transcript").mkdir(parents=True)
     (run_dir / "transcript" / "words.json").write_text('{"x":1}')
     (run_dir / "transcript" / "audio-16k.wav").write_bytes(b"audio" * 100)
@@ -44,3 +49,12 @@ def test_purge_full_erases_everything(tmp_path):
     _seed(run)
     info = purge_run(run, full=True)
     assert not run.exists() and info["full"] is True
+
+
+def test_purge_full_refuses_non_run_dir(tmp_path):
+    notarun = tmp_path / "important-docs"
+    notarun.mkdir()
+    (notarun / "thesis.txt").write_text("do not delete")
+    with pytest.raises(SourceError, match="doesn't look like an Eddy run"):
+        purge_run(notarun, full=True)
+    assert notarun.exists() and (notarun / "thesis.txt").exists()  # untouched

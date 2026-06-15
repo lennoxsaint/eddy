@@ -7,10 +7,14 @@ import zipfile
 from eddy.bundle import _redact, _scrub, build_bundle
 
 
-def test_scrub_home_paths():
-    assert _scrub("/Users/lennox/footage/secret.mp4") == "[home]"  # whole path incl. filename
-    assert _scrub("/home/bob/x.mp4") == "[home]"
-    assert _scrub("relative/ok.mp4") == "relative/ok.mp4"  # no home root -> untouched
+def test_scrub_any_absolute_path():
+    assert _scrub("/Users/lennox/footage/secret.mp4") == "[path]"
+    assert _scrub("/home/bob/x.mp4") == "[path]"
+    assert _scrub("/Volumes/ExternalSSD/Client-Confidential.mp4") == "[path]"  # external SSD (C1)
+    assert _scrub("/mnt/nas/footage.mp4") == "[path]"                          # NAS mount (C1)
+    assert _scrub(r"C:\Users\bob\x.mp4") == "[path]"
+    assert _scrub("rendered /tmp/seg.mp4 ok") == "rendered [path] ok"          # path inside a sentence
+    assert _scrub("relative/ok.mp4") == "relative/ok.mp4"                      # not absolute -> untouched
 
 
 def test_redact_strips_text_keeps_structure():
@@ -24,13 +28,14 @@ def test_redact_strips_text_keeps_structure():
 def _seed(run_dir):
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "manifest.json").write_text(json.dumps({
-        "sources": {"camera": "/Users/lennox/footage/secret-project.mp4"},
+        "sources": {"camera": "/Volumes/ExternalSSD/Client-Confidential.mp4"},  # external SSD (C1)
         "source_sha256": {"camera": "abc123"},
     }))
     (run_dir / "state.json").write_text(json.dumps({"phase": "done", "iteration": 3}))
     (run_dir / "receipts.jsonl").write_text(
         json.dumps({"event": "model_call", "label": "cutplan", "ok": True}) + "\n"
         + json.dumps({"event": "gate", "quality": 7.2, "judge_score": 8.1}) + "\n"
+        + json.dumps({"event": "ffmpeg", "error": "failed: /Volumes/ExternalSSD/Client-Confidential.mp4"}) + "\n"
     )
     it = run_dir / "iterations" / "01"
     it.mkdir(parents=True)
@@ -47,9 +52,11 @@ def test_build_bundle_redacts_and_keeps_audit(tmp_path):
         names = z.namelist()
         assert "environment.json" in names and "manifest.json" in names and "receipts.jsonl" in names
         manifest = z.read("manifest.json").decode()
-        assert "abc123" in manifest                 # hash kept (useful for triage)
-        assert "secret-project.mp4" not in manifest # but the home path is scrubbed
-        assert "[home]" in manifest
+        assert "abc123" in manifest                       # hash kept (useful for triage)
+        assert "Client-Confidential" not in manifest      # external-SSD path + filename scrubbed (C1)
+        assert "[path]" in manifest
+        receipts = z.read("receipts.jsonl").decode()
+        assert "Client-Confidential" not in receipts      # error-message path redacted too (C1)
         judge = z.read("iterations/01/judge.json").decode()
         assert "secret quote" not in judge and "[redacted]" in judge and "8.0" in judge
         env = json.loads(z.read("environment.json"))

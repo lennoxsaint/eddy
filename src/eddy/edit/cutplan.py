@@ -133,11 +133,14 @@ def beat_map(run_dir: Path, provider, receipts: Receipts) -> list[dict]:
         return json.loads(cache.read_text())
     prompt = (PROMPTS / "beatmap.md").read_text()
     phrases = load_phrases(run_dir)
+    packed = packed_lines(phrases)
+    if flags := detect_injection(packed):
+        receipts.log("prompt_injection_flagged", stage="beat_map", patterns=flags[:5])
     result = _call(
         provider,
         receipts,
         "beat_map",
-        [{"role": "user", "content": f"{prompt}\n\nTRANSCRIPT:\n{packed_lines(phrases)}"}],
+        [{"role": "user", "content": f"{prompt}\n\n{fence('TRANSCRIPT', packed)}"}],
         BEATS_SCHEMA,
         max_tokens=2048,
     )

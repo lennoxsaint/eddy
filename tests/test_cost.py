@@ -28,6 +28,15 @@ def test_free_providers_cost_zero():
         assert call_cost_usd(p, 1_000_000, 1_000_000) == 0.0
 
 
+def test_cost_cap_hit_predicate():
+    from eddy.loop.controller import _cost_cap_hit
+
+    assert _cost_cap_hit(5.0, 5.0) is True      # at the cap -> trips
+    assert _cost_cap_hit(5.01, 5.0) is True
+    assert _cost_cap_hit(4.99, 5.0) is False
+    assert _cost_cap_hit(1000.0, 0.0) is False  # cap 0 = unlimited
+
+
 def test_log_cost_records_receipt_and_noops_without_handle():
     r = _Rec()
     log_cost(r, "openai", "gpt-x", 1000, 2000)

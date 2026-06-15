@@ -11,14 +11,12 @@ from pathlib import Path
 
 
 def _ts(seconds: float, sep: str) -> str:
-    seconds = max(0.0, seconds)
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int(round((seconds - int(seconds)) * 1000))
-    if ms == 1000:  # rounding spilled into the next second
-        s += 1
-        ms = 0
+    # derive everything from one rounded-ms integer so the carry cascades through s/m/h correctly
+    # (the old per-field math produced ':60' at minute/hour boundaries — invalid SRT/VTT).
+    total_ms = int(round(max(0.0, seconds) * 1000))
+    h, rem = divmod(total_ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    s, ms = divmod(rem, 1000)
     return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
 
 

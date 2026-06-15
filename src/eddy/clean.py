@@ -61,6 +61,11 @@ def purge_run(run_dir: str | Path, full: bool = False, dry_run: bool = False) ->
     full=True removes the entire run directory (complete erasure)."""
     run_dir = Path(run_dir)
     if full:
+        # delete-safety: refuse to rmtree a path that isn't recognizably an Eddy run
+        if not ((run_dir / "manifest.json").exists() or (run_dir / "state.json").exists()):
+            from eddy.runs import SourceError
+
+            raise SourceError(f"{run_dir} doesn't look like an Eddy run (no manifest.json/state.json) — refusing --full")
         size = dir_size_bytes(run_dir)
         if not dry_run:
             shutil.rmtree(run_dir, ignore_errors=True)

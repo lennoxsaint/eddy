@@ -20,6 +20,13 @@ def test_ts_rounding_spillover():
     assert _ts(1.9999, ",") == "00:00:02,000"  # ms rounds to 1000 -> next second
 
 
+def test_ts_carry_cascades_at_minute_and_hour_boundaries():
+    # the ms carry must cascade through seconds/minutes/hours — never produce an invalid ':60'
+    assert _ts(59.9999, ",") == "00:01:00,000"
+    assert _ts(3599.9999, ",") == "01:00:00,000"
+    assert _ts(3599.9999, ".") == "01:00:00.000"
+
+
 def test_build_srt_structure():
     srt = build_srt(PHRASES)
     assert srt.startswith("1\n00:00:00,000 --> 00:00:02,500\nSystems beat goals.")
