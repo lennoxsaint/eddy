@@ -395,6 +395,20 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     return chosen
 
 
+def _warn_multispeaker(run_dir: Path, receipts: Receipts) -> None:
+    """Non-blocking: surface a heuristic multi-speaker warning after transcription."""
+    from eddy.edit.speakers import detect_multispeaker, multispeaker_warning
+
+    try:
+        det = detect_multispeaker(words_flat(run_dir))
+    except Exception:
+        return
+    warning = multispeaker_warning(det)
+    if warning:
+        print(f"[eddy] ⚠ {warning}")
+        receipts.log("multispeaker_warning", **det)
+
+
 def autonomous_run(
     source: Path,
     target_minutes: float | None = None,
@@ -417,6 +431,7 @@ def autonomous_run(
     state.set_phase("transcribe")
     print("[eddy] transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
+    _warn_multispeaker(run_dir, receipts)
 
     chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume, ceiling_minutes=ceiling_minutes)
     print(f"chosen iteration: {chosen.name}")
@@ -555,6 +570,7 @@ def mine_shorts(
     state.set_phase("transcribe")
     print("[eddy] transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
+    _warn_multispeaker(run_dir, receipts)
 
     state.set_phase("plan")
     print("[eddy] finding short-worthy moments…")

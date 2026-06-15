@@ -86,7 +86,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Audio-first ingest** (.wav/.mp3/.m4a/.flac/.aac… accepted so podcasters can `eddy transcribe`; `eddy run` on audio fails loud with a `eddy transcribe` hint, not a cryptic "no video stream") (`runs.py`, +4 tests)
 - [x] **Standalone `eddy shorts <source>`** (`mine_shorts`: transcribe -> ONE decision pass -> render shorts only, no iterative loop / no long render; `shorts` command now dual-mode: existing run dir = render stage, raw footage = standalone mine) (`controller.py`/`cli.py`, +1 orchestration test)
 - [ ] A/B title/thumbnail pick (`eddy pick`) + decision-template reuse
-- [ ] Multi-speaker/interview detection + warning
+- [x] **Multi-speaker/interview detection + warning** (heuristic over transcript cues + pause density, conservative/under-warns, low|medium confidence, never authoritative; non-blocking warning after transcribe in `autonomous_run` + `mine_shorts`; per-speaker editing stays out of scope) (`edit/speakers.py`/`controller.py`, +4 tests)
 - [ ] RTL/CJK caption note or guard
 
 ### v0.7 items (operability & safety — all autonomous-able)
