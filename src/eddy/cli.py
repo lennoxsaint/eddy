@@ -52,8 +52,15 @@ def run(
     resume: bool = typer.Option(False, help="Resume an interrupted run for this source."),
     skip_shorts: bool = typer.Option(False, help="Skip shorts rendering."),
     skip_package: bool = typer.Option(False, help="Skip packaging (titles/thumbnails/description)."),
+    local_only: bool = typer.Option(
+        False, "--local-only", help="Fully on-device: local brain only, no model downloads, no cloud thumbnail APIs."
+    ),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
+    if local_only:
+        from eddy.privacy import set_offline
+
+        set_offline(True)
     from eddy.loop.controller import autonomous_run
 
     autonomous_run(

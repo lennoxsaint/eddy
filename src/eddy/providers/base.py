@@ -176,11 +176,22 @@ def _editorial_available(cfg: EddyConfig) -> str | None:
     return None
 
 
+_CLOUD_PROVIDERS = {"anthropic", "openai", "claude_cli", "codex_cli"}
+
+
 def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
     """Resolve the brain for editorial-reasoning passes. Mechanical work (transcribe,
     render, QA) never calls this — it stays on the local default."""
+    from eddy.privacy import is_offline
+
     setting = cfg.provider.editorial
     local = get_provider(cfg, cfg.provider.active)
+    # --local-only / EDDY_OFFLINE: force the local brain so the transcript never leaves the
+    # machine, regardless of editorial='auto' or a claude binary being on PATH.
+    if is_offline():
+        if receipts is not None:
+            receipts.log("editorial_brain", chosen=cfg.provider.active, offline=True)
+        return local
     if setting == "local":
         chosen = cfg.provider.active
     elif setting == "auto":
@@ -193,5 +204,9 @@ def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
         return local
     primary = get_provider(cfg, chosen)
     if receipts is not None:
-        receipts.log("editorial_brain", chosen=chosen, upgraded=True, fallback=cfg.provider.active)
+        # honest disclosure: a cloud brain means the transcript is sent off-device.
+        receipts.log(
+            "editorial_brain", chosen=chosen, upgraded=True, fallback=cfg.provider.active,
+            egress=(chosen in _CLOUD_PROVIDERS),
+        )
     return FallbackProvider(primary, local, receipts=receipts)

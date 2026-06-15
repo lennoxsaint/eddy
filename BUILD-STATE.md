@@ -73,7 +73,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [ ] SIGINT child-kill + idempotent post-loop resume
 - [x] **Model-call + wall-clock budget** (cumulative, iteration-head, ships best-effort) (`config.py`/`controller.py`, +4 tests)
 - [x] **Git-derived version + `eddy --version` + receipt stamp** (`__init__.py`/`cli.py`/`runs.py`, +3 tests)
-- [ ] Privacy honesty: `--local-only`/`EDDY_OFFLINE` + consent + `local_files_only` + disclosure
+- [x] **Privacy honesty: `--local-only`/`EDDY_OFFLINE` + `local_files_only` + egress disclosure + PRIVACY.md/README** (`privacy.py`+5 files, +4 tests) — interactive one-time consent prompt deferred to v0.7 onboarding (logged egress disclosure is the v0.4 floor)
 - [x] **CI workflow (ruff+mypy+pytest+cov)** + made the codebase ruff/mypy clean (`.github/workflows/ci.yml`)
 - [x] **Pin/record editorial model per run + drift warning** (`controller.py`, +4 tests)
 - [ ] Legal drafts (LICENSE/EULA/AUP/NOTICE) → human-gate
@@ -96,3 +96,5 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 git-derived version (was stale 0.1.0) + eddy --version + receipt stamp; suite 147 → 150 green.
 - v0.4 CI: .github/workflows/ci.yml (ruff+mypy+pytest); cleaned 33 ruff issues (incl. moving controller.py imports) + 9 mypy errors to zero; suite stays 150 green. (CI runs live once the private remote exists — human-gate.)
 - v0.4 cumulative model-call + wall-clock budget (was dead config); suite 150 → 154 green.
+- v0.4 model pin (provider+model recorded per run, drift warning); suite 154 → 158 green.
+- v0.4 privacy honesty: --local-only/EDDY_OFFLINE forces local brain + whisper local_files_only + thumbnail skip + egress disclosure + PRIVACY.md/README fix; suite 158 → 162 green.

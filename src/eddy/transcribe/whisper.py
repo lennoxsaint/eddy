@@ -45,8 +45,14 @@ def transcribe_run(run_dir: Path) -> Path:
 
     from faster_whisper import WhisperModel
 
+    from eddy.privacy import is_offline
+
     t0 = time.time()
-    model = WhisperModel(cfg.transcribe.model, device="auto", compute_type=cfg.transcribe.compute_type)
+    # offline/airgapped: never reach HuggingFace — use only already-downloaded weights.
+    model = WhisperModel(
+        cfg.transcribe.model, device="auto", compute_type=cfg.transcribe.compute_type,
+        local_files_only=is_offline(),
+    )
     segments, info = model.transcribe(
         str(wav),
         language=cfg.transcribe.language,

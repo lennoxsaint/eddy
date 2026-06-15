@@ -97,13 +97,15 @@ def generate_openai(ref_frame: Path, title_hint: str, out_dir: Path, cfg: EddyCo
 def generate_thumbnails(
     run_dir: Path, ref_frames: list[Path], title_hint: str, cfg: EddyConfig, receipts: Receipts
 ) -> list[Path]:
+    from eddy.privacy import is_offline
+
     out_dir = Path(run_dir) / "final" / "thumbnails"
     out_dir.mkdir(parents=True, exist_ok=True)
-    if not cfg.thumbnails.enabled or not ref_frames:
-        receipts.log("thumbnails_skipped", reason="disabled or no reference frames")
-        (out_dir / "thumbnails-skipped.json").write_text(
-            json.dumps({"reason": "disabled or no reference frames"})
-        )
+    # offline/local-only: thumbnails upload a real face frame to cloud image APIs — skip entirely.
+    if is_offline() or not cfg.thumbnails.enabled or not ref_frames:
+        reason = "offline (--local-only)" if is_offline() else "disabled or no reference frames"
+        receipts.log("thumbnails_skipped", reason=reason)
+        (out_dir / "thumbnails-skipped.json").write_text(json.dumps({"reason": reason}))
         return []
     ref = ref_frames[0]
     for f in ref_frames:

@@ -16,8 +16,13 @@ Editing is **free and unlimited** by default: the editorial brain runs on your o
 Ollama. Weaker machine? `eddy doctor` detects your hardware and recommends a cloud brain instead —
 Anthropic/OpenAI APIs, or your existing ChatGPT/Claude subscription via the `codex`/`claude` CLIs.
 
-Nothing is ever uploaded or published. Sources are never modified (hash-verified). Every decision
-the agent makes is written to receipts you can audit.
+Your raw video and audio never leave your machine, nothing is ever published, and sources are
+never modified (hash-verified). By default (`editorial='auto'`) the editorial brain uses the
+strongest brain available — if you have a `claude`/`codex` CLI or an API key, your **transcript
+text** is sent to that provider; the optional thumbnail step uploads selected face frames to an
+image API. Run with `--local-only` (or `EDDY_OFFLINE=1`) to keep everything fully on-device. See
+[PRIVACY.md](PRIVACY.md) for the exact per-tier data flow. Every model call is written to receipts
+you can audit.
 
 ## Quickstart
 
