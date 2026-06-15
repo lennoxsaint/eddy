@@ -181,6 +181,19 @@ def status(run_dir: Path = typer.Argument(...)) -> None:
 
 
 @app.command()
+def bundle(
+    run_dir: Path = typer.Argument(..., help="Run directory to bundle for a bug report."),
+    out: Optional[Path] = typer.Option(None, "-o", "--out", help="Output zip path (default: <run>/eddy-bundle.zip)."),
+) -> None:
+    """Create a redacted diagnostic archive (audit trail + env, PII stripped) for a bug report."""
+    from eddy.bundle import build_bundle
+
+    path = build_bundle(run_dir, out)
+    typer.echo(f"diagnostic bundle: {path}")
+    typer.echo("(redacted: transcript text + home paths stripped; no footage/transcript/faces included)")
+
+
+@app.command()
 def clean(
     run_dir: Path = typer.Argument(..., help="Run directory to prune scratch from."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be freed without deleting."),
