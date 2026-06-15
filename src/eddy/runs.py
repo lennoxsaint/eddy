@@ -109,7 +109,7 @@ def open_run(source: Path, slug: str | None = None, resume: bool = False) -> Pat
     from eddy.atomicio import atomic_write_text
 
     atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
-    Receipts(run_dir).log("run_opened", sources=manifest["sources"])
+    Receipts(run_dir).log("run_opened", sources=manifest["sources"], eddy_version=manifest["eddy_version"])
     return run_dir
 
 

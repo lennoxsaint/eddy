@@ -15,6 +15,23 @@ app = typer.Typer(
 )
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from eddy import __version__
+
+        typer.echo(f"eddy {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True, help="Show version and exit."
+    ),
+) -> None:
+    """Eddy CLI."""
+
+
 @app.command()
 def doctor(
     ping: bool = typer.Option(False, "--ping", help="Round-trip the active provider, incl. JSON-schema output."),

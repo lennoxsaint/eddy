@@ -72,7 +72,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Apostrophe concat — shared `concat_quote` helper** (`ffmpeg.py`; segments+shorts) (+ tests above)
 - [ ] SIGINT child-kill + idempotent post-loop resume
 - [ ] Model-call + wall-clock budget
-- [ ] Git-derived version + correct receipt stamp
+- [x] **Git-derived version + `eddy --version` + receipt stamp** (`__init__.py`/`cli.py`/`runs.py`, +3 tests)
 - [ ] Privacy honesty: `--local-only`/`EDDY_OFFLINE` + consent + `local_files_only` + disclosure
 - [ ] CI workflow (lint+type+test)
 - [ ] Pin/record editorial model per run
@@ -93,3 +93,4 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 validate_against recursive (nested required/types/enums); suite 126 → 134 green.
 - v0.4 apostrophe concat (shared concat_quote) + path gate (is_relative_to, all outputs); suite 134 → 142 green.
 - v0.4 slug wrong-footage guard (re-hash on reopen) + --resume wired; suite 142 → 147 green.
+- v0.4 git-derived version (was stale 0.1.0) + eddy --version + receipt stamp; suite 147 → 150 green.
