@@ -94,9 +94,9 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Coverage floor (ratchet) + required-green-before-tag** (`[tool.coverage.report] fail_under=68` in pyproject; CI `pytest --cov=eddy` fails under it; current 68.8%; +2 cheap pure-logic tests) (`pyproject.toml`/`ci.yml`/`tests/test_render_long.py`)
 - [x] **Offline wheelhouse builder + airgap docs** (`scripts/build_wheelhouse.sh` downloads the pinned dep closure + builds the eddy wheel for `pip install --no-index`; `docs/AIRGAP.md` covers wheelhouse + ffmpeg + Whisper cache + Ollama model staging + the enforced egress guard) (+4 guard tests)
 - [x] **Reproducibility proof** (two-tier model documented in `docs/REPRODUCIBILITY.md`: deterministic core is byte-reproducible; local qwen gains an EXACT mode via new `[provider.ollama] seed` → `options.seed` at temperature 0; golden suite gates quality mode) (`config.py`/`providers/ollama.py`, +4 tests incl. byte-identical EDL recompile)
-- [ ] Release process (RELEASE.md: tag-on-release, signing/notarize steps [human-gate], update check)
-- [ ] Support runbook + documented known-limits (SUPPORT.md / KNOWN-LIMITS.md)
-- [ ] EDD-84 addressed or documented
+- [x] **Release process** (`docs/RELEASE.md`: required-green gate [ruff+mypy+cov-floor+golden+matrix], local tag/pipx flow, signing/notarize [human-gate], update + rollback)
+- [x] **Support runbook + known-limits** (`docs/SUPPORT.md` triage: doctor→dry-run→bundle + symptom table; `docs/KNOWN-LIMITS.md` honest scope boundaries) (+4 doc tests)
+- [x] **EDD-84 disposition documented** (`docs/decision-log.md`: this build used BUILD-STATE.md not Linear; EDD-84 routed to human-gate reconciliation, not silently closed; referenced in KNOWN-LIMITS)
 - [ ] Soak/scale validation (multi-hour, many-shorts, queues) — opt-in test harness
 
 ### v0.7 items (operability & safety — all autonomous-able)
