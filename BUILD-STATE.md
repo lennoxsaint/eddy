@@ -92,7 +92,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Loop-resume integrity tests** (plateau/best persistence, recovered flag, model-pin/drift) (`test_loop_resume.py`, +7)
 - [x] **Provider contract tests** (ollama/anthropic/openai: text+schema, retry-once→ProviderError, NaN reject, key/timeout) (+28 via Workflow) — surfaced a real openai key/base_url passthrough gap (fixed next)
 - [x] **`compile_edl` Hypothesis fuzz** (finite/in-bounds/sorted/non-overlapping/positive invariants under random cuts + protections) (`test_compile_fuzz.py`, +2 property tests)
-- [ ] Golden editorial suite (pinned qwen q4)
+- [x] **Golden editorial suite** (opt-in EDDY_GOLDEN, pinned local qwen, tolerance assertions) — VERIFIED green against the real qwen36-27b-codex:q4 in 16.8s (`test_golden.py`, +1)
 
 ## Human-gate batch (accumulating)
 1. Legal sign-off — commercial EULA + AUP + third-party NOTICE; ffmpeg LGPL build + qwen/Whisper commercial-use rights.
