@@ -158,6 +158,11 @@ class GatesConfig(BaseModel):
     max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
 
 
+class TelemetryConfig(BaseModel):
+    enabled: bool = False  # OPT-IN only — never on by default
+    endpoint: str = ""     # where anonymized failure beacons are sent (you provide this)
+
+
 class PathsConfig(BaseModel):
     runs_dir: str = "~/.eddy/runs"  # lowercase/hidden: avoids the ~/Eddy vs ~/eddy case collision
 
@@ -175,6 +180,7 @@ class EddyConfig(BaseModel):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     thumbnails: ThumbnailsConfig = Field(default_factory=ThumbnailsConfig)
     gates: GatesConfig = Field(default_factory=GatesConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
 
     @property

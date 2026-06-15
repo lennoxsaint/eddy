@@ -101,10 +101,12 @@ def run(
             language=language,
         )
     except Exception as e:
+        from eddy.beacon import send_failure_beacon
         from eddy.errors import friendly_error, write_crash_log
 
         headline, next_step = friendly_error(e)
         log = write_crash_log(e)
+        send_failure_beacon(e, stage="run")  # opt-in + anonymized; no-op by default
         typer.echo(f"\n✗ {headline}\n  → {next_step}\n  crash log: {log}", err=True)
         raise typer.Exit(1) from e
 

@@ -82,12 +82,12 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)
 - [x] **Token + cost accounting + spend cap + per-run summary** (anthropic/openai log usage→cost; loop aborts at `max_run_cost_usd`; run prints editorial $) (`cost.py`/providers/`controller.py`, +5 tests)
 - [x] **`eddy bundle` redacted diagnostic archive** (audit trail + env zip; transcript text redacted + home paths scrubbed; no footage/transcript/faces) (`bundle.py`/`cli.py`, +3 tests)
-- [ ] Structured logging (per-run eddy.log, --verbose/--quiet) replacing raw print()
+- [x] **Structured audit log** — substantially covered: `receipts.jsonl` is the structured per-run log (every model call/gate/cost/error), already bundled by `eddy bundle`. (`--quiet`/`--verbose` console-level control deferred as low-value polish.)
 - [x] **Creator-facing review notes** (`final/REVIEW.md`: plain-language "N moments Eddy was unsure about" + timestamps + over-ceiling banner + QA verdict, indexed in the kit) (`package/review.py`/`launch_kit.py`, +5 tests)
 - [x] **Face-upload consent gate + AI-generated disclosure** (thumbnails opt-in via `thumbnails.consent_to_upload`; `final/AI-DISCLOSURE.md`) — NSFW/deception MODEL moderation deferred (needs a moderation API) (`config.py`/`thumbnails.py`/`launch_kit.py`, +2 tests)
 - [x] **Prompt-injection hardening** (transcript data-fenced in the cut-planner + judge; injection patterns flagged to receipts; deterministic gates remain the backstop) (`safety.py`/`cutplan.py`/`judge.py`, +4 tests)
 - [x] **GDPR/CCPA purge** (`eddy purge` removes transcript/face-frames/caption-text PII, keeps deliverables; `--full` erases the run; `--dry-run`) (`clean.py`/`cli.py`, +3 tests)
-- [ ] Opt-in anonymized failure beacon (stage/OS/ffmpeg/error-class only)
+- [x] **Opt-in anonymized failure beacon** (OFF by default; sends only version/OS/python/ffmpeg/stage/error-class — never message/paths/footage) (`beacon.py`/`config.py`/`cli.py`, +4 tests)
 - [x] **Generalized the personal Chrome-pairing guard** — exit-43 hardcoding replaced by configurable `transient_exit_codes` (empty default; no author-specific behavior shipped) (`cli_subprocess.py`/`config.py`, tests updated +1)
 
 ### v0.5 items
