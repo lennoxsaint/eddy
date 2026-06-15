@@ -78,6 +78,17 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Pin/record editorial model per run + drift warning** (`controller.py`, +4 tests)
 - [x] **Legal drafts (LICENSE + EULA.md + AUP.md + THIRD-PARTY-NOTICES.md)** — DRAFTs for your + lawyer review → human-gate #1
 
+### v0.8 items (breadth — all autonomous-able)
+- [x] **Editor-native timeline export** (`final/timeline.edl` CMX3600 — import into Premiere/Resolve/FCP) (`nle_export.py`/`launch_kit.py`, +3 tests)
+- [ ] Batch/queue runner (glob/manifest, resumable, per-item failures) + `eddy runs` fleet list
+- [ ] Named per-channel profiles / `--profile` + per-run overrides
+- [ ] Format profiles (disable the 14-min ceiling + compression for tutorials)
+- [ ] Audio-first ingest (.wav/.mp3/.m4a) acceptance
+- [ ] Standalone `eddy shorts <source>` (mine clips without the full long loop) — scope check
+- [ ] A/B title/thumbnail pick (`eddy pick`) + decision-template reuse
+- [ ] Multi-speaker/interview detection + warning
+- [ ] RTL/CJK caption note or guard
+
 ### v0.7 items (operability & safety — all autonomous-able)
 - [x] **Sidecar SRT + WebVTT** of the final cut in the launch kit (accessibility + SEO) (`render/subtitles.py`/`launch_kit.py`, +5 tests)
 - [x] **Token + cost accounting + spend cap + per-run summary** (anthropic/openai log usage→cost; loop aborts at `max_run_cost_usd`; run prints editorial $) (`cost.py`/providers/`controller.py`, +5 tests)

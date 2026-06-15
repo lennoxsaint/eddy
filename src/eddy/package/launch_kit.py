@@ -59,6 +59,10 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
     (final_dir / "edit-decisions.benchmark.json").write_text(
         json.dumps(edl.to_benchmark_format(slug=run_dir.name), indent=2)
     )
+    # editor-native timeline (CMX3600 EDL) so an agency can finish in their NLE
+    from eddy.package.nle_export import write_edl
+
+    write_edl(edl, final_dir, fps=30, title=run_dir.name[:60])  # renderer CFR-normalizes output to 30fps
 
     # kit index
     kit_dir = final_dir / "launch-kit"
@@ -91,6 +95,7 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
         f"- **Thumbnails:** {len(thumb_paths)} candidates in `final/thumbnails/`"
         + ("" if thumb_paths else " (skipped — see receipts)"),
         "- **Final transcript:** `final/transcript.md`",
+        "- **Editor timeline:** `final/timeline.edl` (CMX3600 — import into Premiere/Resolve/FCP)",
         f"- **Subtitles:** `final/subtitles.srt`, `final/subtitles.vtt` ({subs['cues']} cues)",
         "- **Receipts:** `receipts.jsonl`",
         "",
