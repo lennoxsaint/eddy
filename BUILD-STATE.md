@@ -93,7 +93,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Verifiable no-egress + active egress guard** (`--local-only`/`EDDY_OFFLINE` now ENFORCED at the syscall boundary: non-loopback TCP connects raise `EgressBlocked`; loopback/Ollama allowed; hermetic test proves resolving the offline brain attempts zero egress) (`netguard.py`/`cli.py`, +7 tests)
 - [x] **Coverage floor (ratchet) + required-green-before-tag** (`[tool.coverage.report] fail_under=68` in pyproject; CI `pytest --cov=eddy` fails under it; current 68.8%; +2 cheap pure-logic tests) (`pyproject.toml`/`ci.yml`/`tests/test_render_long.py`)
 - [x] **Offline wheelhouse builder + airgap docs** (`scripts/build_wheelhouse.sh` downloads the pinned dep closure + builds the eddy wheel for `pip install --no-index`; `docs/AIRGAP.md` covers wheelhouse + ffmpeg + Whisper cache + Ollama model staging + the enforced egress guard) (+4 guard tests)
-- [ ] Reproducibility proof (same footage + pinned qwen = same edit; doc + check)
+- [x] **Reproducibility proof** (two-tier model documented in `docs/REPRODUCIBILITY.md`: deterministic core is byte-reproducible; local qwen gains an EXACT mode via new `[provider.ollama] seed` → `options.seed` at temperature 0; golden suite gates quality mode) (`config.py`/`providers/ollama.py`, +4 tests incl. byte-identical EDL recompile)
 - [ ] Release process (RELEASE.md: tag-on-release, signing/notarize steps [human-gate], update check)
 - [ ] Support runbook + documented known-limits (SUPPORT.md / KNOWN-LIMITS.md)
 - [ ] EDD-84 addressed or documented

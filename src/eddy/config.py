@@ -20,6 +20,7 @@ class OllamaConfig(BaseModel):
     temperature: float = 0.3
     max_tokens: int = 4096
     num_ctx: int = 32768
+    seed: int | None = None  # set (with temperature=0) for EXACT reproducible editorial output
 
 
 class AnthropicConfig(BaseModel):

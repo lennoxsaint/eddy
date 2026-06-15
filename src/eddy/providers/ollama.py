@@ -40,6 +40,8 @@ class OllamaProvider:
                 "num_ctx": self.cfg.num_ctx,
             },
         }
+        if self.cfg.seed is not None:  # exact reproducibility: pin the sampler seed (use with temperature=0)
+            body["options"]["seed"] = self.cfg.seed
         if schema is not None:
             body["format"] = schema
 
