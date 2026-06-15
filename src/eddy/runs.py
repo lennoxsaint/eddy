@@ -72,12 +72,29 @@ def default_slug(source: Path) -> str:
 def open_run(source: Path, slug: str | None = None, resume: bool = False) -> Path:
     cfg = load_config()
     sources = discover_sources(source)
+    incoming_sha = {k: sha256_file(v) for k, v in sources.items()}
     run_dir = cfg.runs_dir / (slug or default_slug(source))
     manifest_path = run_dir / "manifest.json"
 
     if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text())
+        m = json.loads(manifest_path.read_text())
+        # wrong-footage guard: a run dir is bound to the exact footage it was opened with.
+        # The old code reused any existing dir for the slug WITHOUT re-checking the source
+        # hashes, so a slug collision silently edited the WRONG video and bypassed the
+        # source-mutation guarantee. Refuse unless the incoming footage hash-matches.
+        if incoming_sha != m.get("source_sha256"):
+            raise SourceError(
+                f"slug {run_dir.name!r} already exists with DIFFERENT source footage "
+                f"(sha256 mismatch). Pass a different --slug, or delete {run_dir} to start over."
+            )
+        Receipts(run_dir).log("run_reopened", resume=resume, sources=m.get("sources"))
         return run_dir
+
+    # --resume now means something: there must be a run to resume.
+    if resume:
+        raise SourceError(
+            f"nothing to resume: no run at {run_dir}. Drop --resume to start a new run."
+        )
 
     run_dir.mkdir(parents=True, exist_ok=True)
     for sub in ("transcript", "iterations", "final"):
@@ -85,11 +102,13 @@ def open_run(source: Path, slug: str | None = None, resume: bool = False) -> Pat
     manifest = {
         "slug": run_dir.name,
         "sources": {k: str(v) for k, v in sources.items()},
-        "source_sha256": {k: sha256_file(v) for k, v in sources.items()},
-        "config": load_config().model_dump(),
+        "source_sha256": incoming_sha,
+        "config": cfg.model_dump(),
         "eddy_version": __import__("eddy").__version__,
     }
-    manifest_path.write_text(json.dumps(manifest, indent=2))
+    from eddy.atomicio import atomic_write_text
+
+    atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
     Receipts(run_dir).log("run_opened", sources=manifest["sources"])
     return run_dir
 
