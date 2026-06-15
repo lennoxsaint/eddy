@@ -60,11 +60,61 @@ def extract_json(text: str) -> dict:
     raise ProviderError("unterminated JSON object in response")
 
 
+def _is_numeric(v) -> bool:
+    if isinstance(v, bool):
+        return False  # a JSON true/false must not satisfy a number field
+    if isinstance(v, (int, float)):
+        return True
+    if isinstance(v, str):  # tolerate a stringified number; pydantic coerces it downstream
+        try:
+            float(v)
+            return True
+        except ValueError:
+            return False
+    return False
+
+
+def _validate_node(schema: dict, data, path: str) -> None:
+    t = schema.get("type")
+    if t == "object":
+        if not isinstance(data, dict):
+            raise ProviderError(f"{path or 'response'}: expected object, got {type(data).__name__}")
+        for key in schema.get("required", []):
+            if key not in data:
+                raise ProviderError(f"{path or 'response'}: missing required key {key!r}")
+        for key, subschema in schema.get("properties", {}).items():
+            if key in data:
+                _validate_node(subschema, data[key], f"{path}.{key}" if path else key)
+    elif t == "array":
+        if not isinstance(data, list):
+            raise ProviderError(f"{path or 'response'}: expected array, got {type(data).__name__}")
+        item_schema = schema.get("items")
+        if item_schema:
+            for i, item in enumerate(data):
+                _validate_node(item_schema, item, f"{path}[{i}]")
+    elif t in ("number", "integer"):
+        if not _is_numeric(data):
+            raise ProviderError(f"{path}: expected number, got {type(data).__name__}")
+    elif t == "string":
+        if not isinstance(data, str):
+            raise ProviderError(f"{path}: expected string, got {type(data).__name__}")
+    elif t == "boolean":
+        if not isinstance(data, bool):
+            raise ProviderError(f"{path}: expected boolean, got {type(data).__name__}")
+    if "enum" in schema and data not in schema["enum"]:
+        raise ProviderError(f"{path or 'response'}: {data!r} not in {schema['enum']}")
+
+
 def validate_against(schema: dict, data: dict) -> dict:
-    """Minimal structural check: required top-level keys exist."""
-    for key in schema.get("required", []):
-        if key not in data:
-            raise ProviderError(f"response missing required key {key!r}")
+    """Recursively validate model output against a JSON-Schema subset: NESTED required keys,
+    container/scalar types, and enums (the old check was top-level keys only).
+
+    This is the boundary that catches structurally-wrong model output — a judge missing a nested
+    score dimension, a defect without a severity enum, a list where an object was required — and
+    turns it into a ProviderError the provider retries on, instead of letting it crash or
+    false-pass downstream. Numbers accept numeric strings; pydantic coerces them later.
+    """
+    _validate_node(schema, data, "")
     return data
 
 
