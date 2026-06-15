@@ -34,6 +34,7 @@ class OpenAIConfig(BaseModel):
     enabled: bool = False
     model: str = "gpt-5.1-mini"
     api_key_env: str = "OPENAI_API_KEY"
+    base_url: str = ""  # set for Azure / a proxy / a self-hosted OpenAI-compatible endpoint
     temperature: float = 0.3
     max_tokens: int = 4096
 

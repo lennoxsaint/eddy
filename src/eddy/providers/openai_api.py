@@ -27,9 +27,15 @@ class OpenAIProvider:
         except ImportError as e:
             raise ProviderError("pip install openai to use the OpenAI provider") from e
 
-        if not os.environ.get(self.cfg.api_key_env):
+        key = os.environ.get(self.cfg.api_key_env)
+        if not key:
             raise ProviderError(f"{self.cfg.api_key_env} not set")
-        client = OpenAI()
+        # actually pass the resolved key (+ base_url) so a CUSTOM api_key_env / Azure / proxy
+        # endpoint works — the SDK's bare default only reads OPENAI_API_KEY.
+        client_kwargs: dict = {"api_key": key}
+        if self.cfg.base_url:
+            client_kwargs["base_url"] = self.cfg.base_url
+        client = OpenAI(**client_kwargs)
 
         kwargs: dict = {
             "model": self.cfg.model,

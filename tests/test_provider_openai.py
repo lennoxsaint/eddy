@@ -163,3 +163,25 @@ def test_explicit_max_tokens_overrides_config(monkeypatch):
     fake = _install(monkeypatch, ["sized"])
     _provider(max_tokens=4096).complete(MSGS, max_tokens=128)
     assert fake.calls[0]["max_completion_tokens"] == 128
+
+
+def test_resolved_key_is_passed_to_constructor(monkeypatch):
+    """v0.5: the resolved key actually reaches OpenAI(api_key=...) instead of a bare OpenAI()."""
+    fake = _install(monkeypatch, ["ok"], env_key="OPENAI_API_KEY", env_value="sk-xyz")
+    _provider().complete(MSGS)
+    assert fake.init_kwargs["api_key"] == "sk-xyz"
+    assert "base_url" not in fake.init_kwargs  # none configured
+
+
+def test_custom_env_var_key_reaches_constructor(monkeypatch):
+    """A CUSTOM api_key_env value is read and passed — a bare OpenAI() would miss it."""
+    fake = _install(monkeypatch, ["ok"], env_key="MY_OPENAI_KEY", env_value="sk-custom")
+    _provider(api_key_env="MY_OPENAI_KEY").complete(MSGS)
+    assert fake.init_kwargs["api_key"] == "sk-custom"
+
+
+def test_base_url_passed_when_configured(monkeypatch):
+    """A configured base_url (Azure / proxy / self-hosted) reaches the constructor."""
+    fake = _install(monkeypatch, ["ok"], env_value="sk-test")
+    _provider(base_url="https://proxy.example/v1").complete(MSGS)
+    assert fake.init_kwargs["base_url"] == "https://proxy.example/v1"
