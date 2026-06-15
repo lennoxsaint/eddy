@@ -11,8 +11,8 @@ from eddy.qa.judge import _consistent, weighted_score
 def test_weighted_score():
     scores = {"hook_integrity": 10, "boundary_continuity": 10, "pacing": 10, "completeness": 10, "ending_cta": 10}
     assert weighted_score(scores) == 10.0
-    scores["boundary_continuity"] = 0  # v0.3: weight 3 of 11 (pacing raised to 3)
-    assert weighted_score(scores) == round(80 / 11, 2)  # 7.27
+    scores["boundary_continuity"] = 0  # out of the 1-10 rubric range -> clamped to the 1 floor (v0.4)
+    assert weighted_score(scores) == round(83 / 11, 2)  # 7.55 (0 clamps to 1, weight 3 of 11)
 
 
 def test_consistency_rejects_inflated_score():

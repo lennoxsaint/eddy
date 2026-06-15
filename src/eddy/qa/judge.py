@@ -56,7 +56,20 @@ WEIGHTS = {"hook_integrity": 2, "boundary_continuity": 3, "pacing": 3, "complete
 
 def weighted_score(scores: dict) -> float:
     total = sum(WEIGHTS.values())
-    return round(sum(scores[k] * w for k, w in WEIGHTS.items()) / total, 2)
+    if not isinstance(scores, dict):
+        return 0.0
+
+    def _dim(k: float) -> float:
+        # clamp each dimension to the rubric's 1-10 so an out-of-range model score (e.g. 50)
+        # cannot blow the weighted average past the 8.0 ship gate; a missing dimension defaults
+        # to 1 (worst) so a malformed judge can't omit a low score to inflate the result.
+        try:
+            v = float(scores.get(k, 1))
+        except (TypeError, ValueError):
+            v = 1.0
+        return min(10.0, max(1.0, v))
+
+    return round(sum(_dim(k) * w for k, w in WEIGHTS.items()) / total, 2)
 
 
 def evidence_packet(sim_report: dict, decisions: EditDecisions, edl: Edl, kept_phrases: list[dict]) -> str:
@@ -109,11 +122,12 @@ def _wpm_by_section(kept: list[dict], sections: int = 6) -> list[int]:
 
 
 def _consistent(result: dict) -> bool:
-    score = weighted_score(result["scores"])
-    majors = sum(1 for d in result["defects"] if d["severity"] == "major")
+    score = weighted_score(result.get("scores", {}))
+    defects = result.get("defects") or []
+    majors = sum(1 for d in defects if isinstance(d, dict) and d.get("severity") == "major")
     if score >= 8 and majors >= 2:
         return False
-    if score < 6 and majors == 0 and len(result["defects"]) == 0:
+    if score < 6 and majors == 0 and len(defects) == 0:
         return False
     return True
 
@@ -135,10 +149,17 @@ def run_judge(
     for attempt in range(2):
         try:
             r = provider.complete(messages, schema=JUDGE_SCHEMA, temperature=0.2, max_tokens=4096)
-        except ProviderError as e:
+            if not isinstance(r, dict):
+                raise TypeError(f"judge returned {type(r).__name__}, expected object")
+            # process INSIDE the try: a structurally-malformed-but-returned judge (missing
+            # scores, wrong types) must degrade to a skipped attempt, not abort the whole run.
+            r.setdefault("defects", [])
+            r.setdefault("scores", {})
+            r.setdefault("summary", "")
+            r["weighted"] = weighted_score(r["scores"])
+        except (ProviderError, KeyError, TypeError, ValueError) as e:
             receipts.log("judge", ok=False, attempt=attempt, error=str(e)[:300])
             continue
-        r["weighted"] = weighted_score(r["scores"])
         results.append(r)
         if _consistent(r):
             receipts.log("judge", ok=True, attempt=attempt, score=r["weighted"], defects=len(r["defects"]))
