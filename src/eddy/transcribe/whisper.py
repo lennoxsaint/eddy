@@ -13,7 +13,17 @@ from pathlib import Path
 from eddy.config import load_config
 from eddy.loop.receipts import Receipts
 from eddy.media.ffmpeg import run_ffmpeg
-from eddy.runs import manifest
+from eddy.runs import SourceError, manifest
+
+
+def _assert_has_speech(segments: list, source) -> None:
+    """No-speech is a first-class outcome: fail fast with an actionable message instead of writing
+    an empty transcript that corrupts the edit loop (empty beats/phrases downstream)."""
+    if not segments:
+        raise SourceError(
+            f"no speech detected in {source} — is this the right file? "
+            "(silent video, music-only, or the wrong audio track)"
+        )
 
 def _language_note(requested: str | None, detected: str, mean_no_speech: float) -> dict | None:
     """A non-silent health check on the transcript: warn if a FORCED language disagrees with what
@@ -95,6 +105,7 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
             }
         )
 
+    _assert_has_speech(payload["segments"], audio_source)  # fail fast; don't cache an empty transcript
     out.write_text(json.dumps(payload, indent=1))
     segs = payload["segments"]
     mean_no_speech = sum(s["no_speech_prob"] for s in segs) / len(segs) if segs else 1.0

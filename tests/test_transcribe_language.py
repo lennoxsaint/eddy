@@ -1,7 +1,19 @@
 """v0.5: transcription language is auto-detected by default and a forced-language mismatch (or
 doubtful speech) is surfaced, not silently mistranscribed."""
 
-from eddy.transcribe.whisper import _language_note
+import pytest
+
+from eddy.runs import SourceError
+from eddy.transcribe.whisper import _assert_has_speech, _language_note
+
+
+def test_no_speech_fails_fast():
+    with pytest.raises(SourceError, match="no speech detected"):
+        _assert_has_speech([], "/x/silent.mp4")
+
+
+def test_has_speech_ok():
+    _assert_has_speech([{"text": "hi"}], "/x/ok.mp4")  # no raise
 
 
 def test_language_match_low_no_speech_is_healthy():
