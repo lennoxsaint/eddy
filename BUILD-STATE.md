@@ -85,7 +85,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Ingest gates** (accept webm/avi/ts/mts/3gp/wmv/flv; decodability preflight fails loud on corrupt/0-byte/no-video) (`runs.py`/`controller.py`, +7 tests)
 - [x] **Empty/no-speech is a first-class outcome** (fail fast, don't cache an empty transcript) (`whisper.py`, +2 tests)
 - [ ] Live progress + ETA layer
-- [ ] Top-level error handler + crash log
+- [x] **Top-level error handler + crash log** (friendly "what happened + next step" + persisted traceback, nonzero exit) (`errors.py`/`cli.py`, +6 tests)
 - [x] **`tests/conftest.py` + synthetic lavfi fixtures + markers** (needs_ffmpeg/e2e/slow; real-probe coverage) (`conftest.py`/`test_fixtures.py`, +5 tests)
 - [ ] Fixture-backed `eddy run` e2e
 - [x] **Unit tests across untested modules** (doctor/retakes/protect/pack/captions/copy/layout/simulate, +88 tests via an 8-agent self-verified Workflow fan-out)

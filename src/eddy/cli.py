@@ -64,15 +64,23 @@ def run(
         set_offline(True)
     from eddy.loop.controller import autonomous_run
 
-    autonomous_run(
-        source=source,
-        target_minutes=target_minutes,
-        slug=slug,
-        resume=resume,
-        skip_shorts=skip_shorts,
-        skip_package=skip_package,
-        language=language,
-    )
+    try:
+        autonomous_run(
+            source=source,
+            target_minutes=target_minutes,
+            slug=slug,
+            resume=resume,
+            skip_shorts=skip_shorts,
+            skip_package=skip_package,
+            language=language,
+        )
+    except Exception as e:
+        from eddy.errors import friendly_error, write_crash_log
+
+        headline, next_step = friendly_error(e)
+        log = write_crash_log(e)
+        typer.echo(f"\n✗ {headline}\n  → {next_step}\n  crash log: {log}", err=True)
+        raise typer.Exit(1) from e
 
 
 @app.command()
