@@ -15,18 +15,61 @@ from eddy.media.ffmpeg import run_ffmpeg, video_encoder_args
 from eddy.render import layout as L
 
 FONT_CANDIDATES = [
+    # macOS
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
     "/System/Library/Fonts/SFNS.ttf",
+    # Linux (Debian/Ubuntu/Fedora/Arch common locations)
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/noto/NotoSans-Bold.ttf",
+    # Windows
+    "C:/Windows/Fonts/arialbd.ttf",
+    "C:/Windows/Fonts/arial.ttf",
+    "C:/Windows/Fonts/segoeui.ttf",
 ]
+
+_FONT_DIRS = [
+    "/usr/share/fonts", "/usr/local/share/fonts", "/Library/Fonts",
+    "C:/Windows/Fonts",
+]
+_font_warned = [False]
+
+
+def _find_font() -> str | None:
+    for c in FONT_CANDIDATES:
+        if Path(c).exists():
+            return c
+    # nothing in the known list — glob the standard font dirs for any TrueType (prefer bold sans)
+    import glob
+    import os
+
+    for d in _FONT_DIRS + [str(Path.home() / ".fonts"), str(Path.home() / "Library" / "Fonts")]:
+        if not os.path.isdir(d):
+            continue
+        for pat in ("**/*Bold*.ttf", "**/*.ttf"):
+            hits = sorted(glob.glob(os.path.join(d, pat), recursive=True))
+            if hits:
+                return hits[0]
+    return None
 
 
 def load_font(size: int) -> ImageFont.FreeTypeFont:
-    for c in FONT_CANDIDATES:
-        if Path(c).exists():
-            return ImageFont.truetype(c, size=size)
-    return ImageFont.load_default(size=size)  # type: ignore[return-value]  # PIL fallback is font-like
+    path = _find_font()
+    if path:
+        return ImageFont.truetype(path, size=size)
+    # No system font: Pillow's load_default(size) is a real scalable font on modern Pillow (fine for
+    # Latin; non-Latin needs a real font — v0.7). Warn once so it's not a silent quality drop.
+    if not _font_warned[0]:
+        import sys
+
+        print("[eddy] WARNING: no system TrueType font found; captions use Pillow's default font. "
+              "Install a font (e.g. DejaVu) for best caption quality.", file=sys.stderr)
+        _font_warned[0] = True
+    return ImageFont.load_default(size=size)  # type: ignore[return-value]
 
 
 def word_width(word: str, font: ImageFont.FreeTypeFont) -> int:
