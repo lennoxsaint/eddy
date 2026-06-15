@@ -91,7 +91,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [x] **Unit tests across untested modules** (doctor/retakes/protect/pack/captions/copy/layout/simulate, +88 tests via an 8-agent self-verified Workflow fan-out)
 - [ ] Loop-resume integrity tests
 - [ ] Provider/judge contract tests
-- [ ] `compile_edl` Hypothesis fuzz
+- [x] **`compile_edl` Hypothesis fuzz** (finite/in-bounds/sorted/non-overlapping/positive invariants under random cuts + protections) (`test_compile_fuzz.py`, +2 property tests)
 - [ ] Golden editorial suite (pinned qwen q4)
 
 ## Human-gate batch (accumulating)
