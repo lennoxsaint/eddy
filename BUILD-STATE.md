@@ -74,7 +74,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - [ ] Model-call + wall-clock budget
 - [x] **Git-derived version + `eddy --version` + receipt stamp** (`__init__.py`/`cli.py`/`runs.py`, +3 tests)
 - [ ] Privacy honesty: `--local-only`/`EDDY_OFFLINE` + consent + `local_files_only` + disclosure
-- [ ] CI workflow (lint+type+test)
+- [x] **CI workflow (ruff+mypy+pytest+cov)** + made the codebase ruff/mypy clean (`.github/workflows/ci.yml`)
 - [ ] Pin/record editorial model per run
 - [ ] Legal drafts (LICENSE/EULA/AUP/NOTICE) → human-gate
 
@@ -94,3 +94,4 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 apostrophe concat (shared concat_quote) + path gate (is_relative_to, all outputs); suite 134 → 142 green.
 - v0.4 slug wrong-footage guard (re-hash on reopen) + --resume wired; suite 142 → 147 green.
 - v0.4 git-derived version (was stale 0.1.0) + eddy --version + receipt stamp; suite 147 → 150 green.
+- v0.4 CI: .github/workflows/ci.yml (ruff+mypy+pytest); cleaned 33 ruff issues (incl. moving controller.py imports) + 9 mypy errors to zero; suite stays 150 green. (CI runs live once the private remote exists — human-gate.)

@@ -14,7 +14,6 @@ from eddy.package.copy import chapters, chapters_block, description, titles, wri
 from eddy.package.thumbnails import generate_thumbnails
 from eddy.providers.base import get_provider
 from eddy.render.long import latest_iteration_dir
-from eddy.runs import manifest
 from eddy.transcribe.pack import phrases as load_phrases
 
 
@@ -67,14 +66,14 @@ def package_run(run_dir: Path, iteration_dir: Path | None = None) -> Path:
     index = [
         f"# Launch Kit — {run_dir.name}",
         "",
-        f"- **Video:** `final/video.mp4`" + (" (final QA: PASS)" if qa.get("pass") else " (final QA: CHECK qa-final.json)"),
+        "- **Video:** `final/video.mp4`" + (" (final QA: PASS)" if qa.get("pass") else " (final QA: CHECK qa-final.json)"),
         f"- **Titles:** `final/titles.md` ({len(title_list)} candidates, top: \"{title_list[0]['title'] if title_list else '—'}\")",
-        f"- **Description + chapters:** `final/description.md`, `final/chapters.txt`",
+        "- **Description + chapters:** `final/description.md`, `final/chapters.txt`",
         f"- **Shorts:** {sum(1 for s in shorts if s.get('status') == 'rendered')} rendered in `final/shorts/`",
         f"- **Thumbnails:** {len(thumb_paths)} candidates in `final/thumbnails/`"
         + ("" if thumb_paths else " (skipped — see receipts)"),
-        f"- **Final transcript:** `final/transcript.md`",
-        f"- **Receipts:** `receipts.jsonl`",
+        "- **Final transcript:** `final/transcript.md`",
+        "- **Receipts:** `receipts.jsonl`",
         "",
         "## Chapters",
         "",

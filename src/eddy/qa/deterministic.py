@@ -8,7 +8,6 @@ from pathlib import Path
 
 from eddy.config import EddyConfig
 from eddy.edit.schema import Edl
-from eddy.media.ffmpeg import run_ffmpeg, run_ffprobe
 from eddy.media.probe import stream_summary
 
 

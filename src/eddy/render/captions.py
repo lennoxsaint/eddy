@@ -7,7 +7,6 @@ future words dim — per the approved standard."""
 from __future__ import annotations
 
 import math
-import shlex
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -27,13 +26,13 @@ def load_font(size: int) -> ImageFont.FreeTypeFont:
     for c in FONT_CANDIDATES:
         if Path(c).exists():
             return ImageFont.truetype(c, size=size)
-    return ImageFont.load_default(size=size)
+    return ImageFont.load_default(size=size)  # type: ignore[return-value]  # PIL fallback is font-like
 
 
 def word_width(word: str, font: ImageFont.FreeTypeFont) -> int:
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     bbox = probe.textbbox((0, 0), word.upper(), font=font, stroke_width=2)
-    return bbox[2] - bbox[0]
+    return int(bbox[2] - bbox[0])
 
 
 def group_cues(words: list[dict]) -> list[list[dict]]:

@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 from eddy.config import AudioConfig
-from eddy.media.ffmpeg import FFMPEG, run_ffmpeg, run_ffprobe
+from eddy.media.ffmpeg import FFMPEG, run_ffmpeg
 
 
 def _speech_eq(cfg: AudioConfig) -> str:

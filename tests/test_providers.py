@@ -1,6 +1,5 @@
 """CLI provider behaviour: the Claude pairing-guard (exit 43) settle-retry."""
 
-import subprocess
 from types import SimpleNamespace
 
 import pytest

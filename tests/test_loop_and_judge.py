@@ -1,8 +1,6 @@
 """Loop state ranking, judge consistency checks, directive building — stubbed providers."""
 
-import json
 
-import pytest
 
 from eddy.loop.state import RunState
 from eddy.qa.judge import _consistent, weighted_score

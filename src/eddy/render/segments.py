@@ -10,7 +10,7 @@ import concurrent.futures
 from pathlib import Path
 
 from eddy.config import RenderConfig
-from eddy.edit.schema import Edl
+from eddy.edit.schema import Edl, EdlRange
 from eddy.media.ffmpeg import concat_quote, run_ffmpeg
 
 SEEK_PREROLL_S = 2.0
@@ -83,7 +83,7 @@ def render_edl(
     seg_dir.mkdir(parents=True, exist_ok=True)
     fade_s = render_cfg.boundary_fade_ms / 1000
 
-    def one(job: tuple[int, object]) -> Path:
+    def one(job: tuple[int, EdlRange]) -> Path:
         idx, r = job
         # v0.3.1: fold the speed into the cache filename so a resume that newly enables speed-ramp
         # re-renders instead of reusing a stale un-sped segment. 1.0x keeps the old byte-identical

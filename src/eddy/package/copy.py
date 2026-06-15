@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from eddy.edit.compiler import cut_transcript, src_to_out
+from eddy.edit.compiler import src_to_out
 from eddy.edit.schema import EditDecisions, Edl
 from eddy.loop.receipts import Receipts
 
@@ -57,7 +57,7 @@ def chapters(edl: Edl, decisions: EditDecisions, provider, receipts: Receipts) -
     if not beats:
         return []
 
-    chaps = []
+    chaps: list[dict] = []
     for b in beats:
         t = src_to_out(edl, b.get("start_s", 0.0))  # speed-aware shared remap
         if t is None:

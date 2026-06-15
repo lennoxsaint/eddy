@@ -48,7 +48,7 @@ class AnthropicProvider:
                     model=self.cfg.model,
                     max_tokens=self.cfg.max_tokens if max_tokens is None else max_tokens,
                     temperature=self.cfg.temperature if temperature is None else temperature,
-                    messages=msgs,
+                    messages=msgs,  # type: ignore[arg-type]  # plain dicts; SDK wants MessageParam
                 )
                 text = "".join(b.text for b in resp.content if b.type == "text")
                 if schema is None:

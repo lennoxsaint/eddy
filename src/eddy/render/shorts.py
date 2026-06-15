@@ -204,6 +204,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             seg_out = asset_dir / "layout-segments" / f"segment-{i:03d}.mp4"
             seg_out.parent.mkdir(exist_ok=True)
             if dual:
+                assert screen is not None  # dual layout implies a screen source
                 cam_v = stream_summary(camera)["video"]
                 _render_segment_dual(camera, screen, seg_out, s, e, face_mask, screen_mask, cam_v["width"], cam_v["height"], run_dir)
             else:

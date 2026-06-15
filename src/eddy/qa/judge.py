@@ -59,7 +59,7 @@ def weighted_score(scores: dict) -> float:
     if not isinstance(scores, dict):
         return 0.0
 
-    def _dim(k: float) -> float:
+    def _dim(k: str) -> float:
         # clamp each dimension to the rubric's 1-10 so an out-of-range model score (e.g. 50)
         # cannot blow the weighted average past the 8.0 ship gate; a missing dimension defaults
         # to 1 (worst) so a malformed judge can't omit a low score to inflate the result.
@@ -103,8 +103,8 @@ def evidence_packet(sim_report: dict, decisions: EditDecisions, edl: Edl, kept_p
     return (
         f"STATS:\n{json.dumps(stats, indent=1)}\n\n"
         f"BOUNDARY CARDS ({len(cards)}):\n" + "\n".join(cards) + "\n\n"
-        f"WHAT WAS LOST (chunks >20s):\n" + "\n".join(f"- {r}" for r in removed_big[:20]) + "\n\n"
-        f"CUT TRANSCRIPT:\n" + "\n".join(lines)
+        "WHAT WAS LOST (chunks >20s):\n" + "\n".join(f"- {r}" for r in removed_big[:20]) + "\n\n"
+        "CUT TRANSCRIPT:\n" + "\n".join(lines)
     )
 
 

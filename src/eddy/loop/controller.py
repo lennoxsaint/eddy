@@ -8,6 +8,29 @@ from pathlib import Path
 
 from eddy.config import load_config
 from eddy.edit.compiler import CompileError, cut_transcript
+from eddy.edit.cutplan import (
+    beat_map,
+    compile_with_repair,
+    initial_decisions,
+    revise_decisions,
+)
+from eddy.edit.retakes import filler_candidates, retake_candidates
+from eddy.edit.schema import load_decisions, load_edl, save
+from eddy.edit.simulate import save_report, simulate
+from eddy.loop.receipts import Receipts
+from eddy.loop.speed import speed_to_fit
+from eddy.loop.state import RunState
+from eddy.loop.trim import trim_to_fit
+from eddy.media.frames import boundary_contact_sheet
+from eddy.providers.base import get_editorial_provider
+from eddy.qa.deterministic import run_deterministic
+from eddy.qa.deterministic import save as save_qa
+from eddy.qa.judge import run_judge, run_ship_panel
+from eddy.qa.quality import quality_score
+from eddy.render.segments import render_edl
+from eddy.runs import open_run, verify_sources_unmutated
+from eddy.transcribe.pack import phrases as load_phrases
+from eddy.transcribe.whisper import transcribe_run, words_flat
 
 
 class EditLoopError(RuntimeError):
@@ -41,29 +64,6 @@ def _plateau_step(no_improve: int, prev_best_q: float, best_over: float, cur_bes
     prev_best_q = max(prev_best_q, cur_best_q)
     best_over = min(best_over, over_ceiling_s)
     return no_improve, prev_best_q, best_over, no_improve >= loop.plateau_rounds
-from eddy.edit.cutplan import (
-    beat_map,
-    compile_with_repair,
-    initial_decisions,
-    revise_decisions,
-)
-from eddy.edit.retakes import filler_candidates, retake_candidates
-from eddy.edit.schema import load_decisions, load_edl, save
-from eddy.edit.simulate import save_report, simulate
-from eddy.loop.receipts import Receipts
-from eddy.loop.speed import speed_to_fit
-from eddy.loop.state import RunState
-from eddy.loop.trim import trim_to_fit
-from eddy.media.frames import boundary_contact_sheet
-from eddy.providers.base import get_editorial_provider
-from eddy.qa.deterministic import run_deterministic
-from eddy.qa.deterministic import save as save_qa
-from eddy.qa.judge import run_judge, run_ship_panel
-from eddy.qa.quality import quality_score
-from eddy.render.segments import render_edl
-from eddy.runs import open_run, verify_sources_unmutated
-from eddy.transcribe.pack import phrases as load_phrases
-from eddy.transcribe.whisper import transcribe_run, words_flat
 
 
 def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int = 0) -> list[dict]:
