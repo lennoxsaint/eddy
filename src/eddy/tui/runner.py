@@ -9,6 +9,7 @@ the whole TUI is testable without launching real `eddy` processes.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -20,7 +21,11 @@ from eddy.config import load_config
 from eddy.jobs import JobManager, _tail
 from eddy.tui.intents import Intent
 
+_ERR_LINE = re.compile(r"([A-Za-z_]\w*(?:Error|Exception)):\s*(.*)")
 _MAX_TEXT = 20_000
+# extensions we can usefully show as text in the preview modal; everything else (video, images,
+# audio) is a binary the creator opens in their player / image viewer.
+_TEXT_EXTS = {".md", ".txt", ".srt", ".vtt", ".json", ".edl", ".ffconcat", ".csv"}
 
 
 def run_verdict(state: dict) -> str | None:
@@ -84,6 +89,29 @@ class TuiData:
             return None
         return p.read_text(errors="replace")[:_MAX_TEXT]
 
+    def artifacts(self, slug: str) -> list[dict]:
+        """Everything in a run's final/ as {name, kind('text'|'binary'|'folder'), size}. Powers the
+        in-app preview so a creator can validate the launch kit without an OS file manager."""
+        final = self.run_dir(slug) / "final"
+        out: list[dict] = []
+        if not final.exists():
+            return out
+        for p in sorted(final.iterdir()):
+            if p.is_dir():
+                try:
+                    n = sum(1 for _ in p.iterdir())
+                except OSError:
+                    n = 0
+                out.append({"name": p.name + "/", "kind": "folder", "size": n})
+            else:
+                kind = "text" if p.suffix.lower() in _TEXT_EXTS else "binary"
+                try:
+                    size = p.stat().st_size
+                except OSError:
+                    size = 0
+                out.append({"name": p.name, "kind": kind, "size": size})
+        return out
+
     def brain_label(self) -> str:
         active = getattr(self.cfg.provider, "active", "?")
         try:
@@ -113,18 +141,64 @@ class TuiData:
         st = self.jobs.status(slug)
         return st.get("state") == "interrupted"
 
+    def failure_detail(self, slug: str) -> dict | None:
+        """Plain-language failure summary for a run that errored, or None if it didn't fail.
+
+        The `eddy` subprocess already prints a friendly block (via errors.friendly_error) into its
+        log: `✗ headline / → next step / crash log: path`. We prefer that verbatim — it IS the
+        friendly mapping. If the child died before printing one (killed/segfault), we fall back to
+        mapping the last `…Error:` line in the log through errors.friendly_by_name. Always returns a
+        log tail so there's something concrete to read."""
+        log_path = self.cfg.runs_dir / ".mcp-jobs" / f"{slug}.log"
+        text = log_path.read_text(errors="replace") if log_path.exists() else ""
+        failed = self.jobs.status(slug).get("state") == "failed" or "✗ " in text or "Traceback (most recent call last)" in text
+        if not failed:
+            return None
+        headline = next_step = crash_log = ""
+        for ln in text.splitlines():
+            s = ln.strip()
+            if s.startswith("✗ ") and not headline:
+                headline = s[2:].strip()
+            elif s.startswith("→ ") and not next_step:
+                next_step = s[2:].strip()
+            elif s.startswith("crash log:"):
+                crash_log = s.split("crash log:", 1)[1].strip()
+        if not headline:  # no friendly block printed — map the raw error class ourselves
+            from eddy.errors import friendly_by_name
+
+            cls, msg = "Error", "the run ended unexpectedly — see the log below"
+            for ln in reversed(text.splitlines()):
+                m = _ERR_LINE.search(ln)
+                if m:
+                    cls, msg = m.group(1), m.group(2)
+                    break
+            headline, next_step = friendly_by_name(cls, msg)
+        return {
+            "slug": slug,
+            "headline": headline,
+            "next_step": next_step or "Run `eddy doctor`, or re-run once the issue is fixed.",
+            "crash_log": crash_log,
+            "tail": _tail(log_path, 20),
+        }
+
     # --- side-effecting helpers -------------------------------------------------------------------
     def cancel(self, slug: str) -> dict:
         """Stop a running job (delegates to JobManager.cancel)."""
         return self.jobs.cancel(slug)
 
+    def results_path(self, slug: str) -> Path | None:
+        """The folder a reveal would open (final/ if present, else the run dir), or None if neither
+        exists. Lets the UI show an honest, copyable path when no OS opener is available."""
+        for target in (self.run_dir(slug) / "final", self.run_dir(slug)):
+            if target.exists():
+                return target
+        return None
+
     def reveal(self, slug: str) -> bool:
         """Open a run's results in the OS file manager (final/ if present, else the run dir). Returns
         False if there's nothing to show or no opener. This is a LOCAL folder reveal, not a URL."""
-        target = self.run_dir(slug) / "final"
-        if not target.exists():
-            target = self.run_dir(slug)
-        if not target.exists():
+        target = self.results_path(slug)
+        if target is None:
             return False
         try:
             if sys.platform == "darwin":

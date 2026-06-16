@@ -119,7 +119,8 @@ def pick_thumbnail_ab(thumb_dir: Path) -> dict:
     """Pair two distinct generated thumbnail files for an A/B test. No visual scoring (no vision
     model) — this is an honest pairing, not a quality judgement."""
     thumb_dir = Path(thumb_dir)
-    pngs = sorted(p for p in thumb_dir.glob("*.png") if not p.name.startswith("refs"))
+    # exclude reference frames and the offline placeholder title-card — neither is a real candidate.
+    pngs = sorted(p for p in thumb_dir.glob("*.png") if not p.name.startswith(("refs", "placeholder")))
     if len(pngs) < 2:
         return {"a": None, "b": None, "note": f"need >=2 generated thumbnails, found {len(pngs)}"}
     return {"a": pngs[0].name, "b": pngs[1].name,

@@ -61,6 +61,14 @@ def test_pick_thumbnail_ab(tmp_path):
     assert {res["a"], res["b"]} == {"gemini-1.png", "openai-1.png"}
 
 
+def test_pick_thumbnail_ab_ignores_offline_placeholder(tmp_path):
+    # the offline title-card is a starting point, not a real candidate — it must not enter the A/B
+    (tmp_path / "placeholder.png").write_bytes(b"x")
+    (tmp_path / "gemini-1.png").write_bytes(b"x")
+    res = pick_thumbnail_ab(tmp_path)
+    assert res["a"] is None and "found 1" in res["note"]
+
+
 def test_build_ab_pick_standalone_from_titles_json(tmp_path):
     final = tmp_path / "final"
     final.mkdir()

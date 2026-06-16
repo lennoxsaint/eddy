@@ -22,6 +22,8 @@ from eddy.tui.intents import ACTIONS, Intent, interpret_nl, parse_command
 from eddy.tui.runner import TuiData, run_verdict
 from eddy.tui.screens.confirm import ConfirmScreen
 from eddy.tui.screens.doctor import DoctorScreen
+from eddy.tui.screens.failure import FailureScreen
+from eddy.tui.screens.preview import PreviewScreen
 from eddy.tui.widgets.eagle import EagleWidget
 
 _GOLD = "#f5b836"
@@ -50,7 +52,7 @@ _HELP = (
     "  clean <run>               reclaim a run's scratch space\n"
     "  purge <run>               delete a run's data (asks first)\n"
     "  doctor · runs · /help · /quit\n\n"
-    f"[{_DIM}]Keys: F5 refresh · F2 doctor · F1 help · ctrl+x cancel · ctrl+c quit.[/]"
+    f"[{_DIM}]Keys: F5 refresh · F4 preview · F3 why-failed · F2 doctor · F1 help · ctrl+x cancel · ctrl+c quit.[/]"
 )
 
 
@@ -103,6 +105,8 @@ class _CmdSuggester(Suggester):
 class HomeScreen(Screen):
     BINDINGS = [
         ("f5", "refresh", "Refresh"),
+        ("f4", "preview", "Preview"),
+        ("f3", "why_failed", "Why?"),
         ("f2", "doctor", "Doctor"),
         ("f1", "help", "Help"),
         ("ctrl+x", "cancel_run", "Cancel"),
@@ -115,6 +119,7 @@ class HomeScreen(Screen):
         self._was_running = False
         self._slugs: list[str] = []
         self._notified_fail: set[str] = set()
+        self._last_failed: str | None = None
 
     def compose(self):
         with Horizontal(id="hdr"):
@@ -188,6 +193,8 @@ class HomeScreen(Screen):
             )
         if self.data.is_interrupted(slug):
             lines.append(f"[{_GOLD}]interrupted — type: render {escape(slug)} to resume[/]")
+        if slug in self._notified_fail:
+            lines.append("[red]failed — press F3 for what went wrong[/]")
         if d["artifacts"]:
             lines.append("")
             lines.append(f"[{_DIM}]results:[/] {escape(', '.join(d['artifacts'][:12]))}")
@@ -247,7 +254,13 @@ class HomeScreen(Screen):
             if slug:
                 self._selected = slug
                 self._update_monitor(slug)
-                self._status(f"opened {slug}" if self.data.reveal(slug) else f"showing {slug} (no results folder yet)")
+                self.app.push_screen(PreviewScreen(self.data, slug))  # in-app preview (works headless)
+                if self.data.reveal(slug):
+                    self._status(f"opened {slug}")
+                else:
+                    # honest: don't claim we opened it if there's no OS opener — give the path
+                    path = self.data.results_path(slug)
+                    self._status(f"results at {path}" if path else f"{slug} has no results yet")
             return
         if intent.needs_confirm:
             self.app.push_screen(ConfirmScreen(intent.describe()), lambda ok: self._maybe_exec(ok, intent))
@@ -317,8 +330,8 @@ class HomeScreen(Screen):
             eagle.set_state("error")
             for j in new_failures:
                 self._notified_fail.add(j["job_id"])
-                tail = (j.get("log_tail") or "").strip().splitlines()
-                self._status(f"{j['job_id']} failed — {tail[-1] if tail else 'see the run for details'}")
+                self._last_failed = j["job_id"]
+                self._status(f"{j['job_id']} failed — press F3 for what went wrong")
             delay = 5.0
         else:
             eagle.set_state("success")
@@ -337,3 +350,22 @@ class HomeScreen(Screen):
 
     def action_help(self) -> None:
         self.query_one("#monitor", Static).update(_HELP)
+
+    def action_preview(self) -> None:
+        """Tab through the selected run's launch-kit artifacts in-app (no file manager needed)."""
+        if not self._selected:
+            self._status("select a run first, then F4 to preview its results")
+            return
+        self.app.push_screen(PreviewScreen(self.data, self._selected))
+
+    def action_why_failed(self) -> None:
+        """Explain a failed run in plain language: headline + next step + crash log + tail."""
+        slug = self._selected or self._last_failed
+        if not slug:
+            self._status("no run selected")
+            return
+        detail = self.data.failure_detail(slug)
+        if not detail:
+            self._status(f"{slug} didn't fail")
+            return
+        self.app.push_screen(FailureScreen(detail))

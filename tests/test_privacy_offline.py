@@ -55,6 +55,17 @@ def test_thumbnails_skipped_when_offline(monkeypatch, tmp_path):
     monkeypatch.setenv("EDDY_OFFLINE", "1")
     cfg = load_config()
     out = generate_thumbnails(tmp_path, [tmp_path / "frame.jpg"], "hint", cfg, _R())
-    assert out == []
+    assert out == []  # no cloud candidates offline
     skipped = tmp_path / "final" / "thumbnails" / "thumbnails-skipped.json"
     assert skipped.exists() and "offline" in skipped.read_text()
+
+
+def test_offline_leaves_a_local_placeholder_thumbnail(monkeypatch, tmp_path):
+    # offline can't reach the image APIs, but the kit should still carry a starting-point title-card
+    monkeypatch.setenv("EDDY_OFFLINE", "1")
+    cfg = load_config()
+    out = generate_thumbnails(tmp_path, [tmp_path / "frame.jpg"], "My Big Idea", cfg, _R())
+    assert out == []  # the placeholder is NOT counted as a real candidate
+    ph = tmp_path / "final" / "thumbnails" / "placeholder.png"
+    assert ph.exists() and ph.stat().st_size > 0
+    assert "placeholder.png" in (tmp_path / "final" / "thumbnails" / "thumbnails-skipped.json").read_text()

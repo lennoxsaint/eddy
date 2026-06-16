@@ -136,6 +136,42 @@ async def test_suggester_completes_verb_path_and_slug(tmp_path):
     assert await sug.get_suggestion(f"run {tmp_path}/Mov") == f"run {tmp_path}/Movies/"
 
 
+async def test_preview_modal_opens_for_selected_run(tmp_path):
+    from eddy.tui.screens.preview import PreviewScreen
+
+    final = tmp_path / "2026-demo" / "final"
+    final.mkdir(parents=True)
+    (final / "titles.md").write_text("# Title candidates\n1. Hello world")
+    app, _ = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        scr = app.screen
+        scr._selected = "2026-demo"
+        scr.action_preview()
+        await pilot.pause()
+        assert isinstance(app.screen, PreviewScreen)
+        assert app.screen._items  # found the artifact
+
+
+async def test_why_failed_modal_opens_for_failed_run(tmp_path):
+    from eddy.tui.screens.failure import FailureScreen
+
+    log = tmp_path / ".mcp-jobs" / "2026-boom.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("✗ Media error: boom\n  → Make sure ffmpeg 8+ is installed (run `eddy doctor`).\n")
+    app, _ = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        scr = app.screen
+        scr._selected = "2026-boom"
+        scr.action_why_failed()
+        await pilot.pause()
+        assert isinstance(app.screen, FailureScreen)
+        assert "Media error" in app.screen._d["headline"]
+
+
 @pytest.mark.parametrize("state", ["idle", "working", "success", "error"])
 async def test_eagle_state_can_change(tmp_path, state):
     app, _ = _app(tmp_path)

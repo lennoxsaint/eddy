@@ -16,6 +16,43 @@ from eddy.config import EddyConfig
 from eddy.loop.receipts import Receipts
 
 
+def _write_placeholder_thumbnail(out_dir: Path, title_hint: str) -> Path | None:
+    """A local, offline title-card the creator can use as a STARTING POINT — not a generated
+    thumbnail (it's clearly labeled and excluded from the A/B pairing). Pure PIL, no network, so
+    `--local-only` runs still leave a frame in the kit instead of an empty thumbnails folder."""
+    try:
+        from PIL import Image, ImageDraw
+
+        from eddy.render.captions import load_font
+
+        w, h = 1280, 720
+        img = Image.new("RGB", (w, h), (16, 22, 38))  # brand navy
+        d = ImageDraw.Draw(img)
+        d.rectangle([0, 0, 24, h], fill=(245, 184, 54))  # gold accent bar
+        title_font, small = load_font(72), load_font(26)
+        lines: list[str] = []
+        cur = ""
+        for word in (title_hint or "Your title here").split():
+            if len(cur) + len(word) + 1 > 20:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = f"{cur} {word}".strip()
+        if cur:
+            lines.append(cur)
+        y = 120
+        for ln in lines[:5]:
+            d.text((70, y), ln, font=title_font, fill=(238, 238, 238))
+            y += 90
+        d.text((70, h - 64), "PLACEHOLDER - generated offline, replace before publishing",
+               font=small, fill=(139, 144, 155))
+        path = out_dir / "placeholder.png"
+        img.save(path)
+        return path
+    except Exception:
+        return None  # never let a nicety crash packaging
+
+
 def _thumb_prompt(title_hint: str) -> str:
     return (
         "Create a YouTube thumbnail (16:9, 1280x720) featuring this exact person from the "
@@ -112,7 +149,13 @@ def generate_thumbnails(
         else:
             reason = "disabled or no reference frames"
         receipts.log("thumbnails_skipped", reason=reason)
-        (out_dir / "thumbnails-skipped.json").write_text(json.dumps({"reason": reason}))
+        skip: dict = {"reason": reason}
+        if is_offline():  # offline can't reach the image APIs — leave a local title-card to start from
+            ph = _write_placeholder_thumbnail(out_dir, title_hint)
+            if ph is not None:
+                skip["placeholder"] = ph.name
+                receipts.log("thumbnail_placeholder", path=str(ph))
+        (out_dir / "thumbnails-skipped.json").write_text(json.dumps(skip))
         return []
     ref = ref_frames[0]
     for f in ref_frames:

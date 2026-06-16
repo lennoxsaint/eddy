@@ -13,6 +13,28 @@ import traceback
 from pathlib import Path
 
 
+# headline-prefix + concrete next-step, keyed by error CLASS NAME. Keyed by name (not the class
+# object) so the TUI can map a failure parsed from a log/receipt — where it only has the class name,
+# not a live exception — through the exact same table. friendly_error() uses isinstance (so it still
+# catches subclasses); friendly_by_name() is the string-only path.
+_FRIENDLY = {
+    "SourceError": ("Input problem", "Check the footage path and format, or pass a different file."),
+    "FfmpegError": ("Media error", "Make sure ffmpeg 8+ is installed (run `eddy doctor`) and the file isn't corrupt."),
+    "ProviderError": ("Editorial brain error", "Check your brain with `eddy doctor`, or re-run with --local-only."),
+    "EditLoopError": ("Couldn't produce a shippable edit", "Try a stronger brain (`eddy doctor`) and re-run."),
+}
+
+
+def friendly_by_name(type_name: str, msg: str) -> tuple[str, str]:
+    """(headline, next_step) from an error CLASS NAME + message — the string-only path used by the TUI
+    when it reconstructs a failure from a log/receipt rather than a live exception."""
+    head, nxt = _FRIENDLY.get(
+        type_name,
+        (f"Unexpected {type_name}", "This looks like a bug — please attach the crash log below."),
+    )
+    return (f"{head}: {msg[:300]}", nxt)
+
+
 def friendly_error(e: BaseException) -> tuple[str, str]:
     """(headline, next_step) for a known error type; a generic pair otherwise."""
     from eddy.loop.controller import EditLoopError
@@ -20,16 +42,10 @@ def friendly_error(e: BaseException) -> tuple[str, str]:
     from eddy.providers.base import ProviderError
     from eddy.runs import SourceError
 
-    msg = str(e)[:300]
-    if isinstance(e, SourceError):
-        return (f"Input problem: {msg}", "Check the footage path and format, or pass a different file.")
-    if isinstance(e, FfmpegError):
-        return (f"Media error: {msg}", "Make sure ffmpeg 8+ is installed (run `eddy doctor`) and the file isn't corrupt.")
-    if isinstance(e, ProviderError):
-        return (f"Editorial brain error: {msg}", "Check your brain with `eddy doctor`, or re-run with --local-only.")
-    if isinstance(e, EditLoopError):
-        return (f"Couldn't produce a shippable edit: {msg}", "Try a stronger brain (`eddy doctor`) and re-run.")
-    return (f"Unexpected {type(e).__name__}: {msg}", "This looks like a bug — please attach the crash log below.")
+    for cls in (SourceError, FfmpegError, ProviderError, EditLoopError):
+        if isinstance(e, cls):
+            return friendly_by_name(cls.__name__, str(e))
+    return friendly_by_name(type(e).__name__, str(e))
 
 
 def crash_dir() -> Path:

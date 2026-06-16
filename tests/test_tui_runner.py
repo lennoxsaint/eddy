@@ -138,6 +138,60 @@ def test_reveal_missing_run_returns_false(tmp_path):
     assert _data(tmp_path).reveal("nope") is False
 
 
+def test_results_path_prefers_final(tmp_path):
+    data = _data(tmp_path)
+    (tmp_path / "demo" / "final").mkdir(parents=True)
+    assert data.results_path("demo").name == "final"
+    assert data.results_path("ghost") is None
+
+
+def test_artifacts_classify_text_binary_folder(tmp_path):
+    data = _data(tmp_path)
+    final = tmp_path / "demo" / "final"
+    (final / "shorts").mkdir(parents=True)
+    (final / "titles.md").write_text("# t")
+    (final / "video.mp4").write_bytes(b"\x00\x00")
+    (final / "shorts" / "a.mp4").write_bytes(b"x")
+    arts = {a["name"]: a for a in data.artifacts("demo")}
+    assert arts["titles.md"]["kind"] == "text"
+    assert arts["video.mp4"]["kind"] == "binary"
+    assert arts["shorts/"]["kind"] == "folder" and arts["shorts/"]["size"] == 1
+
+
+def _write_log(tmp_path, slug, text):
+    log = tmp_path / ".mcp-jobs" / f"{slug}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(text)
+    return log
+
+
+def test_failure_detail_parses_the_friendly_block(tmp_path):
+    # the eddy subprocess already prints errors.friendly_error into its log — we surface it verbatim
+    _write_log(
+        tmp_path, "demo",
+        "starting...\n"
+        "✗ Input problem: no video files\n"
+        "  → Check the footage path and format, or pass a different file.\n"
+        "  crash log: /home/u/.config/eddy/crashes/crash-9.log\n",
+    )
+    d = _data(tmp_path).failure_detail("demo")
+    assert d["headline"] == "Input problem: no video files"
+    assert "Check the footage path" in d["next_step"]
+    assert d["crash_log"].endswith("crash-9.log")
+
+
+def test_failure_detail_falls_back_to_error_class_from_traceback(tmp_path):
+    _write_log(tmp_path, "boom", "Traceback (most recent call last):\n  ...\nValueError: weird thing\n")
+    d = _data(tmp_path).failure_detail("boom")
+    assert "ValueError" in d["headline"] and "weird thing" in d["headline"]
+    assert d["next_step"]
+
+
+def test_failure_detail_none_when_run_did_not_fail(tmp_path):
+    _write_log(tmp_path, "ok", "all good\ndone\n")
+    assert _data(tmp_path).failure_detail("ok") is None
+
+
 def test_local_provider_pins_to_ollama(monkeypatch):
     # NL interpretation must use the LOCAL brain, never the (possibly cloud) active provider.
     seen = {}

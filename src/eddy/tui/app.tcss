@@ -59,7 +59,7 @@ Screen {
 }
 
 /* modals */
-ConfirmScreen, DoctorScreen {
+ConfirmScreen, DoctorScreen, FailureScreen, PreviewScreen {
     align: center middle;
 }
 
@@ -71,6 +71,15 @@ ConfirmScreen, DoctorScreen {
     border: round #f5b836;
     background: $panel;
     padding: 1 2;
+}
+
+/* scrollable body shared by the failure + preview modals (log tail / artifact text) */
+#failtail, #pbody {
+    height: 16;
+    max-height: 60%;
+    border: round #444b57;
+    padding: 0 1;
+    margin-top: 1;
 }
 
 #dbtns {

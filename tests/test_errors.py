@@ -1,6 +1,6 @@
 """v0.5: friendly error mapping + crash log so failures are actionable, not raw tracebacks."""
 
-from eddy.errors import friendly_error, write_crash_log
+from eddy.errors import friendly_by_name, friendly_error, write_crash_log
 from eddy.loop.controller import EditLoopError
 from eddy.media.ffmpeg import FfmpegError
 from eddy.providers.base import ProviderError
@@ -31,6 +31,14 @@ def test_editloop_error_suggests_stronger_brain():
 def test_unknown_error_is_generic_with_type():
     head, nxt = friendly_error(ValueError("weird"))
     assert "ValueError" in head and "crash log" in nxt.lower()
+
+
+def test_friendly_by_name_maps_known_class_and_generic():
+    # the string-only path the TUI uses when it reconstructs a failure from a log/receipt
+    head, nxt = friendly_by_name("SourceError", "no video files")
+    assert "Input problem" in head and "no video files" in head and nxt
+    head, nxt = friendly_by_name("KaboomError", "weird")
+    assert "Unexpected KaboomError" in head and "crash log" in nxt.lower()
 
 
 def test_write_crash_log_captures_traceback(tmp_path):
