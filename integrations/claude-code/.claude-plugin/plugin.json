@@ -1,0 +1,7 @@
+{
+  "name": "eddy",
+  "version": "1.1.0",
+  "description": "Drive Eddy, a local-first agentic video editor, from Claude Code: full edits, shorts, run status, and launch-kit results via the eddy-mcp server.",
+  "author": { "name": "Lennox Saint" },
+  "keywords": ["video", "editing", "youtube", "shorts", "local-first", "agentic"]
+}
