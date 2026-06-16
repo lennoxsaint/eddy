@@ -164,3 +164,15 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 MERGED to master, tagged v0.4 (review SHIP-WITH-NITS, nits cleared). v0.5 branch cut.
 - v0.5 QA detect fix (175→), duration resolution, whisper language, ingest gates, no-speech gate, conftest+fixtures: suite to 194.
 - v0.5 unit-test sweep (8-agent Workflow, self-verified): doctor/retakes/protect/pack/captions/copy/layout/simulate; +88 tests; suite 194 → 282 green, ruff+mypy clean.
+
+## Post-GA (trunk-based on `main`, private GitHub remote)
+- **v1.1–v1.2** — mascot/MCP/plugin + the full-screen Textual TUI (tagged v1.1.0, v1.2.0).
+- **v1.3 "Eddy, simpler"** — TUI minimalism + honest feedback + reach (tagged v1.3.0; see docs/decision-log.md).
+- **v1.4 "No Sharp Edges"** (tagged v1.4.0) — 13-item batch from a 7-subsystem assessment, all autonomous:
+  five verified crash/leak fixes (console UTF-8, shorts video-None guard, subprocess error redaction,
+  copy fallbacks, whisper plain errors); in-app failure (F3) + artifact-preview (F4) modals + honest
+  reveal + offline thumbnail placeholder; package_run e2e + JobManager/CliProvider unit tests; retake
+  pause signal + post-cut pacing feedback; matrix-on-main + Node-20 action bumps + cross-platform
+  wheelhouse (`--target`). Suite 581→618, coverage 74.0%, ruff+mypy clean, fast CI + matrix green.
+- Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
+  spend) remains open by design — none are coding-agent tasks.
