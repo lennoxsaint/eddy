@@ -17,7 +17,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        # apt on ubuntu-latest (24.04) ships ffmpeg 6.x, but Eddy's preflight requires 8+ and the
+        # real-render tests run here. Use the same modern static build as the 3-OS matrix.
+        uses: federicocarboni/setup-ffmpeg@v3
 
       - name: Install (editable, with dev tools)
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
