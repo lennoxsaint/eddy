@@ -31,6 +31,16 @@ def test_wheelhouse_builder_present_and_executable():
     assert "--no-index" in body and "requirements.lock" in body
 
 
+def test_wheelhouse_builder_supports_cross_platform_targets():
+    # one connected machine can stage a wheelhouse for another OS/arch (correct-arch wheels)
+    body = (ROOT / "scripts" / "build_wheelhouse.sh").read_text()
+    assert "--target" in body and "--platform" in body
+    for tag in ("manylinux", "win_amd64", "macosx_11_0_arm64"):
+        assert tag in body, f"missing platform tag {tag}"
+    doc = (ROOT / "docs" / "AIRGAP.md").read_text()
+    assert "--target" in doc
+
+
 def test_airgap_doc_covers_the_four_stages():
     doc = (ROOT / "docs" / "AIRGAP.md").read_text().lower()
     for needle in ("wheelhouse", "--no-index", "ffmpeg", "ollama", "local_files_only", "--local-only"):

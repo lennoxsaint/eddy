@@ -17,14 +17,29 @@ offline mode:
 
 ## 1. Build the wheelhouse (connected machine)
 
-> Build on the **same OS, Python minor version (3.11/3.12), and CPU architecture** as the target —
-> Python wheels are platform-specific.
+Python wheels are platform-specific. By default the builder targets the **host** OS/arch:
 
 ```bash
-scripts/build_wheelhouse.sh            # writes ./wheelhouse
+scripts/build_wheelhouse.sh            # writes ./wheelhouse for THIS machine
 ```
 
-This downloads Eddy + every pinned dependency (from `requirements.lock`) as wheels. Verify the
+To stage a **different** platform from one connected machine (e.g. prepare a Linux box from your
+Mac), pass `--target` — pip fetches the target's wheels by platform tag, so `onnxruntime`/`numpy`/`av`
+come down for the right arch instead of the host's. Pin the Python minor with `--python` (wheels are
+version-specific):
+
+```bash
+scripts/build_wheelhouse.sh ./wheelhouse-linux --target linux   --python 312
+scripts/build_wheelhouse.sh ./wheelhouse-win   --target windows --python 312
+# targets: host (default) | linux | windows | macos-arm | macos-x86
+```
+
+A foreign target uses `--only-binary=:all:`, so if a dependency has no wheel for that platform the
+build fails **on the connected machine** rather than shipping a broken/wrong-arch closure. (Eddy's
+own wheel is pure-Python `py3-none-any`, so it installs on every target regardless of where it was
+built.)
+
+Both modes download Eddy + every pinned dependency (from `requirements.lock`) as wheels. Verify the
 closure is self-contained **without touching the network**:
 
 ```bash

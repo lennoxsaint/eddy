@@ -4,15 +4,21 @@ on:
   push:
   pull_request:
 
+# Cancel an in-progress run when a newer commit lands on the same ref — saves runner minutes on
+# rapid pushes without losing signal (the newest commit is the one that matters).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # full history so the git-describe version resolves
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
