@@ -129,15 +129,9 @@ class HomeScreen(Screen):
 
     @work(thread=True, exclusive=True)
     def _interpret(self, text: str) -> None:
-        provider = None
-        try:
-            from eddy.config import load_config
-            from eddy.providers.base import get_provider
+        from eddy.tui.runner import local_provider
 
-            provider = get_provider(load_config())
-        except Exception:
-            provider = None
-        intent = interpret_nl(text, provider)
+        intent = interpret_nl(text, local_provider())  # local brain only — never a billable cloud call
         self.app.call_from_thread(self._handle_intent, intent)
 
     def _handle_intent(self, intent: Intent) -> None:

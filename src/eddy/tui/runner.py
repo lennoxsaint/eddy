@@ -20,6 +20,18 @@ from eddy.tui.intents import Intent
 _MAX_TEXT = 20_000
 
 
+def local_provider() -> Any:
+    """The LOCAL brain (Ollama) for interpreting natural-language input — never a cloud provider, so a
+    typed sentence can't silently bill an API call. Returns None if no local brain is available (the
+    caller then degrades gracefully)."""
+    try:
+        from eddy.providers.base import get_provider
+
+        return get_provider(load_config(), name="ollama")
+    except Exception:
+        return None
+
+
 class TuiData:
     def __init__(self, jobs: JobManager | None = None, cfg: Any = None) -> None:
         self.cfg = cfg or load_config()

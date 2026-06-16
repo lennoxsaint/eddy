@@ -79,3 +79,18 @@ def test_execute_purge_passes_full(tmp_path, monkeypatch):
 
 def test_brain_label(tmp_path):
     assert "ollama" in _data(tmp_path).brain_label()
+
+
+def test_local_provider_pins_to_ollama(monkeypatch):
+    # NL interpretation must use the LOCAL brain, never the (possibly cloud) active provider.
+    seen = {}
+
+    def fake_get_provider(cfg, name=None, receipts=None):
+        seen["name"] = name
+        return object()
+
+    monkeypatch.setattr("eddy.providers.base.get_provider", fake_get_provider)
+    from eddy.tui.runner import local_provider
+
+    assert local_provider() is not None
+    assert seen["name"] == "ollama"
