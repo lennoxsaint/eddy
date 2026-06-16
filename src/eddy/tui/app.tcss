@@ -1,0 +1,69 @@
+/* Eddy TUI — gold-on-slate brand. */
+
+Screen {
+    layout: vertical;
+}
+
+#hdr {
+    height: 9;
+    padding: 0 1;
+    border-bottom: solid #2b313c;
+}
+
+#eagle {
+    width: 16;
+    height: 9;
+    content-align: center middle;
+}
+
+#title {
+    padding: 1 0 0 2;
+    height: 9;
+}
+
+#main {
+    height: 1fr;
+}
+
+#runs {
+    width: 38;
+    border: round #f5b836;
+    border-title-color: #f5b836;
+}
+
+#monitorwrap {
+    width: 1fr;
+    border: round #444b57;
+    padding: 0 1;
+}
+
+#cmd {
+    height: 3;
+    border: round #f5b836;
+    margin: 0 0 0 0;
+}
+
+/* modals */
+ConfirmScreen, DoctorScreen {
+    align: center middle;
+}
+
+#dialog {
+    width: 64;
+    max-width: 90%;
+    height: auto;
+    max-height: 80%;
+    border: round #f5b836;
+    background: $panel;
+    padding: 1 2;
+}
+
+#dbtns {
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+#dbtns Button {
+    margin: 0 2;
+}

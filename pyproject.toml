@@ -36,9 +36,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.setuptools.package-data]
-eddy = ["prompts/*.md"]
+eddy = ["prompts/*.md", "tui/*.tcss"]
 
 [tool.ruff]
 line-length = 120
