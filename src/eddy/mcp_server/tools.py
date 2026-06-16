@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from eddy.config import load_config
-from eddy.mcp_server.jobs import JobManager
+from eddy.jobs import JobManager
 
 _MAX_TEXT = 200_000  # cap on any single text artifact returned to a client
 
