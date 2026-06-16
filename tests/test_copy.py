@@ -13,6 +13,7 @@ from eddy.package.copy import (
     chapters,
     chapters_block,
     description,
+    titles,
 )
 
 
@@ -209,3 +210,42 @@ def test_description_strips_em_dashes():
     desc = description([{"text": "x"}], chaps, _EmDashProvider(), _Receipts())
     assert "—" not in desc
     assert "before - after" in desc
+
+
+def test_titles_fallback_when_model_fails(monkeypatch, tmp_path):
+    # a brain hiccup must NOT fail the whole launch kit — titles fall back to grounded keyphrases
+    monkeypatch.setattr("eddy.package.copy.PROMPTS", tmp_path, raising=True)
+    (tmp_path / "titles.md").write_text("PROMPT")
+    rcpt = _Receipts()
+    kept = [
+        {"text": "the single biggest mistake creators make with their hooks"},
+        {"text": "ok"},  # too short to become a title
+        {"text": "why your first three seconds decide everything"},
+    ]
+    out = titles(kept, _DeadProvider(), rcpt)
+    assert out and all("title" in t and "grounding_quote" in t for t in out)
+    assert "—" not in out[0]["title"]  # still em-dash-free
+    # longest substantive phrase becomes the top candidate
+    assert out[0]["title"].startswith("the single biggest mistake")
+    assert any(ev == "titles_fallback" for ev, _ in rcpt.events)
+    assert any(ev == "titles" for ev, _ in rcpt.events)
+
+
+def test_titles_fallback_handles_no_usable_phrases():
+    out = titles([{"text": "hi"}], _DeadProvider(), _Receipts())
+    assert len(out) == 1 and out[0]["title"] == "Untitled edit"
+
+
+def test_description_fallback_when_model_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr("eddy.package.copy.PROMPTS", tmp_path, raising=True)
+    (tmp_path / "description.md").write_text("PROMPT")
+    chaps = [{"out_s": 0.0, "label": "Start"}, {"out_s": 90.0, "label": "The Payoff"}]
+    rcpt = _Receipts()
+    desc = description(
+        [{"text": "we open the video here"}, {"text": "we wrap up"}],
+        chaps, _DeadProvider(), rcpt, cta="Join at example.com/plans",
+    )
+    assert "0:00 Start" in desc and "1:30 The Payoff" in desc  # chapters block survives
+    assert "Join at example.com/plans" in desc  # CTA preserved
+    assert "we open the video here" in desc  # lead drawn from the transcript
+    assert any(ev == "description_fallback" for ev, _ in rcpt.events)

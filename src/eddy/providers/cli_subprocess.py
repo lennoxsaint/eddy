@@ -10,6 +10,7 @@ import time
 from typing import Any
 
 from eddy.config import CliProviderConfig
+from eddy.privacy import redact_paths
 from eddy.providers.base import ProviderError, extract_json, validate_against
 
 TIMEOUT_S = 1200
@@ -71,7 +72,10 @@ class CliProvider:
                     timeout=TIMEOUT_S,
                 )
                 if proc.returncode != 0:
-                    detail = (proc.stderr.strip() or proc.stdout.strip())[-500:]
+                    # The CLI's stderr can echo absolute paths (and occasionally prompt context) that
+                    # would otherwise land unredacted in receipts.jsonl. Scrub paths before it goes
+                    # anywhere — privacy is Eddy's core promise.
+                    detail = redact_paths((proc.stderr.strip() or proc.stdout.strip())[-500:])
                     is_transient = proc.returncode in self.cfg.transient_exit_codes
                     if is_transient and settle_used < MAX_SETTLE_RETRIES:
                         # configured transient code: pause to settle, then retry without

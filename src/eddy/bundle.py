@@ -10,25 +10,22 @@ from __future__ import annotations
 
 import json
 import platform
-import re
 import shutil
 import tempfile
 from pathlib import Path
+
+from eddy.privacy import redact_paths
 
 # keys whose string values carry transcript-derived content (PII)
 _REDACT_KEYS = {
     "quote", "text", "summary", "reason", "hook", "title", "description",
     "before_text", "after_text", "removed_summary", "prompt", "fix_note", "label", "error",
 }
-# scrub ANY absolute path, not just home roots — footage often lives on /Volumes, /mnt, an external
-# SSD or a NAS, and the filename itself can be sensitive. Over-redacting paths is the safe choice
-# for a diagnostic archive.
-# the path must START at a boundary (not preceded by a word char/dot) so a relative "a/b" isn't hit
-_ABS_PATH = re.compile(r"(?<![\w.])(/[^\s\"]+|[A-Za-z]:\\[^\s\"]+)")
 
 
 def _scrub(s: str) -> str:
-    return _ABS_PATH.sub("[path]", s)
+    # absolute-path scrub lives in eddy.privacy now (shared with the CLI-subprocess provider)
+    return redact_paths(s)
 
 
 def _redact(obj):

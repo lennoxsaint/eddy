@@ -4,13 +4,21 @@ the offline flag threading; not unit-tested here to avoid downloading weights.)"
 
 from eddy.config import load_config
 from eddy.package.thumbnails import generate_thumbnails
-from eddy.privacy import is_offline
+from eddy.privacy import is_offline, redact_paths
 from eddy.providers.base import get_editorial_provider
 
 
 class _R:
     def log(self, *a, **k):
         pass
+
+
+def test_redact_paths_scrubs_absolute_paths_keeps_prose():
+    # absolute POSIX + Windows paths are scrubbed (they can leak footage location / intent)...
+    assert redact_paths("failed at /Users/x/footage/secret.mp4 now") == "failed at [path] now"
+    assert redact_paths(r"opening C:\Users\x\clip.mov broke") == "opening [path] broke"
+    # ...but a relative path inside ordinary prose is left intact
+    assert redact_paths("see config a/b.txt here") == "see config a/b.txt here"
 
 
 def test_is_offline_reads_env(monkeypatch):

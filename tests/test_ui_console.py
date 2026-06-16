@@ -82,3 +82,47 @@ def test_status_helpers_render():
     ui.console().print(ui.banner("editing"))
     out = buf.getvalue()
     assert "done" in out and "hmm" in out and "nope" in out and "EDDY" in out
+
+
+# --- harden_stdout: Eddy's ✓/✗/▸ glyphs must never crash a legacy (cp1252) console -----------------
+class _Reconfigurable:
+    def __init__(self, encoding: str) -> None:
+        self.encoding = encoding
+        self.reconfigured: tuple | None = None
+
+    def reconfigure(self, encoding=None, errors=None) -> None:
+        self.reconfigured = (encoding, errors)
+        self.encoding = encoding
+
+
+def test_harden_stdout_reconfigures_non_utf8(monkeypatch):
+    out, err = _Reconfigurable("cp1252"), _Reconfigurable("ascii")
+    monkeypatch.setattr("eddy.ui.console.sys.stdout", out)
+    monkeypatch.setattr("eddy.ui.console.sys.stderr", err)
+    ui.harden_stdout()
+    assert out.reconfigured == ("utf-8", "replace")
+    assert err.reconfigured == ("utf-8", "replace")
+
+
+def test_harden_stdout_noop_on_utf8(monkeypatch):
+    # already-UTF-8 streams (any spelling) are left untouched
+    out, err = _Reconfigurable("utf-8"), _Reconfigurable("UTF-8")
+    monkeypatch.setattr("eddy.ui.console.sys.stdout", out)
+    monkeypatch.setattr("eddy.ui.console.sys.stderr", err)
+    ui.harden_stdout()
+    assert out.reconfigured is None and err.reconfigured is None
+
+
+def test_harden_stdout_survives_unreconfigurable_and_failing_streams(monkeypatch):
+    class _Plain:  # no reconfigure attr (e.g. a captured buffer)
+        encoding = "ascii"
+
+    class _Bad:
+        encoding = "cp1252"
+
+        def reconfigure(self, **k):
+            raise ValueError("detached buffer")
+
+    monkeypatch.setattr("eddy.ui.console.sys.stdout", _Plain())
+    monkeypatch.setattr("eddy.ui.console.sys.stderr", _Bad())
+    ui.harden_stdout()  # must not raise on either

@@ -31,4 +31,7 @@ class EddyApp(App):
 
 def run_tui(data: TuiData | None = None) -> None:
     """Launch the Eddy TUI (blocks until the user quits)."""
+    from eddy.ui.console import harden_stdout
+
+    harden_stdout()  # UTF-8 before Textual takes the terminal (eagle + labels use unicode)
     EddyApp(data=data).run()

@@ -103,19 +103,61 @@ def _no_em_dashes(text: str) -> str:
     return text.replace("\u2014", " - ").replace("\u2013", "-").replace("  ", " ")
 
 
+def _keyphrase_titles(kept_phrases: list[dict]) -> list[dict]:
+    """Deterministic last-resort titles when the brain is unavailable: the longest substantive kept
+    phrases become grounded candidates. Honest, lower-craft copy beats failing the whole launch kit
+    after a successful edit+render \u2014 same survive-a-hiccup policy as chapters()."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for p in sorted(kept_phrases, key=lambda x: -len(x.get("text", ""))):
+        text = " ".join(p.get("text", "").split())
+        if len(text) < 15:
+            continue
+        title = text if len(text) <= 70 else text[:70].rsplit(" ", 1)[0]
+        key = title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "title": _no_em_dashes(title),
+            "grounding_quote": text[:140],
+            "mechanism": "",
+            "rationale": "fallback: model copy unavailable, derived from the transcript",
+        })
+        if len(out) >= 5:
+            break
+    if not out:
+        out.append({"title": "Untitled edit", "grounding_quote": "", "mechanism": "",
+                    "rationale": "fallback: no usable transcript phrases"})
+    return out
+
+
 def titles(kept_phrases: list[dict], provider, receipts: Receipts) -> list[dict]:
     prompt = (PROMPTS / "titles.md").read_text()
     transcript = "\n".join(p["text"] for p in kept_phrases)
-    result = provider.complete(
-        [{"role": "user", "content": f"{prompt}\n\nFINAL CUT TRANSCRIPT:\n{transcript}"}],
-        schema=TITLES_SCHEMA,
-        max_tokens=2048,
-    )
-    receipts.log("titles", count=len(result["titles"]))
-    cleaned = result["titles"][:10]
-    for item in cleaned:
-        item["title"] = _no_em_dashes(item["title"])
+    try:
+        result = provider.complete(
+            [{"role": "user", "content": f"{prompt}\n\nFINAL CUT TRANSCRIPT:\n{transcript}"}],
+            schema=TITLES_SCHEMA,
+            max_tokens=2048,
+        )
+        cleaned = result["titles"][:10]
+        for item in cleaned:
+            item["title"] = _no_em_dashes(item["title"])
+    except Exception as e:
+        receipts.log("titles_fallback", error=str(e)[:200])
+        cleaned = _keyphrase_titles(kept_phrases)
+    receipts.log("titles", count=len(cleaned))
     return cleaned
+
+
+def _fallback_description(kept_phrases: list[dict], block: str, cta: str) -> str:
+    """Boilerplate description from the opening transcript + chapters when the brain is unavailable."""
+    lead = _no_em_dashes(" ".join(p.get("text", "").strip() for p in kept_phrases[:3]).strip())[:400]
+    parts = [p for p in (lead, cta.strip() if cta else "") if p]
+    if block:
+        parts.append("Chapters:\n" + block)
+    return "\n\n".join(parts) or "Edited with Eddy."
 
 
 def description(kept_phrases: list[dict], chaps: list[dict], provider, receipts: Receipts, cta: str = "") -> str:
@@ -126,8 +168,12 @@ def description(kept_phrases: list[dict], chaps: list[dict], provider, receipts:
     if cta:
         content += f"CTA LINE (verbatim, after chapters):\n{cta}\n\n"
     content += f"FINAL CUT TRANSCRIPT:\n{transcript}"
-    result = provider.complete([{"role": "user", "content": content}], schema=DESCRIPTION_SCHEMA, max_tokens=2048)
-    desc = _no_em_dashes(result["description"])
+    try:
+        result = provider.complete([{"role": "user", "content": content}], schema=DESCRIPTION_SCHEMA, max_tokens=2048)
+        desc = _no_em_dashes(result["description"])
+    except Exception as e:
+        receipts.log("description_fallback", error=str(e)[:200])
+        desc = _fallback_description(kept_phrases, block, cta)
     if block and block not in desc:
         desc = desc.rstrip() + "\n\nChapters:\n" + block
     receipts.log("description", chars=len(desc))

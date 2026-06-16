@@ -23,7 +23,7 @@ from eddy.media.probe import stream_summary
 from eddy.render import layout as L
 from eddy.render.captions import burn_captions, caption_events
 from eddy.render.long import latest_iteration_dir
-from eddy.runs import manifest
+from eddy.runs import SourceError, manifest
 from eddy.transcribe.whisper import words_flat
 
 MARKER_PATTERNS = (
@@ -165,6 +165,15 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
     screen = Path(m["sources"].get("screen", "")) if m["sources"].get("screen") else None
     dual = screen is not None and screen.exists()
 
+    # Shorts compose a vertical *video* layout — fail loud at the top if the camera has no video
+    # stream (audio-only/corrupt source) instead of crashing mid-render on a None["width"] deref.
+    cam_summary = stream_summary(camera)
+    if cam_summary["video"] is None:
+        raise SourceError(
+            f"no video stream in {camera.name} — shorts need a video track to build the vertical "
+            "layout (audio-only sources can't be made into shorts; try `eddy transcribe` instead)"
+        )
+
     out_root = run_dir / "final" / "shorts"
     out_root.mkdir(parents=True, exist_ok=True)
 
@@ -189,15 +198,15 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         asset_dir = out_root / slug
         asset_dir.mkdir(parents=True, exist_ok=True)
 
-        src_summary = stream_summary(camera)
+        src_video = cam_summary["video"]  # validated non-None above
         if dual:
             face_mask = asset_dir / "face-mask.png"
             screen_mask = asset_dir / "screen-mask.png"
             _rounded_mask(face_mask, (L.FACE_SIZE, L.FACE_SIZE), L.RADIUS)
             _rounded_mask(screen_mask, (L.SCREEN_W, L.SCREEN_H), L.RADIUS)
         else:
-            vw = src_summary["video"]["width"] or 1920
-            vh = src_summary["video"]["height"] or 1080
+            vw = src_video["width"] or 1920
+            vh = src_video["height"] or 1080
             panel_h = min(int(L.PANEL_W * vh / vw), 1100)
             stack_h = panel_h + 56 + L.CAPTION_H
             panel_y = max(60, (L.H - stack_h) // 2)
@@ -211,8 +220,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             seg_out.parent.mkdir(exist_ok=True)
             if dual:
                 assert screen is not None  # dual layout implies a screen source
-                cam_v = stream_summary(camera)["video"]
-                _render_segment_dual(camera, screen, seg_out, s, e, face_mask, screen_mask, cam_v["width"], cam_v["height"], run_dir)
+                _render_segment_dual(camera, screen, seg_out, s, e, face_mask, screen_mask, src_video["width"], src_video["height"], run_dir)
             else:
                 _render_segment_single(camera, seg_out, s, e, mask, panel_h, panel_y, run_dir)
             seg_paths.append(seg_out)
@@ -247,19 +255,21 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             studio_sound(final, run_dir, cfg.audio, receipts=receipts)
 
         final_summary = stream_summary(final)
+        fv = final_summary["video"]  # None only if our own render produced no video stream — QA-fail it
         entry = {
             "slug": slug,
             "hook": cand.hook,
             "path": str(final),
             "duration_s": round(final_summary["duration_s"], 1),
-            "resolution": f"{final_summary['video']['width']}x{final_summary['video']['height']}",
+            "resolution": f"{fv['width']}x{fv['height']}" if fv else "unknown",
             "segments": len(segs),
             "caption_events": len(events),
             "sentence_final": ends_on_complete_sentence(words),
             "layout": "dual" if dual else "single_composite",
             "qa_pass": (
-                final_summary["video"]["width"] == L.W
-                and final_summary["video"]["height"] == L.H
+                fv is not None
+                and fv["width"] == L.W
+                and fv["height"] == L.H
                 and len(events) > 0
                 and final_summary["audio"] is not None
             ),

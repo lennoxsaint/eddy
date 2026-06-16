@@ -12,7 +12,7 @@ from pathlib import Path
 
 from eddy.config import load_config
 from eddy.loop.receipts import Receipts
-from eddy.media.ffmpeg import run_ffmpeg
+from eddy.media.ffmpeg import FfmpegError, run_ffmpeg
 from eddy.runs import SourceError, manifest
 
 
@@ -55,11 +55,19 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
     audio_source = Path(m["sources"].get("mic") or m["sources"]["camera"])
     wav = run_dir / "transcript" / "audio-16k.wav"
     if not wav.exists():
-        run_ffmpeg(
-            ["-i", str(audio_source), "-vn", "-ac", "1", "-ar", "16000", str(wav)],
-            run_dir=run_dir,
-            receipts=receipts,
-        )
+        try:
+            run_ffmpeg(
+                ["-i", str(audio_source), "-vn", "-ac", "1", "-ar", "16000", str(wav)],
+                run_dir=run_dir,
+                receipts=receipts,
+            )
+        except FfmpegError as e:
+            # The commonest cause is a source with no audio track (silent screen-grab / video-only
+            # export) — say that plainly instead of dumping a raw ffmpeg stderr on the user.
+            raise SourceError(
+                f"couldn't extract audio from {audio_source.name} — does it have an audio track? "
+                "A silent or video-only file has nothing to transcribe."
+            ) from e
 
     from faster_whisper import WhisperModel
 
@@ -67,10 +75,24 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
 
     t0 = time.time()
     # offline/airgapped: never reach HuggingFace — use only already-downloaded weights.
-    model = WhisperModel(
-        cfg.transcribe.model, device="auto", compute_type=cfg.transcribe.compute_type,
-        local_files_only=is_offline(),
-    )
+    try:
+        model = WhisperModel(
+            cfg.transcribe.model, device="auto", compute_type=cfg.transcribe.compute_type,
+            local_files_only=is_offline(),
+        )
+    except Exception as e:
+        msg = str(e).lower()
+        if any(k in msg for k in ("compute", "float16", "efficient", "not support")):
+            raise SourceError(
+                f"Whisper can't use compute_type='{cfg.transcribe.compute_type}' on this machine — "
+                "set [transcribe] compute_type to 'int8' (CPU) or 'float16' (a CUDA GPU) in your config."
+            ) from e
+        if is_offline():
+            raise SourceError(
+                f"Whisper model '{cfg.transcribe.model}' isn't available offline — download it once "
+                "online, or stage it per docs/AIRGAP.md, before running with --local-only."
+            ) from e
+        raise
     # "" (config) or None -> auto-detect; --language / config forces a specific language.
     lang = (language or cfg.transcribe.language) or None
     segments, info = model.transcribe(

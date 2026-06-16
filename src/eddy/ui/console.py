@@ -49,11 +49,34 @@ _THEME = Theme(
 _console: Console | None = None
 
 
+def harden_stdout() -> None:
+    """Make stdout/stderr UTF-8 so Eddy never crashes on its own output.
+
+    Eddy draws ✓/✗/⚠/▸/→ and the eagle's box glyphs. On a legacy Windows console (cp1252) — or any
+    stream whose encoding can't map those — a plain ``print`` or Rich write raises
+    ``UnicodeEncodeError`` mid-run. Reconfigure both streams to UTF-8, replacing the rare unmappable
+    glyph rather than dying. Idempotent and a no-op where already UTF-8 or where the stream can't be
+    reconfigured (e.g. a captured buffer in tests). This also covers plain ``print`` paths (e.g. the
+    shorts ledger / abpick) that never touch the Rich console, so it's the one global safety net."""
+    for stream in (sys.stdout, sys.stderr):
+        enc = (getattr(stream, "encoding", "") or "").lower().replace("-", "").replace("_", "")
+        if enc == "utf8":
+            continue
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass  # detached/non-text stream — leave it; callers degrade, they don't crash here
+
+
 def console() -> Console:
     """The shared Rich console. Colour is left to Rich's own detection (terminal + ``NO_COLOR``), so
     piping to a file or the MCP subprocess yields plain text automatically."""
     global _console
     if _console is None:
+        harden_stdout()  # before the first write, so glyphs never hit a cp1252 console
         _console = Console(theme=_THEME, highlight=False)
     return _console
 

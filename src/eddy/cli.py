@@ -67,6 +67,9 @@ def _main(
     no_tui: bool = typer.Option(False, "--no-tui", help="Print the banner instead of opening the full-screen TUI."),
 ) -> None:
     """Eddy CLI."""
+    from eddy.ui.console import harden_stdout
+
+    harden_stdout()  # UTF-8 every invocation, before any glyph hits a legacy console
     # Bare `eddy` (no subcommand) wakes Eddy: the TUI on a terminal, else the branded splash.
     if ctx.invoked_subcommand is None:
         _wake(no_tui)

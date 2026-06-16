@@ -2,9 +2,12 @@
 skipping the iterative edit loop and the long-form render. Orchestration is mocked at the stage
 boundaries; this asserts the sequence and that the long edit_loop is NOT invoked."""
 
+import pytest
+
 import eddy.edit.cutplan as cutplan_mod
 import eddy.loop.controller as ctrl
 import eddy.render.shorts as shorts_mod
+from eddy.runs import SourceError
 
 
 def test_mine_shorts_runs_plan_then_shorts_no_long_loop(tmp_path, monkeypatch):
@@ -38,3 +41,20 @@ def test_mine_shorts_runs_plan_then_shorts_no_long_loop(tmp_path, monkeypatch):
     out = ctrl.mine_shorts(source="/x/ep.mp4")
     assert out == run_dir
     assert calls == ["preflight", "transcribe", "plan", "shorts", "verify"]
+
+
+def test_render_shorts_rejects_audio_only_source(tmp_path, monkeypatch):
+    """An audio-only / stream-less camera fails loud at the top, not with a None['width'] crash mid-render."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setattr(shorts_mod, "manifest", lambda rd: {"sources": {"camera": "/x/podcast.m4a"}})
+    monkeypatch.setattr(shorts_mod, "latest_iteration_dir", lambda rd: run_dir / "iterations" / "01")
+    monkeypatch.setattr(shorts_mod, "load_decisions", lambda p: object())
+    monkeypatch.setattr(shorts_mod, "words_flat", lambda rd: [])
+    # a source whose video stream probed to None (audio-only or corrupt)
+    monkeypatch.setattr(
+        shorts_mod, "stream_summary",
+        lambda p: {"video": None, "audio": {"codec": "aac"}, "duration_s": 12.0},
+    )
+    with pytest.raises(SourceError, match="no video stream"):
+        shorts_mod.render_shorts(run_dir)
