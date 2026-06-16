@@ -14,6 +14,9 @@ from eddy.tui.runner import TuiData
 class EddyApp(App):
     CSS_PATH = "app.tcss"
     TITLE = "EDDY"
+    # The command bar (NL + verbs + inline suggestions) already does everything the palette would, so
+    # we disable the palette rather than advertise a fourth, redundant command surface (^p) in the Footer.
+    ENABLE_COMMAND_PALETTE = False
     BINDINGS = [("ctrl+c", "quit", "Quit"), ("ctrl+q", "quit", "Quit")]
 
     def __init__(self, data: TuiData | None = None) -> None:

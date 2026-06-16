@@ -4,31 +4,46 @@ Screen {
     layout: vertical;
 }
 
+/* Header floors at 8 rows: the chibi eaglet sprite (~15px = 8 text rows) sets the height. The space
+   win comes from the compact 2-line title (was a 3-line gold block), not from clipping the mascot. */
 #hdr {
-    height: 9;
+    height: 8;
     padding: 0 1;
     border-bottom: solid #2b313c;
 }
 
 #eagle {
     width: 16;
-    height: 9;
+    height: 8;
     content-align: center middle;
 }
 
 #title {
     padding: 1 0 0 2;
-    height: 9;
+    height: 8;
 }
 
 #main {
     height: 1fr;
 }
 
+/* Slate border (not gold): the gold accent belongs on the input bar — the call to action — not on a
+   usually-empty list. border-title (set in code) names the box. */
 #runs {
     width: 38;
-    border: round #f5b836;
+    border: round #444b57;
     border-title-color: #f5b836;
+}
+
+/* Shown in place of the runs table when there are no runs yet — a calm, teaching empty state. */
+#runsempty {
+    display: none;
+    width: 38;
+    height: 1fr;
+    border: round #444b57;
+    padding: 1 1;
+    content-align: center middle;
+    text-align: center;
 }
 
 #monitorwrap {

@@ -81,6 +81,63 @@ def test_brain_label(tmp_path):
     assert "ollama" in _data(tmp_path).brain_label()
 
 
+def test_run_verdict_speaks_in_passes_not_floats():
+    from eddy.tui.runner import run_verdict
+
+    assert run_verdict({"phase": "done", "attempts": [{}, {}, {}]}) == "Kept the best of 3 editing passes."
+    assert run_verdict({"phase": "done", "attempts": [{}]}) == "Edited in a single clean pass."
+    assert run_verdict({"attempts": []}) is None
+    mid = run_verdict({"phase": "iteration_2", "attempts": [{"iteration": 2, "gates_passed": False}]})
+    assert "pass 2" in mid and "refining" in mid
+
+
+def test_log_tail_reads_job_log(tmp_path):
+    data = _data(tmp_path)
+    job = data.jobs.start_run("~/x.mp4")  # fake spawn wrote an empty log
+    job.log_path.write_text("line1\nline2\nlast line\n")
+    assert "last line" in data.log_tail(job.id)
+
+
+def test_cancel_delegates_to_jobmanager(tmp_path):
+    data = _data(tmp_path)
+    job = data.jobs.start_run("~/x.mp4")
+    terminated = {}
+    job.proc.terminate = lambda: terminated.setdefault("hit", True)  # _FakeProc.poll() is None (running)
+    res = data.cancel(job.id)
+    assert res["job_id"] == job.id and res["cancelled"] is True and terminated["hit"]
+
+
+def test_failed_jobs_lists_nonzero_exits(tmp_path):
+    data = _data(tmp_path)
+    job = data.jobs.start_run("~/x.mp4")
+    job.proc.poll = lambda: 1  # pretend the child exited non-zero
+    assert [j["job_id"] for j in data.failed_jobs()] == [job.id]
+
+
+def test_is_interrupted_for_unfinished_untracked_run(tmp_path):
+    _make_run(tmp_path, "wip", phase="final_render")  # progress on disk, no live job
+    _make_run(tmp_path, "fin", phase="done")
+    data = _data(tmp_path)
+    assert data.is_interrupted("wip") is True
+    assert data.is_interrupted("fin") is False
+
+
+def test_reveal_opens_existing_results(tmp_path, monkeypatch):
+    import eddy.tui.runner as runner_mod
+
+    _make_run(tmp_path, "demo")  # creates demo/final
+    seen: dict = {}
+    monkeypatch.setattr(runner_mod.sys, "platform", "linux")
+    monkeypatch.setattr(runner_mod.shutil, "which", lambda n: "/usr/bin/xdg-open")
+    monkeypatch.setattr(runner_mod.subprocess, "Popen", lambda argv, **k: seen.setdefault("argv", argv))
+    assert _data(tmp_path).reveal("demo") is True
+    assert "final" in str(seen["argv"][-1])
+
+
+def test_reveal_missing_run_returns_false(tmp_path):
+    assert _data(tmp_path).reveal("nope") is False
+
+
 def test_local_provider_pins_to_ollama(monkeypatch):
     # NL interpretation must use the LOCAL brain, never the (possibly cloud) active provider.
     seen = {}

@@ -9,15 +9,32 @@ the whole TUI is testable without launching real `eddy` processes.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 from eddy.batch import list_runs
 from eddy.config import load_config
-from eddy.jobs import JobManager
+from eddy.jobs import JobManager, _tail
 from eddy.tui.intents import Intent
 
 _MAX_TEXT = 20_000
+
+
+def run_verdict(state: dict) -> str | None:
+    """A plain, non-technical quality verdict from a run's state — or None when there's nothing to say
+    yet (no attempts). Deliberately avoids fabricating a quality band; it speaks in passes + outcome."""
+    attempts = state.get("attempts") or []
+    if not attempts:
+        return None
+    n = len(attempts)
+    last = attempts[-1]
+    if state.get("phase") == "done":
+        return f"Kept the best of {n} editing passes." if n > 1 else "Edited in a single clean pass."
+    tail = " — looking good" if last.get("gates_passed") else " — refining"
+    return f"Editing pass {last.get('iteration', n)}{tail}"
 
 
 def local_provider() -> Any:
@@ -82,6 +99,48 @@ class TuiData:
 
     def any_running(self) -> bool:
         return any(j.get("state") == "running" for j in self.jobs.list())
+
+    def failed_jobs(self) -> list[dict]:
+        """Finished jobs that exited non-zero (each status carries a `log_tail`)."""
+        return [j for j in self.jobs.list() if j.get("state") == "failed"]
+
+    def log_tail(self, slug: str, lines: int = 12) -> str:
+        """The last lines of a job's live log (runs_dir/.mcp-jobs/<slug>.log), '' if none yet."""
+        return _tail(self.cfg.runs_dir / ".mcp-jobs" / f"{slug}.log", lines)
+
+    def is_interrupted(self, slug: str) -> bool:
+        """A run with progress but neither finished nor currently live (resumable via `render`)."""
+        st = self.jobs.status(slug)
+        return st.get("state") == "interrupted"
+
+    # --- side-effecting helpers -------------------------------------------------------------------
+    def cancel(self, slug: str) -> dict:
+        """Stop a running job (delegates to JobManager.cancel)."""
+        return self.jobs.cancel(slug)
+
+    def reveal(self, slug: str) -> bool:
+        """Open a run's results in the OS file manager (final/ if present, else the run dir). Returns
+        False if there's nothing to show or no opener. This is a LOCAL folder reveal, not a URL."""
+        target = self.run_dir(slug) / "final"
+        if not target.exists():
+            target = self.run_dir(slug)
+        if not target.exists():
+            return False
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", str(target)])
+            elif sys.platform.startswith("win"):
+                import os
+
+                os.startfile(str(target))  # type: ignore[attr-defined]  # Windows-only
+            else:
+                opener = shutil.which("xdg-open")
+                if not opener:
+                    return False
+                subprocess.Popen([opener, str(target)])
+            return True
+        except Exception:
+            return False
 
     # --- actions ----------------------------------------------------------------------------------
     def execute(self, intent: Intent) -> dict:

@@ -9,7 +9,7 @@ import io
 from textual import on, work
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static
+from textual.widgets import Button, Footer, Static
 
 
 class DoctorScreen(ModalScreen[None]):
@@ -19,6 +19,7 @@ class DoctorScreen(ModalScreen[None]):
         with Vertical(id="dialog"):
             yield Static("[#f5b836 bold]doctor[/]\n\nchecking environment…", id="dtext")
             yield Button("Close", id="close")
+        yield Footer()
 
     def on_mount(self) -> None:
         self._probe()

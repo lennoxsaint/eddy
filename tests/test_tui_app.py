@@ -102,6 +102,40 @@ async def test_quit_command_exits(tmp_path):
     assert app._return_value is None  # app exited cleanly
 
 
+async def test_empty_state_when_no_runs(tmp_path):
+    app, _ = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        scr = app.screen
+        assert scr.query_one("#runsempty", Static).display is True
+        assert scr.query_one("#runs", DataTable).display is False
+
+
+async def test_failed_run_shows_error_eaglet(tmp_path):
+    app, data = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        job = data.jobs.start_run("~/x.mp4")
+        job.proc.poll = lambda: 1  # the child exited non-zero → failed
+        scr = app.screen
+        scr._was_running = True  # we'd seen it running, now it's finishing
+        scr._poll()
+        await pilot.pause()
+        assert scr.query_one("#eagle", EagleWidget).state == "error"  # NOT the happy bird
+
+
+async def test_suggester_completes_verb_path_and_slug(tmp_path):
+    from eddy.tui.screens.home import _CmdSuggester
+
+    (tmp_path / "Movies").mkdir()
+    sug = _CmdSuggester(lambda: ["2026-demo"])
+    assert await sug.get_suggestion("ru") == "run"
+    assert await sug.get_suggestion("open 2026") == "open 2026-demo"
+    assert await sug.get_suggestion(f"run {tmp_path}/Mov") == f"run {tmp_path}/Movies/"
+
+
 @pytest.mark.parametrize("state", ["idle", "working", "success", "error"])
 async def test_eagle_state_can_change(tmp_path, state):
     app, _ = _app(tmp_path)

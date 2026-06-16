@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from eddy.tui.widgets.eagle import EagleWidget
+from eddy.tui.widgets.eagle import EagleWidget, needs_ascii
+
+
+def test_needs_ascii_below_256_colors():
+    assert needs_ascii(None) is True  # no colour
+    assert needs_ascii("standard") is True  # 16-colour terminal — half-blocks unreadable
+    assert needs_ascii("256") is False
+    assert needs_ascii("truecolor") is False
 
 
 def test_renders_a_text_for_each_state():

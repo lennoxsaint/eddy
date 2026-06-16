@@ -1,16 +1,25 @@
 """The Eddy home screen: animated eaglet header, a runs list, a live run monitor, and a bottom input
 bar that takes Eddy commands, /slash commands, or plain-language requests (interpreted by the local
-brain, always confirmed). A 2s poll keeps the runs list + monitor + the eaglet's mood live."""
+brain, always confirmed). A 2s poll keeps the runs list + monitor + the eaglet's mood live.
+
+The copy is deliberately calm: a warm one-screen welcome (not a CLI cheat-sheet), engine phases shown
+as plain labels, and run quality led by a human verdict — the raw judge/gates numbers are demoted.
+"""
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from rich.markup import escape
 from textual import on, work
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
+from textual.suggester import Suggester
 from textual.widgets import DataTable, Footer, Input, Static
 
-from eddy.tui.intents import Intent, interpret_nl, parse_command
-from eddy.tui.runner import TuiData
+from eddy.tui import phases
+from eddy.tui.intents import ACTIONS, Intent, interpret_nl, parse_command
+from eddy.tui.runner import TuiData, run_verdict
 from eddy.tui.screens.confirm import ConfirmScreen
 from eddy.tui.screens.doctor import DoctorScreen
 from eddy.tui.widgets.eagle import EagleWidget
@@ -18,24 +27,85 @@ from eddy.tui.widgets.eagle import EagleWidget
 _GOLD = "#f5b836"
 _DIM = "#8b909b"
 
-_HELP = (
-    f"[{_GOLD} bold]Eddy[/] — type a command, a /slash, or just ask:\n\n"
-    "  run <footage> [minutes]   start a full edit\n"
-    "  shorts <footage>          mine vertical shorts\n"
-    "  render <run>              re-render a run\n"
-    "  open <run>                show a run's results\n"
-    "  clean <run> / purge <run> reclaim / delete (confirmed)\n"
-    "  doctor · runs · /help · /quit\n\n"
-    f"[{_DIM}]…or 'edit my podcast and keep it punchy' — the local brain interprets it (you confirm).[/]\n"
-    f"[{_DIM}]ctrl+d doctor · ctrl+r refresh · ctrl+c quit[/]"
+# A warm, minimal welcome — the first thing a (non-technical) creator sees. Plain words, one obvious
+# first action. The full command reference lives in _HELP (shown on /help or F1).
+_WELCOME = (
+    f"[{_GOLD} bold]Hi, I'm Eddy.[/] Drop in a video and I'll turn it into a finished YouTube kit —\n"
+    "privately, on your own machine. I check with you before anything big.\n\n"
+    "Just tell me what you want — in plain words or a command:\n\n"
+    f"  [{_GOLD}]run my footage[/]      edit a video start to finish\n"
+    f"  [{_GOLD}]shorts my footage[/]   make vertical shorts from it\n"
+    f"  [{_GOLD}]open a run[/]          show me a finished result\n\n"
+    f"[{_DIM}]Type /help for everything. F1 help · F2 doctor · ctrl+c quit.[/]"
 )
+
+# The full reference, shown on /help or F1 — keeps the power-user verbs (transcribe/clean/purge).
+_HELP = (
+    f"[{_GOLD} bold]Eddy — commands[/]   (or just ask in plain words)\n\n"
+    "  run <footage> [minutes]   edit a video start to finish\n"
+    "  shorts <footage>          make vertical shorts\n"
+    "  transcribe <footage>      transcript only\n"
+    "  render <run>              re-render an existing run\n"
+    "  open <run>                show + reveal a run's results\n"
+    "  clean <run>               reclaim a run's scratch space\n"
+    "  purge <run>               delete a run's data (asks first)\n"
+    "  doctor · runs · /help · /quit\n\n"
+    f"[{_DIM}]Keys: F5 refresh · F2 doctor · F1 help · ctrl+x cancel · ctrl+c quit.[/]"
+)
+
+
+def _complete_path(frag: str) -> str | None:
+    """Filesystem completion that EXTENDS the typed fragment (Textual requires the suggestion to start
+    with what's typed, so we keep the user's `~`/relative form rather than switching to absolute)."""
+    expanded = Path(frag).expanduser()
+    if frag.endswith("/"):
+        base, prefix, typed_dir = expanded, "", frag
+    else:
+        base, prefix = expanded.parent, expanded.name
+        typed_dir = frag[: len(frag) - len(prefix)]  # the dir part, verbatim as typed
+    try:
+        names = sorted(p.name + ("/" if p.is_dir() else "") for p in base.iterdir() if p.name.startswith(prefix))
+    except OSError:
+        return None
+    return typed_dir + names[0] if names else None
+
+
+class _CmdSuggester(Suggester):
+    """Inline ghost-completion for the command bar: filesystem paths for the footage verbs, run slugs
+    for the run verbs, and the verb vocabulary otherwise. Submission still goes through parse_command."""
+
+    def __init__(self, slugs) -> None:
+        super().__init__(use_cache=False, case_sensitive=False)
+        self._slugs = slugs  # callable -> current run slugs
+
+    async def get_suggestion(self, value: str) -> str | None:
+        if not value or value.startswith("/"):
+            return None
+        parts = value.split()
+        verb, mid = parts[0].lower(), value.endswith(" ")
+        if len(parts) == 1 and not mid:  # completing the verb itself
+            for cand in sorted(ACTIONS):
+                if cand.startswith(verb) and cand != verb:
+                    return cand
+            return None
+        frag = parts[-1]
+        head = value[: value.rfind(frag)]
+        if verb in {"run", "shorts", "transcribe"} and len(parts) >= 2 and not mid:
+            comp = _complete_path(frag)
+            return head + comp if comp else None
+        if verb in {"render", "open", "clean", "purge"} and len(parts) >= 2 and not mid:
+            for slug in self._slugs():
+                if slug.lower().startswith(frag.lower()):
+                    return head + slug
+        return None
 
 
 class HomeScreen(Screen):
     BINDINGS = [
-        ("ctrl+r", "refresh", "Refresh"),
-        ("ctrl+d", "doctor", "Doctor"),
+        ("f5", "refresh", "Refresh"),
+        ("f2", "doctor", "Doctor"),
         ("f1", "help", "Help"),
+        ("ctrl+x", "cancel_run", "Cancel"),
     ]
 
     def __init__(self, data: TuiData) -> None:
@@ -43,6 +113,8 @@ class HomeScreen(Screen):
         self.data = data
         self._selected: str | None = None
         self._was_running = False
+        self._slugs: list[str] = []
+        self._notified_fail: set[str] = set()
 
     def compose(self):
         with Horizontal(id="hdr"):
@@ -50,31 +122,41 @@ class HomeScreen(Screen):
             yield Static(id="title")
         with Horizontal(id="main"):
             yield DataTable(id="runs", cursor_type="row")
-            yield VerticalScroll(Static(_HELP, id="monitor"), id="monitorwrap")
-        yield Input(placeholder="run <footage> · doctor · /help · or just ask…", id="cmd")
+            yield Static(f"[{_DIM}]No edits yet —\ntype: run my footage[/]", id="runsempty")
+            yield VerticalScroll(Static(_WELCOME, id="monitor"), id="monitorwrap")
+        yield Input(placeholder="What should Eddy do?  (try: run my footage)", id="cmd",
+                    suggester=_CmdSuggester(lambda: self._slugs))
         yield Footer()
 
     def on_mount(self) -> None:
         from eddy import __version__
 
         self.query_one("#title", Static).update(
-            f"[{_GOLD} bold]EDDY[/]\n[{_DIM}]local-first agentic video editor[/]\n"
+            f"[{_GOLD} bold]EDDY[/]  [{_DIM}]· local-first agentic video editor[/]\n"
             f"[{_DIM}]brain: {self.data.brain_label()} · v{__version__}[/]"
         )
         table = self.query_one("#runs", DataTable)
         table.add_columns("run", "phase")
+        table.border_title = "runs"
         self._refresh_table()
         self.set_interval(2.0, self._poll)
         self.query_one("#cmd", Input).focus()
 
     # --- runs list ---------------------------------------------------------------------------------
     def _refresh_table(self) -> None:
+        runs = self.data.runs()
+        self._slugs = [r["slug"] for r in runs]
         table = self.query_one("#runs", DataTable)
+        empty = self.query_one("#runsempty", Static)
+        table.display = bool(runs)
+        empty.display = not runs
+        if not runs:
+            return
         prev = self._selected
         table.clear()
-        for r in self.data.runs():
-            table.add_row(r["slug"], r.get("phase", "?"), key=r["slug"])
-        if prev and prev in [r["slug"] for r in self.data.runs()]:
+        for r in runs:
+            table.add_row(r["slug"], phases.friendly(r.get("phase")), key=r["slug"])
+        if prev and prev in self._slugs:
             try:
                 table.move_cursor(row=table.get_row_index(prev))
             except Exception:
@@ -93,23 +175,31 @@ class HomeScreen(Screen):
     def _update_monitor(self, slug: str) -> None:
         d = self.data.run_detail(slug)
         st = d["state"]
-        lines = [f"[{_GOLD} bold]{slug}[/]", f"phase: {st.get('phase', '?')}"]
+        lines = [f"[{_GOLD} bold]{escape(slug)}[/]", phases.label(st.get("phase"))]
+        verdict = run_verdict(st)
+        if verdict:
+            lines.append(verdict)
         attempts = st.get("attempts") or []
-        if attempts:
+        if attempts:  # raw engine numbers, demoted to a dim secondary line for power users
             a = attempts[-1]
             lines.append(
-                f"iter {a.get('iteration', '?')} · q{a.get('quality', 0):.2f} · judge {a.get('judge_score', 0):.1f}"
-                f" · gates {'✓' if a.get('gates_passed') else '✗'}"
+                f"[{_DIM}]iter {a.get('iteration', '?')} · q{a.get('quality', 0):.2f} · "
+                f"judge {a.get('judge_score', 0):.1f} · gates {'✓' if a.get('gates_passed') else '✗'}[/]"
             )
-        if st.get("best_iter") is not None:
-            lines.append(f"best: iteration {st['best_iter']}")
+        if self.data.is_interrupted(slug):
+            lines.append(f"[{_GOLD}]interrupted — type: render {escape(slug)} to resume[/]")
         if d["artifacts"]:
             lines.append("")
-            lines.append(f"[{_DIM}]final/:[/] {', '.join(d['artifacts'][:12])}")
+            lines.append(f"[{_DIM}]results:[/] {escape(', '.join(d['artifacts'][:12]))}")
+        if any(j.get("job_id") == slug and j.get("state") == "running" for j in self.data.jobs_status()):
+            tail = self.data.log_tail(slug, 10)
+            if tail:
+                lines.append("")
+                lines.append(f"[{_DIM}]{escape(tail)}[/]")
         titles = self.data.artifact_text(slug, "titles.md")
         if titles:
             lines.append("")
-            lines.append(f"[{_DIM}]titles:[/]\n{titles[:600]}")
+            lines.append(f"[{_DIM}]titles:[/]\n{escape(titles[:600])}")
         self.query_one("#monitor", Static).update("\n".join(lines))
 
     # --- input / intents ---------------------------------------------------------------------------
@@ -157,6 +247,7 @@ class HomeScreen(Screen):
             if slug:
                 self._selected = slug
                 self._update_monitor(slug)
+                self._status(f"opened {slug}" if self.data.reveal(slug) else f"showing {slug} (no results folder yet)")
             return
         if intent.needs_confirm:
             self.app.push_screen(ConfirmScreen(intent.describe()), lambda ok: self._maybe_exec(ok, intent))
@@ -186,6 +277,25 @@ class HomeScreen(Screen):
             self._selected = res["job_id"]
             self._set_eagle("working")
 
+    # --- cancel ------------------------------------------------------------------------------------
+    def action_cancel_run(self) -> None:
+        slug = self._selected
+        if not slug:
+            self._status("select a run first, then ctrl+x to cancel")
+            return
+        if not any(j.get("job_id") == slug and j.get("state") == "running" for j in self.data.jobs_status()):
+            self._status(f"{slug} isn't running")
+            return
+        self.app.push_screen(ConfirmScreen(f"cancel {slug}?"), lambda ok: self._do_cancel(ok, slug))
+
+    def _do_cancel(self, ok: bool | None, slug: str) -> None:
+        if ok:
+            self.data.cancel(slug)
+            self._status(f"cancelling {slug}")
+            self._refresh_table()
+        else:
+            self._status("kept running")
+
     # --- polling / status --------------------------------------------------------------------------
     def _poll(self) -> None:
         self._refresh_table()
@@ -196,10 +306,24 @@ class HomeScreen(Screen):
             eagle.set_state("working")
         elif self._was_running:
             self._was_running = False
-            eagle.set_state("success")
-            self.set_timer(3.0, lambda: eagle.set_state("idle") if not self.data.any_running() else None)
+            self._show_finish(eagle)
         if self._selected:
             self._update_monitor(self._selected)
+
+    def _show_finish(self, eagle: EagleWidget) -> None:
+        """Eaglet tells the truth: a failed run shows the sad bird + a notify, not the happy one."""
+        new_failures = [j for j in self.data.failed_jobs() if j["job_id"] not in self._notified_fail]
+        if new_failures:
+            eagle.set_state("error")
+            for j in new_failures:
+                self._notified_fail.add(j["job_id"])
+                tail = (j.get("log_tail") or "").strip().splitlines()
+                self._status(f"{j['job_id']} failed — {tail[-1] if tail else 'see the run for details'}")
+            delay = 5.0
+        else:
+            eagle.set_state("success")
+            delay = 3.0
+        self.set_timer(delay, lambda: eagle.set_state("idle") if not self.data.any_running() else None)
 
     def _set_eagle(self, state: str) -> None:
         self.query_one("#eagle", EagleWidget).set_state(state)
