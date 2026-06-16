@@ -216,12 +216,25 @@ def revise_decisions(
     directive: list[dict],
     iteration: int,
 ) -> EditDecisions:
+    from eddy.edit.simulate import latest_post_cut_density
+
     prompt = (PROMPTS / "revise.md").read_text()
     phrases = load_phrases(run_dir)
     prev_json = json.dumps(previous.model_dump(exclude={"x_eddy"}), indent=1)
+    # Close the pacing feedback loop: show the model the POST-CUT pacing its last edit produced
+    # (was re-sending only the pre-cut raw density, so it never saw whether a draggy beat got tighter).
+    density = latest_post_cut_density(run_dir)
+    pacing_block = ""
+    if density:
+        lines = "\n".join(f"- {b['label']}: {b['kept_s']:.0f}s kept @ {b['wpm']:.0f}wpm" for b in density)
+        pacing_block = (
+            "PACING AFTER YOUR LAST EDIT (post-cut; a long kept span at LOW wpm is still draggy — "
+            f"cut harder there):\n{lines}\n\n"
+        )
     content = (
         f"{prompt}\n\n"
         f"YOUR PREVIOUS DECISIONS:\n{prev_json}\n\n"
+        f"{pacing_block}"
         f"REVISION DIRECTIVE:\n{json.dumps(directive, indent=1)}\n\n"
         f"{fence('TRANSCRIPT', packed_lines(phrases))}"
     )

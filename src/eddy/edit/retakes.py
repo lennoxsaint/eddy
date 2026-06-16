@@ -59,6 +59,11 @@ def retake_candidates(raw_words: list[dict], max_gap_s: float = 120.0, limit: in
             if key in seen:
                 continue
             seen.add(key)
+            # Silence right before the second attempt is the classic retake tell (speaker stops,
+            # then restarts). A near-zero pause is more likely natural repetition — the deliberate
+            # recurrence of a key phrase, not a flub. We surface this as a HINT and let the model
+            # adjudicate (detection stays permissive on purpose); it doesn't reorder candidates.
+            pause_before = words[right]["start"] - words[right - 1]["end"] if right > 0 else 0.0
             candidates.append(
                 {
                     "phrase": " ".join(tokens),
@@ -66,6 +71,7 @@ def retake_candidates(raw_words: list[dict], max_gap_s: float = 120.0, limit: in
                     "first_start_s": round(words[left]["start"], 2),
                     "second_start_s": round(words[right]["start"], 2),
                     "gap_s": round(gap, 1),
+                    "pause_before_second_s": round(max(0.0, pause_before), 2),
                     "context_first": _context(words, left),
                     "context_second": _context(words, right),
                 }

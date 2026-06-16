@@ -45,6 +45,14 @@ def test_obvious_retake_repetition_detected():
     assert "welcome" in top["phrase"]
 
 
+def test_retake_carries_pause_before_second():
+    # the silence right before the restart is the retake tell the model adjudicates on (v1.4 #11)
+    first = words_from_phrase("welcome creators building powerful systems", start=0.0)
+    second = words_from_phrase("welcome creators building powerful systems", start=10.0)
+    top = retake_candidates(first + second)[0]
+    assert top["pause_before_second_s"] > 0.5  # ~8s silence before the second take
+
+
 def test_retake_gap_matches_start_delta():
     first = words_from_phrase("scaling content pipelines daily", start=0.0)
     second = words_from_phrase("scaling content pipelines daily", start=8.0)

@@ -60,6 +60,20 @@ def raw_beat_density(beats: list[dict], phrases: list[dict]) -> list[dict]:
     return out
 
 
+def latest_post_cut_density(run_dir: Path) -> list[dict]:
+    """The most recent iteration's post-cut beat density (kept_s + wpm per beat), or [] if none yet.
+
+    The revise loop uses this to show the model the pacing its LAST cuts actually produced, instead of
+    re-sending the pre-cut raw density every pass — so it can see whether a draggy beat got tighter."""
+    reports = sorted((Path(run_dir) / "iterations").glob("*/sim-report.json"))
+    if not reports:
+        return []
+    try:
+        return json.loads(reports[-1].read_text()).get("beat_density", []) or []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
 def simulate(
     edl: Edl,
     decisions: EditDecisions,

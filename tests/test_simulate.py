@@ -6,12 +6,52 @@ pass, dead-air detection (and protected-moment exemption), thin-handle gating,
 and the kept-phrase beat_density (heaviest-first + wpm).
 """
 
+import json
+
 from eddy.config import EddyConfig
 from eddy.edit.schema import EddyMeta, EditDecisions, Edl, EdlRange, ProtectedMoment
-from eddy.edit.simulate import simulate
+from eddy.edit.simulate import latest_post_cut_density, simulate
 
 CFG = EddyConfig()
 TARGET_S = 600.0
+
+
+def test_latest_post_cut_density_reads_newest_iteration(tmp_path):
+    assert latest_post_cut_density(tmp_path) == []  # none yet
+    for i, wpm in ((1, 100), (2, 150)):
+        d = tmp_path / "iterations" / f"0{i}"
+        d.mkdir(parents=True)
+        (d / "sim-report.json").write_text(json.dumps({"beat_density": [{"label": "intro", "kept_s": 30, "wpm": wpm}]}))
+    out = latest_post_cut_density(tmp_path)
+    assert out and out[0]["wpm"] == 150  # newest iteration's pacing wins
+
+
+def test_revise_decisions_feeds_post_cut_pacing(tmp_path):
+    # the revise loop must show the model the POST-CUT pacing its last edit produced (v1.4 #11)
+    import eddy.edit.cutplan as cp
+    from eddy.loop.receipts import Receipts
+
+    (tmp_path / "transcript").mkdir(parents=True)
+    (tmp_path / "transcript" / "phrases.json").write_text(
+        json.dumps([{"start": 0.0, "end": 2.0, "text": "hello there friends"}]))
+    d = tmp_path / "iterations" / "01"
+    d.mkdir(parents=True)
+    (d / "sim-report.json").write_text(json.dumps({"beat_density": [{"label": "intro", "kept_s": 40, "wpm": 95}]}))
+
+    seen: dict = {}
+
+    class _P:
+        name = "fake"
+
+        def complete(self, messages, schema=None, max_tokens=None):
+            seen["content"] = messages[0]["content"]
+            return {"cuts": [], "retakes": [], "protected_moments": [], "shorts_candidates": []}
+
+    prev = EditDecisions()
+    prev.x_eddy = EddyMeta(iteration=1, beats=[])
+    out = cp.revise_decisions(tmp_path, _P(), Receipts(tmp_path), prev, directive=[{"op": "trim"}], iteration=2)
+    assert "PACING AFTER YOUR LAST EDIT" in seen["content"] and "95wpm" in seen["content"]
+    assert out.x_eddy.iteration == 2
 
 
 def mk_edl(ranges):
