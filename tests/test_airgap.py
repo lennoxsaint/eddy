@@ -2,6 +2,7 @@
 builder + the airgap doc must stay present and consistent, since offline install depends on them."""
 
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,7 +25,8 @@ def test_runtime_deps_are_in_the_lock():
 def test_wheelhouse_builder_present_and_executable():
     s = ROOT / "scripts" / "build_wheelhouse.sh"
     assert s.exists()
-    assert s.stat().st_mode & 0o111, "build_wheelhouse.sh must be executable"
+    if sys.platform != "win32":  # git checkout drops the +x bit on Windows; executability is a Unix concept
+        assert s.stat().st_mode & 0o111, "build_wheelhouse.sh must be executable"
     body = s.read_text()
     assert "--no-index" in body and "requirements.lock" in body
 

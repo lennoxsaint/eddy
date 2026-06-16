@@ -12,6 +12,10 @@ jobs:
   matrix:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Run Python in UTF-8 mode so Eddy's Unicode output (arrows, ✓/✗) doesn't hit Windows' legacy
+    # cp1252 console encoding during tests.
+    env:
+      PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -25,11 +29,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Eddy requires ffmpeg 8+. macOS/Windows setup-ffmpeg builds (evermeet/gyan) track latest; the
-      # Linux build lags, so the Linux leg pulls BtbN's current static build instead.
-      - name: Install ffmpeg (macOS/Windows)
-        if: runner.os != 'Linux'
+      # Eddy requires ffmpeg 8+. Per-OS source: Windows setup-ffmpeg (gyan, x64); macOS Homebrew
+      # (setup-ffmpeg has no arm64 build and macos-latest is Apple Silicon); Linux BtbN static build
+      # (apt + setup-ffmpeg's Linux build both lag behind 8).
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
         uses: federicocarboni/setup-ffmpeg@v3
+      - name: Install ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
       - name: Install ffmpeg 8 (Linux static)
         if: runner.os == 'Linux'
         run: |
