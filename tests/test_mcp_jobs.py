@@ -91,3 +91,27 @@ def test_render_job_uses_run_dir_name_as_id(tmp_path):
     cap: dict = {}
     job = _mgr(tmp_path, capture=cap).start_render(str(tmp_path / "somerun"), proxy=True)
     assert job.id == "somerun" and "--proxy" in cap["argv"]
+
+
+def test_same_source_double_start_uniquifies_slug(tmp_path):
+    # two live runs of the same source must NOT share a run dir (would corrupt state.json)
+    mgr = _mgr(tmp_path, rc=None)  # both stay 'running'
+    a = mgr.start_run("/foot/age.mp4")
+    b = mgr.start_run("/foot/age.mp4")
+    assert a.id != b.id and b.id == f"{a.id}-2"
+    assert a.run_dir != b.run_dir
+
+
+def test_launch_refuses_live_duplicate(tmp_path):
+    import pytest
+
+    mgr = _mgr(tmp_path, rc=None)
+    mgr.start_render(str(tmp_path / "run1"))
+    with pytest.raises(RuntimeError, match="already running"):
+        mgr.start_render(str(tmp_path / "run1"))  # same run, still rendering
+
+
+def test_finished_job_can_restart_same_slug(tmp_path):
+    mgr = _mgr(tmp_path, rc=0)  # finishes immediately
+    mgr.start_render(str(tmp_path / "run1"))
+    mgr.start_render(str(tmp_path / "run1"))  # prior finished -> allowed, no raise

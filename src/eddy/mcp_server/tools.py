@@ -55,8 +55,17 @@ def _read_text(path: Path) -> str | None:
 
 
 # --- reads (in-process) ---------------------------------------------------------------------------
+def _load_json(path: Path) -> Any:
+    """Tolerant JSON read: a corrupt artifact degrades to an error marker instead of failing the call."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"error": f"corrupt or unreadable: {path.name}"}
+
+
 def eddy_doctor() -> dict:
-    """Hardware + provider detection and an environment preflight (no config writes, no pings)."""
+    """Hardware + provider detection and an environment preflight. No config writes; may briefly probe
+    a local Ollama (<=5s). Does not contact any cloud provider."""
     from eddy.doctor import detect, preflight
 
     with _quiet():
@@ -124,13 +133,13 @@ def eddy_artifacts(run: str) -> dict:
     out: dict[str, Any] = {"run_dir": str(run_dir)}
     titles = final / "titles.json"
     if titles.exists():
-        out["titles"] = json.loads(titles.read_text())
+        out["titles"] = _load_json(titles)
     out["description"] = _read_text(final / "description.md")
     out["chapters"] = _read_text(final / "chapters.csv")
     out["ab_test"] = _read_text(final / "AB-TEST.md")
     ledger = final / "shorts" / "shorts-ledger.json"
     if ledger.exists():
-        out["shorts_ledger"] = json.loads(ledger.read_text())
+        out["shorts_ledger"] = _load_json(ledger)
     out["videos"] = [
         {"name": p.name, "bytes": p.stat().st_size}
         for p in sorted(final.rglob("*.mp4"))

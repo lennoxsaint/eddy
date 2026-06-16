@@ -19,8 +19,9 @@ _INSTRUCTIONS = (
     "Drive Eddy, a local-first agentic video editor. Start a long edit with eddy_run_start (it "
     "returns a job_id immediately); poll eddy_job_status(job_id) until state is 'completed', then "
     "read results with eddy_artifacts(run). Reads (eddy_runs, eddy_run_inspect, eddy_doctor, "
-    "eddy_profiles, eddy_qa, eddy_pick, eddy_artifacts) are instant. Destructive tools (eddy_clean, "
-    "eddy_purge) require confirm=true."
+    "eddy_profiles, eddy_qa, eddy_pick, eddy_artifacts) return quickly (eddy_doctor may briefly probe "
+    "a local Ollama). Jobs are tracked per server session; eddy_job_cancel works within the session "
+    "that started the job. Destructive tools (eddy_clean, eddy_purge) require confirm=true."
 )
 
 # All tools exposed, grouped by kind. Single source of truth for registration and for tests.

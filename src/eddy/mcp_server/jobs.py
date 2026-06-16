@@ -28,8 +28,10 @@ SpawnFn = Callable[[list[str], Path, dict[str, str]], Any]
 
 def _default_spawn(argv: list[str], log_path: Path, env: dict[str, str]) -> Any:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    fh = open(log_path, "w")  # noqa: SIM115 - handed to the child; closed when the process ends
-    return subprocess.Popen(argv, stdout=fh, stderr=subprocess.STDOUT, env=env, text=True)
+    # Popen dup()s the fd, so the local handle can be dropped right after; we close it once Popen has
+    # its own copy (refcount drop would do it on CPython, but be explicit so it's correct everywhere).
+    with open(log_path, "w") as fh:
+        return subprocess.Popen(argv, stdout=fh, stderr=subprocess.STDOUT, env=env, text=True)
 
 
 def _tail(path: Path, lines: int = 40) -> str:
@@ -74,7 +76,23 @@ class JobManager:
         # use THIS interpreter's eddy, not whatever `eddy` happens to be on PATH
         return [sys.executable, "-m", "eddy", *args]
 
+    def _is_live(self, jid: str) -> bool:
+        job = self._jobs.get(jid)
+        return job is not None and job.proc.poll() is None
+
+    def _free_slug(self, base: str) -> str:
+        """Pick a slug whose run isn't already being written by a live job (avoids two `eddy`
+        processes writing the same run dir, which would corrupt state.json/iterations)."""
+        slug, n = base, 2
+        while self._is_live(slug):
+            slug, n = f"{base}-{n}", n + 1
+        return slug
+
     def _launch(self, jid: str, kind: str, args: list[str], run_dir: Path | None) -> Job:
+        # Refuse to overwrite a still-running job of the same id — it would orphan the first child
+        # (untracked, uncancellable) and risk concurrent writes to one run dir.
+        if self._is_live(jid):
+            raise RuntimeError(f"job {jid!r} is already running; cancel it or wait before starting again")
         argv = self._eddy(*args)
         log_path = self.runs_dir / ".mcp-jobs" / f"{jid}.log"
         proc = self._spawn(argv, log_path, self._env())
@@ -96,7 +114,7 @@ class JobManager:
         skip_shorts: bool | None = None,
         skip_package: bool | None = None,
     ) -> Job:
-        slug = slug or default_slug(Path(source))
+        slug = self._free_slug(slug or default_slug(Path(source)))
         args = ["run", str(source), "--slug", slug]
         if target_minutes is not None:
             args += ["--target-minutes", str(target_minutes)]
@@ -113,14 +131,14 @@ class JobManager:
         return self._launch(slug, "run", args, self.runs_dir / slug)
 
     def start_shorts(self, source: str, *, slug: str | None = None, language: str | None = None) -> Job:
-        slug = slug or default_slug(Path(source))
+        slug = self._free_slug(slug or default_slug(Path(source)))
         args = ["shorts", str(source), "--slug", slug]
         if language:
             args += ["--language", language]
         return self._launch(slug, "shorts", args, self.runs_dir / slug)
 
     def start_transcribe(self, source: str, *, slug: str | None = None, language: str | None = None) -> Job:
-        slug = slug or default_slug(Path(source))
+        slug = self._free_slug(slug or default_slug(Path(source)))
         args = ["transcribe", str(source), "--slug", slug]
         if language:
             args += ["--language", language]
