@@ -143,20 +143,22 @@ def panel(body: RenderableType, title: str | None = None, style: str = "eddy.acc
     console().print(Panel(body, title=title, border_style=style, padding=(0, 1)))
 
 
+# Status helpers build Rich Text rather than interpolating into markup, so a message containing
+# brackets (a path, an exception repr) can never break rendering or inject styling.
 def ok(msg: str) -> None:
-    console().print(f"[eddy.ok]✓[/eddy.ok] {msg}")
+    console().print(Text.assemble(("✓ ", "eddy.ok"), msg))
 
 
 def warn(msg: str) -> None:
-    console().print(f"[eddy.warn]⚠[/eddy.warn] {msg}")
+    console().print(Text.assemble(("⚠ ", "eddy.warn"), msg))
 
 
 def err(msg: str) -> None:
-    console().print(f"[eddy.err]✗[/eddy.err] {msg}")
+    console().print(Text.assemble(("✗ ", "eddy.err"), msg))
 
 
 def note(msg: str) -> None:
-    console().print(f"[eddy.dim]{msg}[/eddy.dim]")
+    console().print(Text(msg, style="eddy.dim"))
 
 
 @contextmanager

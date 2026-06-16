@@ -96,7 +96,7 @@ def _loop_progress(iteration: int, max_iter: int, quality: float, judge: float, 
         if remaining > 0:
             eta = f" · ~{_fmt_dur(remaining)} left (max)"
     over = f" · {_fmt_dur(over_s)} over ceiling" if over_s > 0 else " · under ceiling"
-    return f"[eddy] cut {iteration}/{max_iter} · q{quality:.2f} judge{judge:.1f}{over} · {_fmt_dur(elapsed_s)} in{eta}"
+    return f"cut {iteration}/{max_iter} · q{quality:.2f} judge{judge:.1f}{over} · {_fmt_dur(elapsed_s)} in{eta}"
 
 
 def _editorial_model_id(cfg) -> dict:
@@ -342,10 +342,13 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             judge_score=judge["weighted"], judge_unstable=judge.get("judge_unstable"),
             under_ceiling=under_ceiling, done=gates_ok and judge_ok and under_ceiling,
         )
-        print(_loop_progress(
+        from eddy.ui import console as ui
+
+        _prog = _loop_progress(
             iteration, cfg.loop.max_iterations, qual["quality"], judge["weighted"],
             over_ceiling_s, time.time() - loop_start,
-        ))
+        )
+        ui.console().print(f"[eddy.accent]▸[/eddy.accent] [eddy.dim]{_prog}[/eddy.dim]")
 
         # clean-ship check runs BEFORE the plateau break so a passing iteration is never
         # thrown away by a plateau stop
@@ -405,7 +408,9 @@ def _warn_multispeaker(run_dir: Path, receipts: Receipts) -> None:
         return
     warning = multispeaker_warning(det)
     if warning:
-        print(f"[eddy] ⚠ {warning}")
+        from eddy.ui import console as ui
+
+        ui.warn(warning)
         receipts.log("multispeaker_warning", **det)
 
 
@@ -426,15 +431,20 @@ def autonomous_run(
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
     run_t0 = time.time()
-    print(f"run: {run_dir}")
+    from eddy.ui import console as ui
+
+    if ui.color_enabled():
+        ui.print_sprite("working", small=True)
+    ui.console().print(ui.banner("editing"))
+    ui.note(f"run: {run_dir}")
 
     state.set_phase("transcribe")
-    print("[eddy] transcribing (this can take a few minutes on a long source)…")
+    ui.note("transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
     _warn_multispeaker(run_dir, receipts)
 
     chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume, ceiling_minutes=ceiling_minutes)
-    print(f"chosen iteration: {chosen.name}")
+    ui.note(f"chosen iteration: {chosen.name}")
 
     # edit_loop used its own RunState and wrote the attempts/best_iter to disk. Reload here so
     # this function's later set_phase() saves don't clobber that record with stale empty data
@@ -457,10 +467,10 @@ def autonomous_run(
             (run_dir / "final").mkdir(parents=True, exist_ok=True)
             (run_dir / "final" / "trim-to-fit.json").write_text(json.dumps(trim_info, indent=1))
             if trim_info["adopted"]:
-                print(f"trim-to-fit: {trim_info['duration_before_s']:.0f}s -> {trim_info['duration_after_s']:.0f}s "
-                      f"({len(trim_info['beats_dropped'])} beats; ceiling miss {trim_info['ceiling_missed_s']:.0f}s)")
+                ui.note(f"trim-to-fit: {trim_info['duration_before_s']:.0f}s -> {trim_info['duration_after_s']:.0f}s "
+                        f"({len(trim_info['beats_dropped'])} beats; ceiling miss {trim_info['ceiling_missed_s']:.0f}s)")
             else:
-                print(f"trim-to-fit reverted ({trim_info['revert_reason']}) — keeping pre-trim cut")
+                ui.note(f"trim-to-fit reverted ({trim_info['revert_reason']}) — keeping pre-trim cut")
 
     # v0.3.1 speed-to-fit: deterministically time-compress the heaviest slow, non-protected beats
     # to close any residual gap to the length ceiling that cutting alone couldn't (off unless
@@ -474,8 +484,8 @@ def autonomous_run(
                      over_before_s=speed_info["over_before_s"], ceiling_missed_s=speed_info["ceiling_missed_s"],
                      duration_before_s=speed_info["duration_before_s"], duration_after_s=speed_info["duration_after_s"])
         if speed_info["applied"]:
-            print(f"speed-to-fit: {speed_info['duration_before_s']:.0f}s -> {speed_info['duration_after_s']:.0f}s "
-                  f"({len(speed_info['beats_sped'])} beats; ceiling miss {speed_info['ceiling_missed_s']:.0f}s)")
+            ui.note(f"speed-to-fit: {speed_info['duration_before_s']:.0f}s -> {speed_info['duration_after_s']:.0f}s "
+                    f"({len(speed_info['beats_sped'])} beats; ceiling miss {speed_info['ceiling_missed_s']:.0f}s)")
             (run_dir / "final").mkdir(parents=True, exist_ok=True)
             (run_dir / "final" / "speed-to-fit.json").write_text(json.dumps(speed_info, indent=1))
 
@@ -496,7 +506,7 @@ def autonomous_run(
             (run_dir / "final").mkdir(parents=True, exist_ok=True)
             (run_dir / "final" / "ship-panel.json").write_text(json.dumps(panel, indent=1))
             if not panel["ships"]:
-                print(f"ship panel dissent ({panel['yes']}/{panel['of']} ship) — delivering best anyway")
+                ui.note(f"ship panel dissent ({panel['yes']}/{panel['of']} ship) — delivering best anyway")
         except Exception as e:
             receipts.log("ship_panel_failed", error=str(e)[:300])
 
@@ -527,7 +537,7 @@ def autonomous_run(
             render_shorts(run_dir, iteration_dir=chosen)
         except Exception as e:
             receipts.log("shorts_failed", error=str(e)[:400])
-            print(f"shorts failed (continuing): {e}")
+            ui.warn(f"shorts failed (continuing): {e}")
 
     if not skip_package:
         state.set_phase("package")
@@ -537,14 +547,16 @@ def autonomous_run(
             package_run(run_dir, iteration_dir=chosen)
         except Exception as e:
             receipts.log("package_failed", error=str(e)[:400])
-            print(f"packaging failed (continuing): {e}")
+            ui.warn(f"packaging failed (continuing): {e}")
 
     verify_sources_unmutated(run_dir)
     cost = run_cost_summary(receipts.read())
     receipts.log("run_cost", **cost)
     state.set_phase("done")
     cost_note = f" · editorial cost ${cost['total_usd']} ({cost['calls']} paid calls)" if cost["total_usd"] > 0 else " · $0 (local brain)"
-    print(f"[eddy] done in {_fmt_dur(time.time() - run_t0)}{cost_note} · launch kit: {run_dir / 'final'}")
+    if ui.color_enabled():
+        ui.print_sprite("success", small=True)
+    ui.ok(f"done in {_fmt_dur(time.time() - run_t0)}{cost_note} · launch kit: {run_dir / 'final'}")
     return run_dir
 
 
@@ -565,15 +577,20 @@ def mine_shorts(
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
     run_t0 = time.time()
-    print(f"run: {run_dir}")
+    from eddy.ui import console as ui
+
+    if ui.color_enabled():
+        ui.print_sprite("working", small=True)
+    ui.console().print(ui.banner("mining shorts"))
+    ui.note(f"run: {run_dir}")
 
     state.set_phase("transcribe")
-    print("[eddy] transcribing (this can take a few minutes on a long source)…")
+    ui.note("transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
     _warn_multispeaker(run_dir, receipts)
 
     state.set_phase("plan")
-    print("[eddy] finding short-worthy moments…")
+    ui.note("finding short-worthy moments…")
     iter_dir = plan_run(run_dir)  # iteration-1 decisions incl. shorts_candidates
 
     state.set_phase("shorts")
@@ -584,5 +601,7 @@ def mine_shorts(
     receipts.log("run_cost", **cost)
     state.set_phase("done")
     cost_note = f" · editorial cost ${cost['total_usd']}" if cost["total_usd"] > 0 else " · $0 (local brain)"
-    print(f"[eddy] {len(shorts)} short(s) in {_fmt_dur(time.time() - run_t0)}{cost_note} · {run_dir / 'final' / 'shorts'}")
+    if ui.color_enabled():
+        ui.print_sprite("success", small=True)
+    ui.ok(f"{len(shorts)} short(s) in {_fmt_dur(time.time() - run_t0)}{cost_note} · {run_dir / 'final' / 'shorts'}")
     return run_dir
