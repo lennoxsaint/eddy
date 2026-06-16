@@ -16,10 +16,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install ffmpeg
-        # apt on ubuntu-latest (24.04) ships ffmpeg 6.x, but Eddy's preflight requires 8+ and the
-        # real-render tests run here. Use the same modern static build as the 3-OS matrix.
-        uses: federicocarboni/setup-ffmpeg@v3
+      - name: Install ffmpeg 8 (static build)
+        # Eddy's preflight requires ffmpeg 8+ and the real-render tests run here, but ubuntu-latest apt
+        # ships 6.x and setup-ffmpeg's Linux build (John Van Sickle) lags too. BtbN's static build is
+        # current (>= 8) and is what makes the preflight + av-drift tests pass on the hosted runner.
+        run: |
+          set -euo pipefail
+          url=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          curl -fsSL "$url" -o /tmp/ffmpeg.tar.xz
+          mkdir -p /tmp/ffmpeg && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1
+          echo "/tmp/ffmpeg/bin" >> "$GITHUB_PATH"
+          /tmp/ffmpeg/bin/ffmpeg -version | head -1
 
       - name: Install (editable, with dev tools)
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
