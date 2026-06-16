@@ -59,3 +59,32 @@ Durable product/architecture decisions. Newest first. Format: date · decision �
 - **Distribution decision:** `mcp` is an **optional extra** (`eddy[mcp]`) so the base install stays slim/offline-friendly; `eddy-mcp` is a new console script. `eddy mcp install --client claude-desktop|claude-code|codex` writes config idempotently (backs up, merges only the `eddy` key — JSON or comment-preserving TOML). A one-shot Claude Code **plugin** ships at `integrations/claude-code/` (commands + `eddy` skill + `.mcp.json`). No marketplace/PyPI publish — owner-gated.
 - **Adversarial review (superpowers:code-reviewer) verdict: MERGE.** Fixed before tag: **M1** job-id collision (two live same-source runs could share a run dir and race `state.json`) → `_launch` refuses a live duplicate + `start_*` auto-uniquify the slug; **M3** `eddy_artifacts` tolerates corrupt JSON; corrected a false "no pings" docstring. **M2** (cancel only works within the originating server session) documented as session-scoped; disk-backed pid registry deferred to v1.1.x.
 - **Tags/version:** branch `v1.1-eddy-face` ff-merged to `master` locally (no push, per AGENTS.md), tagged `v1.1.0`, `pyproject` 1.0.0→1.1.0. Suite 464→532 green; coverage 70.5% (floor 67); ruff + mypy clean. `vendor/yt_tools/` untouched.
+
+## 2026-06-16 — v1.2 "Eddy Lands": full-screen TUI + chibi eaglet + upright wordmark
+
+- **Bare `eddy` opens a full-screen Textual TUI** (Lennox: "like Claude Code, not just a box at the
+  top"). Hybrid layout: animated chibi-eaglet header, a live runs list, a run monitor, and a bottom
+  input bar. Reverses v1.1's "banner only, no Textual" — Textual is now a **core dependency** and the
+  TUI is the default interactive experience. Piped / non-TTY / `--no-tui` / CI / the MCP subprocess
+  still get the v1.1 banner (`_wake()` gates on `stdout.isatty()`), so automation is untouched. `eddy
+  tui` launches it explicitly.
+- **Input bar is hybrid**: a deterministic command/`/slash` parse first (instant, no model call);
+  unrecognised text falls back to **local-brain NL interpretation** (`interpret_nl`, JSON schema, run
+  in a Textual worker thread) into a structured action. Every NL action — and every long/destructive
+  action — goes through a **confirm modal** before executing, so Eddy never acts on a guess or deletes
+  anything without a yes.
+- **Mascot is now a cute chibi/kawaii baby bald eaglet** (big round white head, huge sparkly eyes,
+  blush, small hooked gold beak) — the v1.1 realistic bust read as stern. Iterated against rendered
+  PNGs and confirmed visually; states (idle/thinking/working/success/error) are eye-row overrides on
+  the base bitmap. The **EDDY wordmark is upright** now (dropped the shear), not italic.
+- **Refactor**: `Job`/`JobManager` moved from `eddy.mcp_server.jobs` to core **`eddy.jobs`** (no
+  MCP-SDK deps) so the TUI launches/monitors runs via the same subprocess job model without the
+  optional `mcp` extra; `eddy.mcp_server.jobs` re-exports for back-compat.
+- **Testing**: the TUI is covered by Textual's `run_test` pilot harness (mount, run→confirm→job,
+  cancel, doctor modal, quit, eagle state) plus pure-logic tests for intents/runner/eagle.
+  `asyncio_mode=auto`; `tui/*.tcss` added to package-data. Note: the `EagleWidget` and `DoctorScreen`
+  must override `render()` only (not Textual's internal `_render`) — a `_render(self, …)` override
+  silently breaks Textual rendering (caught in review/tests).
+- **Ship**: branch `v1.2-eddy-tui` ff-merged to `master` locally (no push), tagged **v1.2.0**,
+  `pyproject` 1.1.0→1.2.0, `requirements.lock` += textual deps. Suite 532→562 green; coverage 71.0%
+  (floor 67); ruff + mypy clean. `vendor/yt_tools/` untouched.

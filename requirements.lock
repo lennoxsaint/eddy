@@ -45,3 +45,9 @@ tqdm==4.68.2
 typer==0.25.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+# TUI (textual) + its transitive deps
+textual==8.2.7
+platformdirs==4.10.0
+mdit-py-plugins==0.6.1
+linkify-it-py==2.1.0
+uc-micro-py==2.0.0

@@ -38,9 +38,12 @@ Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slu
 
 Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy shorts`, `eddy package`.
 
-Bare `eddy` wakes the mascot — **Eddy the eagle** — a branded splash with your recent runs and
-next steps. Preview it anytime with `eddy mascot` (`--state`, `--animate`). Colour is automatic on a
-real terminal and off when piped; set `NO_COLOR=1` or `EDDY_NO_ANIM=1` to tone it down.
+Bare `eddy` on a real terminal opens the **full-screen TUI** — Eddy the (chibi) eagle up top, your
+runs list, a live run monitor, and a bottom input bar. Type a command (`run <footage>`, `doctor`,
+`/help`), or just ask in plain words ("edit my podcast and keep it punchy") and the local brain
+interprets it into an action you confirm. Launch + watch runs without leaving the app. `eddy tui`
+opens it explicitly; `eddy --no-tui` (and any piped / non-TTY / CI / MCP use) prints the branded
+banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_ANIM=1` tone it down.
 
 ## Drive Eddy from Claude Code, Codex, or Claude Desktop
 

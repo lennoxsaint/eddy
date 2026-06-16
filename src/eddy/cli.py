@@ -36,20 +36,49 @@ def _recent_runs() -> list[dict] | None:
         return None
 
 
+def _wake(no_tui: bool) -> None:
+    """Bare `eddy`: open the full-screen TUI on an interactive terminal, else print the banner.
+
+    Piped / non-TTY / `--no-tui` (and CI, and the MCP subprocess) get the banner, so only an
+    interactive human ever drops into the app. A missing Textual degrades to the banner too.
+    """
+    import sys
+
+    interactive = bool(getattr(sys.stdout, "isatty", lambda: False)()) and bool(getattr(sys.stdin, "isatty", lambda: False)())
+    if interactive and not no_tui:
+        try:
+            from eddy.tui.app import run_tui
+        except ImportError:
+            run_tui = None  # type: ignore[assignment]
+        if run_tui is not None:
+            run_tui()
+            return
+    from eddy.ui import console as ui
+
+    ui.console().print(ui.wake_screen(runs=_recent_runs()))
+
+
 @app.callback(invoke_without_command=True)
 def _main(
     ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", callback=_version_callback, is_eager=True, help="Show version and exit."
     ),
+    no_tui: bool = typer.Option(False, "--no-tui", help="Print the banner instead of opening the full-screen TUI."),
 ) -> None:
     """Eddy CLI."""
-    # Bare `eddy` (no subcommand) wakes Eddy: the branded splash + next-step hints.
+    # Bare `eddy` (no subcommand) wakes Eddy: the TUI on a terminal, else the branded splash.
     if ctx.invoked_subcommand is None:
-        from eddy.ui import console as ui
-
-        ui.console().print(ui.wake_screen(runs=_recent_runs()))
+        _wake(no_tui)
         raise typer.Exit()
+
+
+@app.command()
+def tui() -> None:
+    """Open the full-screen Eddy TUI (runs list, live monitor, command/NL input)."""
+    from eddy.tui.app import run_tui
+
+    run_tui()
 
 
 @app.command()
