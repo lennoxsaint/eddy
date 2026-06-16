@@ -19,14 +19,43 @@ FFPROBE = shutil.which("ffprobe") or "ffprobe"
 _ENCODER_PREFERENCE = ("h264_videotoolbox", "h264_nvenc", "h264_qsv", "libx264")
 
 
+# HW encoders can be COMPILED INTO ffmpeg (so they list in `-encoders`) yet fail at runtime when the
+# matching GPU/driver is absent — notably h264_nvenc on a GPU-less Linux box or CI runner, which dies
+# with "Cannot load libcuda.so.1". Listing is not usability: probe these before trusting them.
+_PROBED_ENCODERS = ("h264_videotoolbox", "h264_nvenc", "h264_qsv")
+
+
+def _encoder_works(enc: str) -> bool:
+    """True iff ffmpeg can actually RUN this encoder here — a 1-frame, null-muxed test encode of a
+    synthetic source succeeds. The only reliable signal that a compiled-in HW encoder has working
+    hardware (presence in `-encoders` does not imply a usable GPU/driver)."""
+    extra = ["-allow_sw", "1"] if enc == "h264_videotoolbox" else []  # let VT fall back to SW in VMs
+    try:
+        proc = subprocess.run(
+            [FFMPEG, "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+             "-i", "testsrc=size=64x64:rate=1:duration=0.1", "-frames:v", "1",
+             "-c:v", enc, *extra, "-f", "null", "-"],
+            capture_output=True, text=True, timeout=30,
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
 @functools.lru_cache(maxsize=1)
 def _available_encoders() -> frozenset[str]:
     try:
         out = subprocess.run([FFMPEG, "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=15)
         # encoder names are lowercase [a-z0-9_]; this also excludes the legend lines (" V..... = Video")
-        return frozenset(re.findall(r"^\s*[A-Z.]{6}\s+([a-z0-9_]+)", out.stdout, re.MULTILINE))
+        listed = set(re.findall(r"^\s*[A-Z.]{6}\s+([a-z0-9_]+)", out.stdout, re.MULTILINE))
     except Exception:
         return frozenset()
+    # Drop any HW encoder that lists but can't actually run, so resolve_video_encoder never picks a
+    # dead one (e.g. nvenc without CUDA). libx264 (software) is always trusted as the universal floor.
+    for enc in _PROBED_ENCODERS:
+        if enc in listed and not _encoder_works(enc):
+            listed.discard(enc)
+    return frozenset(listed)
 
 
 def resolve_video_encoder() -> str:

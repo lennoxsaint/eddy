@@ -35,6 +35,22 @@ def test_libx264_when_nothing_detected(monkeypatch):
     assert ffmpeg.resolve_video_encoder() == "libx264"
 
 
+def test_listed_but_unrunnable_hw_encoder_is_dropped(monkeypatch):
+    # nvenc compiles into most Linux/CI ffmpeg builds (so it LISTS) but can't run without a CUDA GPU
+    # ("Cannot load libcuda.so.1"). _available_encoders must probe it out, or resolve picks a dead one.
+    class _Fake:
+        stdout = " V....D h264_nvenc          NVIDIA NVENC H.264\n V....D libx264              libx264 H.264\n"
+
+    monkeypatch.setattr(ffmpeg.subprocess, "run", lambda *a, **k: _Fake())
+    monkeypatch.setattr(ffmpeg, "_encoder_works", lambda enc: enc != "h264_nvenc")  # nvenc fails its probe
+    ffmpeg._available_encoders.cache_clear()
+    try:
+        avail = ffmpeg._available_encoders()
+        assert "libx264" in avail and "h264_nvenc" not in avail
+    finally:
+        ffmpeg._available_encoders.cache_clear()  # don't poison other tests' cache
+
+
 @pytest.mark.needs_ffmpeg
 def test_real_ffmpeg_reports_libx264(ffmpeg_required):
     enc = ffmpeg._available_encoders()
