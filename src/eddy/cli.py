@@ -10,7 +10,7 @@ import typer
 app = typer.Typer(
     name="eddy",
     help="Local-first agentic video editor: raw footage in, YouTube launch kit out.",
-    no_args_is_help=True,
+    no_args_is_help=False,  # bare `eddy` wakes the mascot instead of dumping help (`eddy --help` still helps)
     pretty_exceptions_show_locals=False,
 )
 
@@ -23,13 +23,33 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
+def _recent_runs() -> list[dict] | None:
+    """Best-effort newest-first run list for the wake screen. Never raises — the splash must be instant."""
+    try:
+        from eddy.batch import list_runs
+        from eddy.config import load_config
+
+        cfg = load_config()
+        runs = list_runs(Path(str(cfg.paths.runs_dir)).expanduser())
+        return list(reversed(runs))[:2] if runs else None
+    except Exception:
+        return None
+
+
+@app.callback(invoke_without_command=True)
 def _main(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", callback=_version_callback, is_eager=True, help="Show version and exit."
     ),
 ) -> None:
     """Eddy CLI."""
+    # Bare `eddy` (no subcommand) wakes Eddy: the branded splash + next-step hints.
+    if ctx.invoked_subcommand is None:
+        from eddy.ui import console as ui
+
+        ui.console().print(ui.wake_screen(runs=_recent_runs()))
+        raise typer.Exit()
 
 
 @app.command()
@@ -42,6 +62,32 @@ def doctor(
     from eddy.doctor import run_doctor
 
     run_doctor(ping=ping, all_providers=all_providers, write=write)
+
+
+@app.command()
+def mascot(
+    state: Optional[str] = typer.Option(None, "--state", help="idle | thinking | working | success | error."),
+    small: bool = typer.Option(False, "--small", help="Show the compact eagle instead of the hero size."),
+    animate: bool = typer.Option(False, "--animate", help="Run a short animation demo (interactive terminals)."),
+) -> None:
+    """Preview Eddy the eagle: the wake screen, a single sprite state, or a short animation demo."""
+    from eddy.ui import console as ui
+
+    if animate:
+        import time
+
+        from eddy.ui.animate import animate as run_anim
+
+        with run_anim(status="[eddy.accent]editing…[/eddy.accent] cut 3/6 · q0.82", state="working", final_state="success") as h:
+            time.sleep(1.8)
+            h.update(status="[eddy.accent]rendering final…[/eddy.accent]")
+            time.sleep(1.4)
+        ui.ok("done · launch kit ready")
+        return
+    if state:
+        ui.print_sprite(state, small=small)
+        return
+    ui.console().print(ui.wake_screen(runs=_recent_runs()))
 
 
 @app.command()

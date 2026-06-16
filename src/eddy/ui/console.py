@@ -1,0 +1,175 @@
+"""The one Rich console + the brand surfaces every human-facing command shares.
+
+Everything visual funnels through here so the rest of the codebase stays dumb about styling and the
+look is consistent. This module owns three things:
+
+1. **The theme** — base brand styles plus the three accent colours the one-line `MINI` mark uses.
+2. **Gating** — colour follows the terminal / ``NO_COLOR``; animation additionally requires an
+   interactive TTY and no ``EDDY_NO_ANIM``. The MCP subprocess path is non-interactive, so it
+   automatically gets clean, parseable, un-animated lines.
+3. **Surfaces** — `wake_screen()`, `banner()`, `panel()`, `ok/warn/err/note()`, `progress()`, and
+   `print_sprite()`. The eagle is drawn from `eddy.ui.pixels` half-blocks; the wordmark from
+   `eddy.ui.wordmark`.
+
+No network, no disk, no editorial state. `wake_screen(runs=...)` takes the fleet list as a parameter
+so this package never imports config/batch (keeps it pure and import-cheap).
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+
+from rich.console import Console, Group, RenderableType
+from rich.panel import Panel
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
+from rich.table import Table
+from rich.text import Text
+from rich.theme import Theme
+
+from eddy.ui import pixels, sprite, wordmark
+
+_THEME = Theme(
+    {
+        "eddy.brand": "bold gold1",
+        "eddy.accent": "gold1",
+        "eddy.dim": "grey58",
+        "eddy.ok": "bold green",
+        "eddy.warn": "bold yellow",
+        "eddy.err": "bold red",
+        # accents for the one-line MINI eagle mark
+        "eddy.crown": "grey93",
+        "eddy.eye": "gold1",
+        "eddy.beak": "orange1",
+    }
+)
+
+_console: Console | None = None
+
+
+def console() -> Console:
+    """The shared Rich console. Colour is left to Rich's own detection (terminal + ``NO_COLOR``), so
+    piping to a file or the MCP subprocess yields plain text automatically."""
+    global _console
+    if _console is None:
+        _console = Console(theme=_THEME, highlight=False)
+    return _console
+
+
+def reset() -> None:
+    """Drop the cached console (used by tests that toggle terminal/colour state)."""
+    global _console
+    _console = None
+
+
+# --- gating ---------------------------------------------------------------------------------------
+def color_enabled() -> bool:
+    """True when the console will actually emit colour (interactive terminal, ``NO_COLOR`` unset)."""
+    return bool(console().is_terminal) and not os.environ.get("NO_COLOR")
+
+
+def anim_enabled() -> bool:
+    """Animation is opt-out and strictly gated: real interactive TTY, colour on, ``EDDY_NO_ANIM`` unset.
+
+    This keeps multi-frame loops off pipes, CI logs, dumb terminals, and the MCP subprocess.
+    """
+    if os.environ.get("EDDY_NO_ANIM"):
+        return False
+    try:
+        if not sys.stdout.isatty():
+            return False
+    except (AttributeError, ValueError):
+        return False
+    return color_enabled()
+
+
+# --- sprite ---------------------------------------------------------------------------------------
+def sprite_renderable(state: str = "idle", index: int = 0, small: bool = False) -> Text:
+    """A Rich `Text` of one eagle frame.
+
+    Half-block pixel art when colour is on; a plain-ASCII eagle when it isn't (piped / ``NO_COLOR`` /
+    dumb terminal), since half-blocks are unreadable without colour.
+    """
+    if not color_enabled():
+        return Text(sprite.ascii_art(), style="eddy.dim")
+    return pixels.to_text(sprite.frame(state, index, small=small))
+
+
+def print_sprite(state: str = "idle", index: int = 0, small: bool = False) -> None:
+    console().print(sprite_renderable(state, index, small=small))
+
+
+# --- brand surfaces -------------------------------------------------------------------------------
+def _wordmark_text() -> Text:
+    return Text(wordmark.wordmark(), style="eddy.brand")
+
+
+def wake_screen(runs: Sequence[dict] | None = None) -> RenderableType:
+    """The `eddy` wake splash: the eagle + italic EDDY wordmark + tagline + a short next-step hint.
+
+    `runs` (optional, newest first) renders as a tiny fleet line; pass None to omit it.
+    """
+    right: list[RenderableType] = [_wordmark_text(), Text.from_markup(wordmark.tagline()), Text("")]
+    if runs:
+        recent = ", ".join(f"{r.get('slug', '?')} [eddy.dim]({r.get('phase', '?')})[/eddy.dim]" for r in runs[:2])
+        right.append(Text.from_markup(f"[eddy.dim]recent:[/eddy.dim] {recent}"))
+        right.append(Text(""))
+    for cmd, what in (
+        ("eddy run <footage>", "start a full edit"),
+        ("eddy doctor", "check your setup"),
+        ("eddy runs", "list recent runs"),
+        ("eddy --help", "every command"),
+    ):
+        right.append(Text.from_markup(f"[eddy.accent]▸[/eddy.accent] [bold]{cmd:<20}[/bold] [eddy.dim]{what}[/eddy.dim]"))
+
+    grid = Table.grid(padding=(0, 3))
+    grid.add_column(justify="center", vertical="middle")
+    grid.add_column(vertical="middle")
+    grid.add_row(sprite_renderable("idle"), Group(*right))
+    return Panel(grid, border_style="eddy.accent", padding=(1, 2), title="[eddy.brand]EDDY[/eddy.brand]", title_align="left")
+
+
+def banner(subtitle: str | None = None) -> RenderableType:
+    """A compact one-line brand header for subcommands: mini eagle mark + EDDY + optional subtitle."""
+    line = f"{sprite.MINI}  [eddy.brand]EDDY[/eddy.brand]"
+    if subtitle:
+        line += f"  [eddy.dim]· {subtitle}[/eddy.dim]"
+    return Text.from_markup(line)
+
+
+def panel(body: RenderableType, title: str | None = None, style: str = "eddy.accent") -> None:
+    console().print(Panel(body, title=title, border_style=style, padding=(0, 1)))
+
+
+def ok(msg: str) -> None:
+    console().print(f"[eddy.ok]✓[/eddy.ok] {msg}")
+
+
+def warn(msg: str) -> None:
+    console().print(f"[eddy.warn]⚠[/eddy.warn] {msg}")
+
+
+def err(msg: str) -> None:
+    console().print(f"[eddy.err]✗[/eddy.err] {msg}")
+
+
+def note(msg: str) -> None:
+    console().print(f"[eddy.dim]{msg}[/eddy.dim]")
+
+
+@contextmanager
+def progress(transient: bool = False) -> Iterator[Progress]:
+    """A themed Rich progress bar (spinner + bar + % + ETA). Use for bounded, measurable phases."""
+    prog = Progress(
+        SpinnerColumn(style="eddy.accent"),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(complete_style="eddy.accent", finished_style="eddy.ok"),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console(),
+        transient=transient,
+    )
+    with prog:
+        yield prog
