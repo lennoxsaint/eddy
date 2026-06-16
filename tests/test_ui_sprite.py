@@ -32,9 +32,9 @@ def test_states_are_distinct_edits_not_identical():
     assert sprite.frame("success", small=True) != sprite.frame("idle", small=True)
 
 
-def test_bald_eagle_palette_keys_present_in_art():
+def test_chibi_eaglet_palette_keys_present_in_art():
     flat = "".join("".join(row) for row in sprite.HERO)
-    for key in ("W", "D", "G", "K", "Y"):  # white head, brown body, gold beak, outline, eye
+    for key in ("W", "D", "G", "K", "H", "p"):  # white head, brown body, gold beak, pupil, sparkle, blush
         assert key in flat
 
 

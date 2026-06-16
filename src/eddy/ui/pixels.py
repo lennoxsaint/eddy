@@ -21,19 +21,21 @@ from rich.segment import Segment
 from rich.style import Style
 from rich.text import Text
 
-# Bald-eagle palette. Keys are single chars used in the bitmaps; values are RGB (None = transparent).
+# Chibi bald-eaglet palette. Keys are single chars used in the bitmaps; values are RGB (None = transparent).
 PALETTE: dict[str, tuple[int, int, int] | None] = {
     ".": None,             # transparent
-    "W": (242, 244, 248),  # white head / tail feathers
-    "w": (203, 209, 220),  # white feather shadow
-    "D": (62, 45, 32),     # dark brown body
-    "B": (104, 76, 48),    # mid brown wing
-    "b": (140, 104, 64),   # light brown feather highlight
-    "G": (245, 184, 42),   # gold beak / talons
-    "g": (201, 142, 24),   # gold shadow
-    "K": (24, 19, 16),     # outline / pupil
-    "Y": (252, 216, 96),   # eye iris / highlight
-    "r": (170, 70, 40),    # warm shadow under beak
+    "W": (244, 246, 250),  # white head / fluffy down
+    "w": (208, 214, 224),  # white feather shadow
+    "D": (74, 54, 38),     # dark brown body
+    "B": (116, 86, 54),    # mid brown wing
+    "b": (150, 112, 70),   # light brown feather highlight
+    "G": (248, 190, 52),   # gold beak / talons
+    "g": (206, 148, 28),   # gold shadow
+    "K": (32, 26, 22),     # outline / pupil (softened from near-black)
+    "Y": (252, 216, 96),   # eye iris
+    "H": (255, 255, 255),  # eye sparkle / highlight (cute glint)
+    "p": (245, 170, 175),  # cheek blush (kawaii)
+    "r": (178, 78, 46),    # warm shadow under beak
 }
 
 

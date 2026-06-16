@@ -1,9 +1,8 @@
-"""The EDDY wordmark — a bold 8-bit block logo, sheared into an italic lean.
+"""The EDDY wordmark — a bold, upright 8-bit block logo.
 
-Hand-built from upright block glyphs and sheared in code (no figlet/pyfiglet dependency, so it works
-offline and adds no install weight). The lean gives the "italicised capitalised EDDY" Lennox asked
-for when you wake Eddy in the terminal, and the heavy ``█`` blocks match the sprite's pixel look.
-`wordmark()` returns the art; `tagline()` returns the Rich-italic strapline.
+Hand-built from block glyphs (no figlet/pyfiglet dependency, so it works offline and adds no install
+weight). Upright, not italic; the heavy ``█`` blocks match the sprite's pixel look. `wordmark()`
+returns the art; `tagline()` returns the strapline.
 """
 
 from __future__ import annotations
@@ -26,15 +25,9 @@ def _assemble(word: str) -> list[str]:
     return rows
 
 
-def _shear(rows: list[str]) -> list[str]:
-    """Lean the block right: indent the top row most, the bottom row not at all → italic slant."""
-    n = len(rows)
-    return [(" " * (n - 1 - i)) + row for i, row in enumerate(rows)]
-
-
 def wordmark(word: str = "EDDY") -> str:
-    """The sheared block wordmark for `word` (defaults to EDDY)."""
-    return "\n".join(_shear(_assemble(word)))
+    """The upright 8-bit block wordmark for `word` (defaults to EDDY)."""
+    return "\n".join(_assemble(word))
 
 
 def tagline() -> str:
