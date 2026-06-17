@@ -39,6 +39,7 @@ _WELCOME = (
     f"  [{_GOLD}]run my footage[/]      edit a video start to finish\n"
     f"  [{_GOLD}]shorts my footage[/]   make vertical shorts from it\n"
     f"  [{_GOLD}]open a run[/]          show me a finished result\n\n"
+    f"[{_DIM}]Drag a video in and add “ - only keep the part about X” to focus the edit.[/]\n"
     f"[{_DIM}]Type /help for everything. F1 help · F2 doctor · ctrl+c quit.[/]"
 )
 
@@ -46,6 +47,7 @@ _WELCOME = (
 _HELP = (
     f"[{_GOLD} bold]Eddy — commands[/]   (or just ask in plain words)\n\n"
     "  run <footage> [minutes]   edit a video start to finish\n"
+    "  edit <footage> - <focus>  focus the edit (e.g. 'only keep the part about X' = extract)\n"
     "  shorts <footage>          make vertical shorts\n"
     "  transcribe <footage>      transcript only\n"
     "  render <run>              re-render an existing run\n"
@@ -130,7 +132,7 @@ class HomeScreen(Screen):
             yield DataTable(id="runs", cursor_type="row")
             yield Static(f"[{_DIM}]No edits yet —\ntype: run my footage[/]", id="runsempty")
             yield VerticalScroll(Static(_WELCOME, id="monitor"), id="monitorwrap")
-        yield Input(placeholder="What should Eddy do?  (try: run my footage)", id="cmd",
+        yield Input(placeholder="What should Eddy do?  (drag a video in, or: run my footage)", id="cmd",
                     suggester=_CmdSuggester(lambda: self._slugs))
         yield Footer()
 

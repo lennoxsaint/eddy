@@ -30,6 +30,7 @@ you can audit.
 pipx install /path/to/eddy        # or: pip install -e .
 eddy doctor                        # detects hardware, recommends a brain, writes config
 eddy run path/to/footage/          # camera.mp4 [+ screen.mp4 + mic.wav], or one composite .mp4
+eddy run talk.mp4 --focus "only keep the part where I explain X"   # topical extract
 ```
 
 Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
@@ -41,7 +42,10 @@ Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy sho
 Bare `eddy` on a real terminal opens the **full-screen TUI** — Eddy the (chibi) eagle up top, your
 runs list, a live run monitor, and a bottom input bar. Type a command (`run <footage>`, `doctor`,
 `/help`), or just ask in plain words ("edit my podcast and keep it punchy") and the local brain
-interprets it into an action you confirm. Launch + watch runs without leaving the app. `eddy tui`
+interprets it into an action you confirm. **Drag a video onto the input** and add `- only keep the
+part about X` to focus the edit — phrasing like "only keep / only focus on" arms an aggressive
+topical *extract* (drops the off-topic majority); softer wording is a gentle steer. A focused edit
+asks what to produce (just the video / + Shorts / full kit). Launch + watch runs without leaving the app. `eddy tui`
 opens it explicitly; `eddy --no-tui` (and any piped / non-TTY / CI / MCP use) prints the branded
 banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_ANIM=1` tone it down.
 

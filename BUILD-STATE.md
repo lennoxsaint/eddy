@@ -174,5 +174,12 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   reveal + offline thumbnail placeholder; package_run e2e + JobManager/CliProvider unit tests; retake
   pause signal + post-cut pacing feedback; matrix-on-main + Node-20 action bumps + cross-platform
   wheelhouse (`--target`). Suite 581→618, coverage 74.0%, ruff+mypy clean, fast CI + matrix green.
+- **v1.5 "Focus edit"** (unreleased; lands in the next tag) — drag-drop paths + a natural focus brief
+  ("edit this video: <path> - only focus on X"). Soft steer by default; an opt-in **extract** mode
+  (auto-armed by "only keep / only focus on" phrasing) relaxes the keep-most protection gates so it can
+  drop the off-topic majority. Brief persists in the run manifest (resume-safe), audited in x_eddy only
+  (no schema/enum break). CLI `--focus`/`--extract`; TUI asks what to produce each time. 5 trunk
+  commits; suite 618→644, coverage 74.5%, ruff+mypy clean; verified via free dry-run on the real 62-min
+  source. Known limit: judge isn't yet brief-aware (aggressive extracts may ship best-effort).
 - Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
   spend) remains open by design — none are coding-agent tasks.
