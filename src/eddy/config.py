@@ -20,11 +20,12 @@ class OllamaConfig(BaseModel):
     temperature: float = 0.3
     max_tokens: int = 4096
     num_ctx: int = 32768
-    # v1.6: for a long source (a 60-min+ transcript), input + requested output can exceed num_ctx and
-    # the model truncates its JSON mid-object (the v1.5 extract crash). When the estimated prompt is
-    # large, grow num_ctx toward this cap so input + num_predict both fit. Short prompts stay at the
-    # 32768 default (a bigger window costs RAM/latency on a local model). 0 disables the adaptive grow.
-    num_ctx_max: int = 49152
+    # v1.6: opt-in adaptive context. When >num_ctx, a large prompt grows num_ctx toward this cap so a
+    # long transcript's input + num_predict both fit. DEFAULT OFF (0): a v1.6 live run showed that
+    # bumping the local 27B model to a 49152 window made editorial calls 7-16x slower (a 50-min revise),
+    # for a truncation risk the string-aware JSON salvage in extract_json already covers. Set >32768
+    # only with a fast/large-VRAM backend. 0 = keep num_ctx fixed.
+    num_ctx_max: int = 0
     seed: int | None = None  # set (with temperature=0) for EXACT reproducible editorial output
 
 

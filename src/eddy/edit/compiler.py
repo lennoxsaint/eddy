@@ -253,8 +253,11 @@ def _bridge_keep_gaps(
     ranges: list[EdlRange], phrases: list[dict], gates_cfg: GatesConfig, duration_s: float
 ) -> list[EdlRange]:
     """v1.6 extract continuity. Turn many small keep ranges into a few contiguous blocks:
-    1. Bridge consecutive keeps whose gap <= extract_bridge_gap_s (re-admit the small off-topic
-       bridge so one explanation isn't chopped into slivers); larger gaps — real tangents — stay cut.
+    1. Bridge consecutive keeps whose gap <= extract_bridge_gap_s AND whose gap contains removed
+       SPEECH (re-admit the small bridge so one explanation isn't chopped into slivers). A gap that is
+       only SILENCE is never bridged — re-admitting it just re-introduces dead air (a v1.6 live run
+       failed the dead-air gate doing exactly that); the clean splice between two speech blocks stays.
+       Larger gaps — real tangents — stay cut. (With no phrases, fall back to gap-only for unit tests.)
     2. Snap each block's edges OUT to the nearest phrase boundary within extract_phrase_snap_window_s
        (bounded by the neighbour block) so a block doesn't start/end mid-sentence.
     3. Drop an isolated block shorter than extract_min_block_s (a topical-extract sliver reads as
@@ -265,7 +268,11 @@ def _bridge_keep_gaps(
     bridged: list[EdlRange] = [ranges[0]]
     for r in ranges[1:]:
         prev = bridged[-1]
-        if r.start - prev.end <= gates_cfg.extract_bridge_gap_s:
+        gap = r.start - prev.end
+        # speech in the gap = a phrase overlapping (prev.end, r.start); only those gaps are worth
+        # re-admitting. No phrases supplied (unit tests) -> gap-only.
+        gap_has_speech = (not phrases) or any(p["end"] > prev.end and p["start"] < r.start for p in phrases)
+        if 0.0 <= gap <= gates_cfg.extract_bridge_gap_s and gap_has_speech:
             prev.end = max(prev.end, r.end)
             prev.end_handle_s = r.end_handle_s
         else:

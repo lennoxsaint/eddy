@@ -238,3 +238,26 @@ the **balanced bridge-merge + full pass** (judge + continuity + revision directi
 - **Verified:** full suite green; ruff + mypy clean; new `test_continuity_pass.py` + extended
   `test_focus_edit.py`/`test_model_boundary.py` (bridge geometry, phrase-snap, JSON-repair, brief-aware
   judge, extract directive). Live 62-min re-run pending. `vendor/yt_tools/` + locked eaglet/brand untouched.
+
+## 2026-06-18 — v1.6.1: live-run fixes (the re-run exposed three of my own regressions)
+
+The v1.6 62-min re-run **validated the headline fix** — the brief-aware judge scored the extract
+**5.73–6.91** (vs 2.18 brief-blind) and bridge-merge cut 21 fragments to 7 blocks — but it also
+regressed three ways, all traceable to v1.6 changes, and shipped a 17.4-min over-ceiling cut in 222
+minutes. Honest post-mortem + fixes:
+
+- **Adaptive `num_ctx` was net-negative** → DISABLED by default (`num_ctx_max` 49152 → **0**).
+  Bumping the local 27B to a 49152 window made editorial calls 7–16× slower (one `revise` took **50
+  min**; total 222 min vs 31). The string-aware `extract_json` salvage already covers the truncation
+  risk it was added for, so the grow is now opt-in only.
+- **Extract directive removed the loop's only length lever** → made **ceiling-aware**. The local model
+  is non-deterministic (2.5 min one run, **17 min** the next on the same prompt); the v1.6 "continuity-
+  only, never drop_beat" branch left an over-cut extract with no way to shrink, so it grew unboundedly
+  and thrashed 6 iterations. Now the continuity-only short-circuit fires ONLY while **under** the
+  ceiling; an over-ceiling extract falls through to normal compression.
+- **Bridge-merge re-admitted silence** → **speech-gated**. Setting `prev.end = r.end` across a *silent*
+  gap replayed removed silence and failed the dead-air gate (`dead_air` 10 → **0**; ship panel: "DRAGS
+  ≈200s"). A gap is now bridged only when it contains removed SPEECH (a phrase overlaps it); a silent
+  gap stays a clean splice.
+- **Verified:** suite 665→668 green, coverage 75.0% (floor 67), ruff + mypy clean. Second 62-min
+  re-run pending with all three fixes.

@@ -254,6 +254,17 @@ def test_directive_extract_is_continuity_only():
     assert "restore" in ops and "extend_pad" in ops
 
 
+def test_directive_extract_over_ceiling_still_compresses():
+    # v1.6.1: an over-ceiling extract (model under-cut) MUST get a compression directive, or the loop
+    # can never shrink it — the continuity-only short-circuit fires only while UNDER the ceiling.
+    from eddy.loop.controller import _directive_from
+
+    sim = {"dead_air": [], "duration_s": 1040, "ceiling_s": 840, "under_ceiling": False,
+           "beat_density": [{"label": "B1", "kept_s": 120, "wpm": 90}]}
+    directive = _directive_from({}, {"defects": []}, sim, 0, focus_mode="extract")
+    assert any(x["op"] == "drop_beat" for x in directive)
+
+
 def test_directive_extract_keeps_dead_air_tighteners():
     from eddy.loop.controller import _directive_from
 

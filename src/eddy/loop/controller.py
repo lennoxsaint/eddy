@@ -148,17 +148,18 @@ def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int =
     so a model that keeps under-cutting is pushed harder instead of receiving the identical nudge
     every round (which is what let the loop plateau ~20min over the ceiling).
 
-    v1.6: an EXTRACT has no ceiling race — the brief, not a length target, drove removal. The
-    compression/drop_beat escalation only re-fragments a topical extract (the iter2 thrash where a
-    revise grew the cut and severed more explanations). In extract mode the directive is
-    CONTINUITY-ONLY: keep the dead-air tighteners and pass through only the judge's continuity-
-    restoring fixes (restore / extend_pad / tighten_gap); never emit drop_beat or other compression."""
+    v1.6: an EXTRACT that is UNDER the ceiling has no length to win — compressing it only re-fragments
+    a topical cut (restore/extend/tighten only, never drop_beat). But a v1.6 live run showed the local
+    model is non-deterministic and can UNDER-cut badly (kept ~17min when ~3 was wanted); an over-ceiling
+    extract MUST still be able to compress, or the loop grows it unboundedly and thrashes. So the
+    continuity-only short-circuit fires ONLY while under the ceiling; an over-ceiling extract falls
+    through to the normal compression path below."""
     directive: list[dict] = []
     for span in (sim.get("dead_air") or [])[:5]:
         directive.append(
             {"op": "tighten_gap", "out_s": span["after_out_s"], "quote": span["before"], "reason": f"{span['gap_s']}s dead air"}
         )
-    if focus_mode == "extract":
+    if focus_mode == "extract" and sim.get("under_ceiling", True):
         for d in judge.get("defects", []):
             if d.get("fix_op") in ("restore", "extend_pad", "tighten_gap"):
                 directive.append(

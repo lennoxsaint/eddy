@@ -58,6 +58,23 @@ def test_empty_and_single_range():
     assert [(r.start, r.end) for r in one] == [(5.0 - 5.0, 5.0)]
 
 
+# --- speech-gated bridging (v1.6.1: don't bridge a silent gap -> no re-admitted dead air) ------
+
+def test_bridges_a_speech_filled_gap():
+    # the gap (3..5) holds a removed phrase -> bridge to restore the severed explanation
+    phrases = [{"start": 0.0, "end": 3.0, "text": "a"}, {"start": 3.4, "end": 4.6, "text": "mid"},
+               {"start": 5.0, "end": 8.0, "text": "b"}]
+    out = _bridge_keep_gaps(_ranges((0, 3), (5, 8)), phrases, GATES, duration_s=60.0)
+    assert [(r.start, r.end) for r in out] == [(0.0, 8.0)]
+
+
+def test_does_not_bridge_a_silent_gap():
+    # nothing spoken in (3..5) -> a clean splice; bridging would only re-admit silence (dead air)
+    phrases = [{"start": 0.0, "end": 3.0, "text": "a"}, {"start": 5.0, "end": 8.0, "text": "b"}]
+    out = _bridge_keep_gaps(_ranges((0, 3), (5, 8)), phrases, GATES, duration_s=60.0)
+    assert len(out) == 2  # left un-bridged
+
+
 # --- phrase-boundary snapping -----------------------------------------------------------------
 
 def test_phrase_snap_grows_block_out_to_sentence_edges_within_window():
