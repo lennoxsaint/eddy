@@ -261,3 +261,16 @@ minutes. Honest post-mortem + fixes:
   gap stays a clean splice.
 - **Verified:** suite 665→668 green, coverage 75.0% (floor 67), ruff + mypy clean. Second 62-min
   re-run pending with all three fixes.
+
+## 2026-06-18 — v1.6.2: schema tolerance (the second re-run crashed on a truncated cutplan)
+
+The v1.6.1 re-run crashed at iteration 1: `ollama failed after retry: missing required key
+'protected_moments'`. Cause: at the fast 32768 window the model emitted a huge cut list that hit the
+12288 `num_predict` cap and truncated after `cuts`; the v1.6 `extract_json` salvage correctly recovered
+`{retakes, cuts}`, but `DECISIONS_SCHEMA` marked all four arrays **required**, so the salvage (and the
+retry) were rejected. Fix: `DECISIONS_SCHEMA.required` → **`["cuts"]`** only. `retakes`,
+`protected_moments`, and `shorts_candidates` all default to `[]` in `EditDecisions`, so a model that
+omits one — or a truncated-then-salvaged response — now validates and lets pydantic fill the empties
+instead of aborting the run. This is general robustness (not extract-specific). Kept `num_ctx` at the
+fast default: the truncation was a `num_predict` ceiling, not a context overrun, so a bigger (slower)
+window wouldn't have helped. Suite 668→670 green, coverage 75.0%, ruff + mypy clean. Re-run pending.

@@ -67,6 +67,30 @@ def test_extract_json_unsalvageable_truncation_still_raises():
         extract_json('{"cuts": [{"start_s": 1, "end')
 
 
+def test_decisions_schema_requires_only_cuts():
+    # v1.6.1: retakes/protected_moments/shorts_candidates default to [] in EditDecisions, so a response
+    # (or a salvaged truncated one) carrying only `cuts` must validate and let pydantic fill the rest —
+    # not abort the run (a live extract crashed on a truncated response missing protected_moments).
+    from eddy.edit.cutplan import DECISIONS_SCHEMA
+    from eddy.providers.base import validate_against
+
+    raw = {"cuts": [{"start_s": 1.0, "end_s": 2.0, "tier": "MANDATORY"}]}
+    validate_against(DECISIONS_SCHEMA, raw)  # no raise
+    d = EditDecisions.model_validate({**raw, "target_runtime_seconds": 120.0})
+    assert d.protected_moments == [] and d.shorts_candidates == [] and d.retakes == [] and len(d.cuts) == 1
+
+
+def test_truncated_cutplan_salvage_validates_end_to_end():
+    # the exact v1.6.1 failure: model emitted retakes + cuts, then truncated before protected_moments
+    from eddy.edit.cutplan import DECISIONS_SCHEMA
+    from eddy.providers.base import validate_against
+
+    truncated = '{"retakes": [], "cuts": [{"start_s": 1, "end_s": 2, "tier": "MANDATORY"}, {"start_s": 5, "en'
+    salvaged = extract_json(truncated)
+    validate_against(DECISIONS_SCHEMA, salvaged)  # no raise now (cuts present; optionals default later)
+    assert salvaged["cuts"] == [{"start_s": 1, "end_s": 2, "tier": "MANDATORY"}]
+
+
 # --- layer 2: pydantic schema --------------------------------------------------------
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])

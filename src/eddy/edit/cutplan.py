@@ -44,7 +44,11 @@ BEATS_SCHEMA = {
 
 DECISIONS_SCHEMA = {
     "type": "object",
-    "required": ["retakes", "cuts", "protected_moments", "shorts_candidates"],
+    # Only `cuts` is genuinely required: retakes/protected_moments/shorts_candidates all default to []
+    # in EditDecisions, so a model that omits one — or a long extract whose JSON truncates after `cuts`
+    # and is salvaged by extract_json — must still validate and let pydantic fill the empties, not abort
+    # the whole run (a v1.6 live extract crashed here on a truncated response missing protected_moments).
+    "required": ["cuts"],
     "properties": {
         "target_runtime_seconds": {"type": "number"},
         "retakes": {
