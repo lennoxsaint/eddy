@@ -39,6 +39,60 @@ def _loads_strict(text: str) -> dict:
     return json.loads(text, parse_constant=_reject_nonfinite)
 
 
+def _close_truncated(s: str) -> str | None:
+    """Best-effort salvage of a TRUNCATED JSON object (a long cut list that overran the model's
+    output budget): drop everything after the last structurally-complete element, then append the
+    closers the still-open containers need. Returns a candidate string, or None when nothing is
+    salvageable. String-/escape-aware so a brace inside a quoted value is never miscounted. The
+    caller re-parses + schema-validates the result, so a salvage that is still wrong (e.g. missing a
+    required top-level key) is rejected downstream — this only ever turns 'crash' into 'retry'."""
+    depth = 0
+    in_str = False
+    esc = False
+    last_safe = -1  # index just past the last point the doc could be legally closed (a container end)
+    for i, ch in enumerate(s):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth >= 1:  # we just closed a nested container (e.g. one cut object) — safe to cut here
+                last_safe = i + 1
+    if last_safe < 0:
+        return None
+    prefix = s[:last_safe]
+    stack: list[str] = []
+    in_str = False
+    esc = False
+    for ch in prefix:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append(ch)
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+    closers = "".join("}" if c == "{" else "]" for c in reversed(stack))
+    return prefix + closers
+
+
 def extract_json(text: str) -> dict:
     """Pull the first JSON object out of model text (handles ```json fences)."""
     text = text.strip()
@@ -50,13 +104,33 @@ def extract_json(text: str) -> dict:
     if start < 0:
         raise ProviderError(f"no JSON object in response: {text[:200]!r}")
     depth = 0
+    in_str = False
+    esc = False
     for i, ch in enumerate(text[start:], start):
-        if ch == "{":
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
             depth += 1
         elif ch == "}":
             depth -= 1
             if depth == 0:
                 return _loads_strict(text[start : i + 1])
+    # truncated mid-object (long cut list overran num_predict): salvage the complete elements rather
+    # than crash the whole run, then fall through to the original error if the salvage won't parse.
+    repaired = _close_truncated(text[start:])
+    if repaired is not None:
+        try:
+            return _loads_strict(repaired)
+        except (ValueError, ProviderError):
+            pass
     raise ProviderError("unterminated JSON object in response")
 
 

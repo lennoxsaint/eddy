@@ -139,7 +139,10 @@ def _focus_block(focus: str | None, focus_mode: str | None) -> str:
             "topic — there is no minimum length and no quota to fill.\n"
             "Express the removal as a SMALL number of LARGE, contiguous MANDATORY cut spans — each one "
             "covering a whole off-topic region by start_s/end_s. Do NOT enumerate many tiny cuts; aim "
-            "for well under 30 cut spans total (a few big blocks, not hundreds of slivers).\n\n"
+            "for well under 30 cut spans total (a few big blocks, not hundreds of slivers).\n"
+            "Equivalently: what you KEEP should be a few LARGE, contiguous blocks — whole explanations, "
+            "not fragments. Keeping a few seconds of bridging context is better than chopping one "
+            "explanation into severed slivers.\n\n"
         )
     return (
         "USER FOCUS BRIEF — soft steer:\n"
@@ -322,9 +325,10 @@ def compile_with_repair(
     # protecting them (and exempting them from the budget) would re-admit exactly the content the
     # brief asked to drop, and _clip_by_protected would then shred the big off-topic cuts around them.
     extract = decisions.x_eddy.focus_mode == "extract"
+    phrases = load_phrases(run_dir)
     # deterministic setup→payoff integrity: protect transition/setup lines so cuts can't orphan the
     # payoff they introduce — but skip it for an extract (see above).
-    extra_protected = [] if extract else setup_protections(load_phrases(run_dir))
+    extra_protected = [] if extract else setup_protections(phrases)
     budget_frac = _EXTRACT_PROTECTION_FRAC if extract else cfg.loop.protection_budget_frac
 
     for attempt in range(3):
@@ -348,6 +352,7 @@ def compile_with_repair(
             edl = compile_edl(
                 decisions, words, src, dur, cfg.render, cfg.gates,
                 silence_spans=silence_spans, extra_protected=extra_protected,
+                phrases=phrases, extract=extract,
             )
             return decisions, edl
         except CompileError as e:

@@ -105,6 +105,8 @@ def compile_edl(
     tighten_gaps: bool = True,
     silence_spans: list[dict] | None = None,
     extra_protected: list | None = None,
+    phrases: list[dict] | None = None,
+    extract: bool = False,
 ) -> Edl:
     problems: list[dict] = []
     protected = list(decisions.protected_moments) + list(extra_protected or [])
@@ -189,6 +191,14 @@ def compile_edl(
         else:
             merged.append(r)
 
+    # v1.6 extract continuity: a topical extract drops the off-topic majority and so leaves many
+    # small keep ranges with short gaps between them — which read as explanations severed mid-thought.
+    # Bridge the small gaps into a few contiguous blocks (re-admitting the brief sub-second tangents),
+    # drop orphan slivers, and snap edges to phrase boundaries. Gated on `extract`, so a normal edit
+    # is byte-identical.
+    if extract:
+        merged = _bridge_keep_gaps(merged, phrases or [], gates_cfg, duration_s)
+
     # Scoped cold-open: pull ONE strong payoff clip (<=15s) to the very front as a hook.
     # It also stays in its natural position in the body (teaser-then-context). Prepended
     # after the source-order merge so it deliberately breaks monotonic order.
@@ -217,6 +227,61 @@ def compile_edl(
         ranges=merged,
         total_duration_s=round(total, 2),
     )
+
+
+def _snap_out_to_phrase(t: float, phrases: list[dict], window: float, bound: float | None, edge: str) -> float:
+    """Move a block edge OUTWARD to the nearest phrase boundary within `window`, so a bridged block
+    never begins/ends mid-sentence. `bound` caps the move (the neighbour block's edge, or the source
+    end); None means clamp only to the source. Returns the (possibly unchanged) boundary."""
+    if not phrases:
+        return t
+    if edge == "start":
+        cand = next((p["start"] for p in phrases if p["start"] <= t < p["end"]), None)
+        if cand is None:
+            return t
+        cand = max(cand, 0.0 if bound is None else bound)
+        return cand if 0.0 <= t - cand <= window else t
+    cand = next((p["end"] for p in phrases if p["start"] < t <= p["end"]), None)
+    if cand is None:
+        return t
+    if bound is not None:
+        cand = min(cand, bound)
+    return cand if 0.0 <= cand - t <= window else t
+
+
+def _bridge_keep_gaps(
+    ranges: list[EdlRange], phrases: list[dict], gates_cfg: GatesConfig, duration_s: float
+) -> list[EdlRange]:
+    """v1.6 extract continuity. Turn many small keep ranges into a few contiguous blocks:
+    1. Bridge consecutive keeps whose gap <= extract_bridge_gap_s (re-admit the small off-topic
+       bridge so one explanation isn't chopped into slivers); larger gaps — real tangents — stay cut.
+    2. Snap each block's edges OUT to the nearest phrase boundary within extract_phrase_snap_window_s
+       (bounded by the neighbour block) so a block doesn't start/end mid-sentence.
+    3. Drop an isolated block shorter than extract_min_block_s (a topical-extract sliver reads as
+       debris; the global min_range_s floor is too low here).
+    Only invoked for an extract — a normal edit never enters here."""
+    if not ranges:
+        return ranges
+    bridged: list[EdlRange] = [ranges[0]]
+    for r in ranges[1:]:
+        prev = bridged[-1]
+        if r.start - prev.end <= gates_cfg.extract_bridge_gap_s:
+            prev.end = max(prev.end, r.end)
+            prev.end_handle_s = r.end_handle_s
+        else:
+            bridged.append(r)
+    win = gates_cfg.extract_phrase_snap_window_s
+    for i, r in enumerate(bridged):
+        lo = bridged[i - 1].end if i > 0 else None
+        hi = bridged[i + 1].start if i + 1 < len(bridged) else duration_s
+        ns = _snap_out_to_phrase(r.start, phrases, win, lo, "start")
+        ne = _snap_out_to_phrase(r.end, phrases, win, hi, "end")
+        if ns < r.start:  # grew earlier to a phrase start: boundary now sits on a word edge
+            r.start_handle_s = 0.0
+        if ne > r.end:
+            r.end_handle_s = 0.0
+        r.start, r.end = round(ns, 3), round(ne, 3)
+    return [r for r in bridged if r.end - r.start >= gates_cfg.extract_min_block_s]
 
 
 def _snap_to_words(

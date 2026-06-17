@@ -139,18 +139,32 @@ def _record_model_pin(run_dir: Path, cfg, receipts) -> None:
     receipts.log("model_pin", **pin)
 
 
-def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int = 0) -> list[dict]:
+def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int = 0,
+                    focus_mode: str | None = None) -> list[dict]:
     """Typed fix ops: deterministic defects mapped by code, judge defects passed through.
 
     v0.3.2: when the cut is still over the ceiling, the drop_beat directive ESCALATES with
     over_ceiling_streak (consecutive rounds over) — naming more heavy beats and getting blunter —
     so a model that keeps under-cutting is pushed harder instead of receiving the identical nudge
-    every round (which is what let the loop plateau ~20min over the ceiling)."""
+    every round (which is what let the loop plateau ~20min over the ceiling).
+
+    v1.6: an EXTRACT has no ceiling race — the brief, not a length target, drove removal. The
+    compression/drop_beat escalation only re-fragments a topical extract (the iter2 thrash where a
+    revise grew the cut and severed more explanations). In extract mode the directive is
+    CONTINUITY-ONLY: keep the dead-air tighteners and pass through only the judge's continuity-
+    restoring fixes (restore / extend_pad / tighten_gap); never emit drop_beat or other compression."""
     directive: list[dict] = []
     for span in (sim.get("dead_air") or [])[:5]:
         directive.append(
             {"op": "tighten_gap", "out_s": span["after_out_s"], "quote": span["before"], "reason": f"{span['gap_s']}s dead air"}
         )
+    if focus_mode == "extract":
+        for d in judge.get("defects", []):
+            if d.get("fix_op") in ("restore", "extend_pad", "tighten_gap"):
+                directive.append(
+                    {"op": d["fix_op"], "out_s": d["out_s"], "quote": d["quote"], "reason": d.get("fix_note", d["type"])}
+                )
+        return directive[:10]
     # v0.3: length is a CEILING constraint, not a target band. Being short is fine (never
     # restore to pad). Over the ceiling → structural compression naming the heaviest beats.
     ceiling_s = sim.get("ceiling_s", sim.get("target_s", 0))
@@ -326,7 +340,10 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         save_qa(qa, iter_dir)
 
         kept = cut_transcript(edl, phrases)
-        judge = run_judge(provider, receipts, sim, decisions, edl, kept, cfg)
+        judge = run_judge(
+            provider, receipts, sim, decisions, edl, kept, cfg,
+            focus=decisions.x_eddy.focus, focus_mode=decisions.x_eddy.focus_mode,
+        )
         (iter_dir / "judge.json").write_text(json.dumps(judge, indent=1))
 
         qual = quality_score(sim, judge, kept, decisions, phrases, cfg)
@@ -366,7 +383,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             state.set_phase("loop_done")
             return iter_dir
 
-        directive = _directive_from(qa, judge, sim, over_ceiling_streak)
+        directive = _directive_from(qa, judge, sim, over_ceiling_streak, focus_mode=focus_mode)
         (iter_dir / "revision-directive.json").write_text(json.dumps(directive, indent=1))
 
         # v0.3.2 feasibility-gated plateau: stop only when NEITHER edit-quality NOR length is still
@@ -515,7 +532,10 @@ def autonomous_run(
         sim = simulate(edl, chosen_decisions, load_phrases(run_dir), cfg, cached_sim.get("target_s", edl.total_duration_s))
         kept = cut_transcript(edl, load_phrases(run_dir))
         try:
-            panel = run_ship_panel(provider, receipts, sim, chosen_decisions, edl, kept, cfg)
+            panel = run_ship_panel(
+                provider, receipts, sim, chosen_decisions, edl, kept, cfg,
+                focus=chosen_decisions.x_eddy.focus, focus_mode=chosen_decisions.x_eddy.focus_mode,
+            )
             (run_dir / "final").mkdir(parents=True, exist_ok=True)
             (run_dir / "final" / "ship-panel.json").write_text(json.dumps(panel, indent=1))
             if not panel["ships"]:

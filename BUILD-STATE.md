@@ -181,5 +181,16 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   (no schema/enum break). CLI `--focus`/`--extract`; TUI asks what to produce each time. 5 trunk
   commits; suite 618→644, coverage 74.5%, ruff+mypy clean; verified via free dry-run on the real 62-min
   source. Known limit: judge isn't yet brief-aware (aggressive extracts may ship best-effort).
+- **v1.6 "Extract continuity"** (unreleased) — closes the v1.5 known limit after the first live extract
+  (62-min Codex call → 21 fragments, judge 2.18, 0/3 ship) proved targeting but exposed quality. Four
+  fixes: (1) **brief-aware judge + ship panel** — `_focus_judge_context` stops penalizing an extract for
+  the standalone-video conventions it can't meet (hook/completeness/CTA) while keeping continuity/pacing
+  strict, so a clean extract can actually clear the gate; (2) **deterministic bridge-merge** — a new
+  `compile_edl(extract=True)` pass fuses keeps separated by ≤6s gaps into a few contiguous blocks, snaps
+  edges to phrase boundaries, drops <2.5s slivers (normal edits byte-identical); (3) **extract-aware
+  revision directive** — continuity-only (restore/extend/tighten), never `drop_beat`, killing the v1.5
+  iter-2 thrash; (4) **long-source JSON robustness** — `extract_json` salvages a truncated cut list
+  (no silent corruption) + adaptive `num_ctx`. Full suite green, ruff+mypy clean; new
+  `test_continuity_pass.py` + extended focus/boundary tests. Live 62-min re-run pending.
 - Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
   spend) remains open by design — none are coding-agent tasks.

@@ -23,6 +23,20 @@ class OllamaProvider:
         self.cfg = cfg
         self.root = cfg.base_url.removesuffix("/v1").rstrip("/")
 
+    def _adaptive_num_ctx(self, messages: list[dict[str, str]], num_predict: int) -> int:
+        """Grow num_ctx for a long prompt so input + requested output both fit, capped at num_ctx_max.
+        A 60-min+ transcript otherwise overruns the 32768 default and the model truncates its JSON
+        mid-object. Short prompts return the configured default unchanged. ~4 chars/token estimate
+        with headroom, rounded up to a 4096 boundary."""
+        if not self.cfg.num_ctx_max or self.cfg.num_ctx_max <= self.cfg.num_ctx:
+            return self.cfg.num_ctx
+        est_input = sum(len(m.get("content", "")) for m in messages) // 4
+        needed = est_input + num_predict + 2048  # headroom for the chat template + safety
+        if needed <= self.cfg.num_ctx:
+            return self.cfg.num_ctx
+        rounded = ((needed + 4095) // 4096) * 4096
+        return max(self.cfg.num_ctx, min(self.cfg.num_ctx_max, rounded))
+
     def complete(
         self,
         messages: list[dict[str, str]],
@@ -30,14 +44,15 @@ class OllamaProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> Any:
+        num_predict = self.cfg.max_tokens if max_tokens is None else max_tokens
         body: dict = {
             "model": self.cfg.model,
             "messages": messages,
             "stream": False,
             "options": {
                 "temperature": self.cfg.temperature if temperature is None else temperature,
-                "num_predict": self.cfg.max_tokens if max_tokens is None else max_tokens,
-                "num_ctx": self.cfg.num_ctx,
+                "num_predict": num_predict,
+                "num_ctx": self._adaptive_num_ctx(messages, num_predict),
             },
         }
         if self.cfg.seed is not None:  # exact reproducibility: pin the sampler seed (use with temperature=0)

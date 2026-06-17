@@ -40,6 +40,33 @@ def test_extract_json_still_parses_normal_objects():
     assert extract_json('```json\n{"a": 1, "b": 2.5}\n```') == {"a": 1, "b": 2.5}
 
 
+# --- v1.6: salvage a TRUNCATED cut list (long extract overran num_predict) ------------
+
+def test_extract_json_repairs_truncated_cut_list():
+    # the model emitted a valid object but ran out of tokens mid-way through a later cut object
+    truncated = '{"cuts": [{"start_s": 1, "end_s": 2}, {"start_s": 3, "end_s": 4}, {"start_s": 5, "end'
+    out = extract_json(truncated)
+    # the complete elements survive; the half-written trailing object is dropped, not crashed on
+    assert out == {"cuts": [{"start_s": 1, "end_s": 2}, {"start_s": 3, "end_s": 4}]}
+
+
+def test_extract_json_repair_preserves_outer_keys_before_the_open_array():
+    truncated = '{"target": 9, "cuts": [{"start_s": 1, "end_s": 2}, {"start_s": 3, "en'
+    out = extract_json(truncated)
+    assert out == {"target": 9, "cuts": [{"start_s": 1, "end_s": 2}]}
+
+
+def test_extract_json_brace_inside_string_is_not_miscounted():
+    # a '}' inside a quoted value must not be read as a structural close
+    assert extract_json('{"quote": "a } b", "n": 1}') == {"quote": "a } b", "n": 1}
+
+
+def test_extract_json_unsalvageable_truncation_still_raises():
+    # truncated before any nested element completed -> nothing safe to keep
+    with pytest.raises(ProviderError, match="unterminated"):
+        extract_json('{"cuts": [{"start_s": 1, "end')
+
+
 # --- layer 2: pydantic schema --------------------------------------------------------
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])

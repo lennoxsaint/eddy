@@ -33,6 +33,11 @@ Context limits you must respect:
   creator's own narration grammar breaks ACROSS a splice point (check the boundary cards).
 - Silent stretches during demos are deliberate visual beats, already policed elsewhere.
 
+When a FOCUS CONTEXT block appears between this rubric and the evidence, it OVERRIDES the
+standalone-video assumptions for hook_integrity, completeness, and ending_cta — follow its scoring
+guidance for an extracted/steered edit (an extract legitimately opens mid-context and ends at a
+topic boundary). boundary_continuity and pacing stay fully in force regardless.
+
 Rules:
 - List DEFECTS FIRST, then score. Every defect needs: out_s (output timestamp), quote (exact
   text at the defect), type (one of: bad_splice, orphan_reference, drag, missing_payoff,

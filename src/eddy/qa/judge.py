@@ -122,6 +122,38 @@ def _wpm_by_section(kept: list[dict], sections: int = 6) -> list[int]:
     return out
 
 
+def _focus_judge_context(focus: str | None, focus_mode: str | None) -> str:
+    """Brief-aware judging. A focus/extract edit must be scored against the user's FOCUS BRIEF, not
+    against the standalone-video conventions this rubric assumes (hook/completeness/CTA) that an
+    extract deliberately breaks. Returns '' for a normal edit (judge prompt unchanged)."""
+    if not focus or not focus.strip():
+        return ""
+    focus = focus.strip()
+    if focus_mode == "extract":
+        body = (
+            "This edit is a TOPICAL EXTRACT, not a standalone video. The editor's brief was:\n"
+            f"  {focus}\n"
+            "Judge boundary_continuity and pacing NORMALLY — a severed thought, a glued splice, or a "
+            "drag is still a real defect, and a fragmented 'stitched from many slivers' feel is a "
+            "MAJOR boundary_continuity defect. But do NOT penalize hook_integrity, completeness, or "
+            "ending_cta for the absence of standalone-video conventions: an extract legitimately opens "
+            "mid-context, omits the off-topic setup/tangents/payoff that were cut on purpose, and ends "
+            "at the topic boundary with no CTA. Score completeness on whether the KEPT topic is "
+            "internally whole — a promise made INSIDE the kept span left unpaid — not on whether the "
+            "original video's full arc survives. A clean stop at the end of the topic is ending_cta 10, "
+            "not abrupt_end. Off-topic material that was correctly removed is never a missing_payoff or "
+            "an orphan_reference."
+        )
+    else:
+        body = (
+            "The editor steered this edit toward a FOCUS BRIEF:\n"
+            f"  {focus}\n"
+            "Bias completeness and pacing toward how well the kept content serves this brief. Tangents "
+            "cut because they don't serve the brief are NOT defects — do not ask for them back."
+        )
+    return f"FOCUS CONTEXT (read before scoring):\n{body}\n\n"
+
+
 def _consistent(result: dict) -> bool:
     score = weighted_score(result.get("scores", {}))
     defects = result.get("defects") or []
@@ -141,10 +173,13 @@ def run_judge(
     edl: Edl,
     kept_phrases: list[dict],
     cfg: EddyConfig,
+    focus: str | None = None,
+    focus_mode: str | None = None,
 ) -> dict:
     prompt = (PROMPTS / "judge.md").read_text()
     packet = evidence_packet(sim_report, decisions, edl, kept_phrases)
-    messages = [{"role": "user", "content": f"{prompt}\n\nEVIDENCE:\n{packet}"}]
+    focus_ctx = _focus_judge_context(focus, focus_mode)
+    messages = [{"role": "user", "content": f"{prompt}\n\n{focus_ctx}EVIDENCE:\n{packet}"}]
 
     results = []
     for attempt in range(2):
@@ -198,15 +233,17 @@ SHIP_LENSES = {
 
 
 def run_ship_panel(provider, receipts: Receipts, sim_report: dict, decisions: EditDecisions,
-                   edl: Edl, kept_phrases: list[dict], cfg: EddyConfig) -> dict:
+                   edl: Edl, kept_phrases: list[dict], cfg: EddyConfig,
+                   focus: str | None = None, focus_mode: str | None = None) -> dict:
     """Run ONCE on the chosen best iteration: 3 independent lenses each vote ship/no-ship,
     majority decides. Advisory — never blocks delivery in v0.3 (records dissent)."""
     packet = evidence_packet(sim_report, decisions, edl, kept_phrases)
+    focus_ctx = _focus_judge_context(focus, focus_mode)
     votes = []
     for lens, framing in SHIP_LENSES.items():
         msg = [{"role": "user", "content":
                 f"You are a hostile, skeptical release reviewer. Default: NOT ready.\n{framing}\n\n"
-                f"EVIDENCE:\n{packet}"}]
+                f"{focus_ctx}EVIDENCE:\n{packet}"}]
         try:
             r = provider.complete(msg, schema=PANEL_SCHEMA, temperature=0.2, max_tokens=512)
             votes.append({"lens": lens, "ship": bool(r.get("ship")), "reason": r.get("reason", "")[:200]})

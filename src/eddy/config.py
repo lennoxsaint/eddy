@@ -20,6 +20,11 @@ class OllamaConfig(BaseModel):
     temperature: float = 0.3
     max_tokens: int = 4096
     num_ctx: int = 32768
+    # v1.6: for a long source (a 60-min+ transcript), input + requested output can exceed num_ctx and
+    # the model truncates its JSON mid-object (the v1.5 extract crash). When the estimated prompt is
+    # large, grow num_ctx toward this cap so input + num_predict both fit. Short prompts stay at the
+    # 32768 default (a bigger window costs RAM/latency on a local model). 0 disables the adaptive grow.
+    num_ctx_max: int = 49152
     seed: int | None = None  # set (with temperature=0) for EXACT reproducible editorial output
 
 
@@ -157,6 +162,12 @@ class GatesConfig(BaseModel):
     silence_min_cut_s: float = 0.40  # audio-silent span >= this (and no words) gets removed
     silence_handle_s: float = 0.10  # silence left each side of a removed silent span
     max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
+    # v1.6 extract continuity (only applied when compile_edl runs with extract=True): consolidate the
+    # many small keep ranges a topical extract produces into a few contiguous blocks, so explanations
+    # aren't severed mid-thought. A normal/steer edit never enters this path.
+    extract_bridge_gap_s: float = 6.0          # bridge consecutive keep blocks separated by <= this
+    extract_min_block_s: float = 2.5           # drop an isolated keep block shorter than this (sliver)
+    extract_phrase_snap_window_s: float = 1.5  # snap a block edge OUT to a phrase boundary within this
 
 
 class TelemetryConfig(BaseModel):

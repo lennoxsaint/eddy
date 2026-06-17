@@ -203,3 +203,38 @@ the headline ask; true extraction needs an explicit, isolated relaxation.
   mypy clean. **Known limit:** the judge isn't yet told about the brief, so it may score an aggressive
   extract below threshold (loop then ships best-effort) — extract quality is model-dependent and only
   provable after a local proxy render. `vendor/yt_tools/` + locked eaglet/brand untouched.
+
+## 2026-06-18 — v1.6 "Extract continuity" (brief-aware judge + bridge-merge) — unreleased
+
+The first live extract run (62-min Codex call → 2.5-min, 21 fragments) proved the v1.5 *targeting* but
+exposed *quality*: it correctly isolated the on-topic spans yet shipped 0/3 ship-panel, judge 2.18, gates
+failing. Root cause (verified in source): the judge was **brief-blind** — `run_judge`/`evidence_packet`
+never read `x_eddy.focus`, so the hostile rubric scored a 4% extract against standalone-video conventions
+(hook/completeness/CTA) it structurally can't meet, making the 8.0 threshold mathematically unreachable;
+and the compiler had **no gap-bridging**, so 21 slivers survived ("severed mid-thought"). Lennox approved
+the **balanced bridge-merge + full pass** (judge + continuity + revision directive + JSON robustness).
+
+- **Brief-aware judge + ship panel** (`qa/judge.py`, `prompts/judge.md`, `loop/controller.py`):
+  `_focus_judge_context(focus, focus_mode)` injects an extract/steer block — `boundary_continuity` and
+  `pacing` stay strict (a fragmented feel is still a MAJOR boundary defect), but hook/completeness/CTA are
+  no longer penalized for an extract legitimately opening mid-context and ending at the topic boundary.
+  `run_judge`/`run_ship_panel` gain `focus`/`focus_mode`; the loop passes `decisions.x_eddy.*`. Global
+  `judge_threshold` unchanged (the fix is fair scoring, not a lower bar).
+- **Deterministic continuity pass** (`edit/compiler.py`, `config.py`, `edit/cutplan.py`):
+  `_bridge_keep_gaps` (gated on a new `compile_edl(extract=True)`, so a normal edit is byte-identical)
+  bridges consecutive keeps whose gap ≤ `extract_bridge_gap_s` (6s) into one contiguous block, snaps
+  edges OUT to phrase boundaries within `extract_phrase_snap_window_s` (1.5s), and drops orphan blocks
+  below `extract_min_block_s` (2.5s). Re-admitting a ≤6s bridge can't violate `protected_moments` (it only
+  ADDS kept content). The "aggressive" variant is now a config change, not code.
+- **Extract-aware revision directive** (`loop/controller.py`): `_directive_from(focus_mode=…)` — in extract
+  mode the over-ceiling compression escalation is skipped (no ceiling race) and only continuity-restoring
+  judge fixes (`restore`/`extend_pad`/`tighten_gap`) pass through; **never `drop_beat`** (that caused the
+  v1.5 iter-2 thrash that grew the cut and severed more explanations).
+- **Long-source JSON robustness** (`providers/base.py`, `providers/ollama.py`): `extract_json` is now
+  string/escape-aware and, on a truncated object (a long cut list overrunning `num_predict` — the v1.5
+  crash), salvages the complete elements and re-validates, falling through to the original error if the
+  salvage won't parse (no silent corruption). Ollama grows `num_ctx` adaptively toward `num_ctx_max`
+  (49152) when the estimated prompt is large; short prompts stay at the 32768 default.
+- **Verified:** full suite green; ruff + mypy clean; new `test_continuity_pass.py` + extended
+  `test_focus_edit.py`/`test_model_boundary.py` (bridge geometry, phrase-snap, JSON-repair, brief-aware
+  judge, extract directive). Live 62-min re-run pending. `vendor/yt_tools/` + locked eaglet/brand untouched.
