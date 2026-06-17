@@ -3,7 +3,7 @@ and the safety rule that long + destructive + NL actions all require confirmatio
 
 from __future__ import annotations
 
-from eddy.tui.intents import Intent, interpret_nl, parse_command
+from eddy.tui.intents import Intent, interpret_nl, is_extract_brief, normalize_source, parse_command
 
 
 def test_run_command_parses_source_and_confirms():
@@ -80,3 +80,69 @@ def test_interpret_nl_provider_error_is_graceful():
 def test_describe_is_readable():
     i = Intent(action="run", args={"source": "a.mp4", "target_minutes": 8}, needs_confirm=True)
     assert "run" in i.describe() and "a.mp4" in i.describe()
+
+
+# --- v1.5 drag-drop + focus brief ----------------------------------------------------------------
+
+def test_drag_dropped_path_with_escaped_spaces_survives():
+    # macOS Finder drag-drop escapes spaces with a backslash; shlex must keep the path whole.
+    i = parse_command(r"run /Users/me/My\ Videos/clip\ final.mp4")
+    assert i.action == "run" and i.args["source"] == "/Users/me/My Videos/clip final.mp4"
+
+
+def test_quoted_path_with_spaces_survives():
+    i = parse_command("run '/Users/me/My Videos/clip.mp4'")
+    assert i.args["source"] == "/Users/me/My Videos/clip.mp4"
+
+
+def test_file_url_is_normalized_to_local_path():
+    s = normalize_source("file:///Users/me/My%20Videos/clip.mp4")
+    assert s == "/Users/me/My Videos/clip.mp4"
+
+
+def test_edit_this_video_natural_grammar_with_focus():
+    i = parse_command(
+        "edit this video: /Users/me/codex-call.mp4 - i want this video to only focus on my Codex explanation"
+    )
+    assert i.action == "run"
+    assert i.args["source"] == "/Users/me/codex-call.mp4"
+    assert i.args["focus"] == "i want this video to only focus on my Codex explanation"
+    assert i.args["focus_mode"] == "extract"  # 'only focus on' arms extract
+    assert i.needs_confirm is True
+
+
+def test_soft_steer_brief_is_not_extract():
+    i = parse_command("run ~/talk.mp4 - center it on the pricing story and trim the tangents")
+    assert i.args["focus_mode"] == "steer"
+
+
+def test_extract_verb_forces_extract_even_without_cue():
+    i = parse_command("extract ~/talk.mp4 - the pricing story")
+    assert i.action == "run" and i.args["focus_mode"] == "extract"
+
+
+def test_bare_dropped_path_is_an_edit():
+    i = parse_command("/Users/me/codex-call.mp4 - only keep the demo")
+    assert i.action == "run" and i.args["source"] == "/Users/me/codex-call.mp4"
+    assert i.args["focus_mode"] == "extract"
+
+
+def test_first_dash_separates_path_from_brief():
+    # the brief may itself contain ' - '; only the first split matters
+    i = parse_command("edit ~/v.mp4 - keep only intro - and the outro")
+    assert i.args["source"] == "~/v.mp4"
+    assert i.args["focus"] == "keep only intro - and the outro"
+
+
+def test_is_extract_brief_phrasing():
+    assert is_extract_brief("only keep the part where I explain Codex")
+    assert is_extract_brief("just the bit about pricing")
+    assert is_extract_brief("cut everything except the demo")
+    assert not is_extract_brief("make it punchier and tighten the pacing")
+    assert not is_extract_brief(None)
+
+
+def test_focus_only_attaches_to_run_not_other_verbs():
+    # a focus brief on a non-run verb is ignored (no focus plumbing for transcribe/shorts)
+    i = parse_command("transcribe ~/v.mp4 - only the intro")
+    assert i.action == "transcribe" and "focus" not in i.args
