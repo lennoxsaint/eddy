@@ -21,6 +21,7 @@ from eddy.tui import phases
 from eddy.tui.intents import ACTIONS, Intent, interpret_nl, parse_command
 from eddy.tui.runner import TuiData, run_verdict
 from eddy.tui.screens.confirm import ConfirmScreen
+from eddy.tui.screens.output import OUTPUT_FLAGS, OutputScreen
 from eddy.tui.screens.doctor import DoctorScreen
 from eddy.tui.screens.failure import FailureScreen
 from eddy.tui.screens.preview import PreviewScreen
@@ -263,7 +264,14 @@ class HomeScreen(Screen):
                     self._status(f"results at {path}" if path else f"{slug} has no results yet")
             return
         if intent.needs_confirm:
-            self.app.push_screen(ConfirmScreen(intent.describe()), lambda ok: self._maybe_exec(ok, intent))
+            # a focused / extract edit asks what to PRODUCE (Lennox picks each time); the chooser
+            # doubles as the confirm. Every other mutating action uses the plain yes/no confirm.
+            if a == "run" and intent.args.get("focus"):
+                self.app.push_screen(
+                    OutputScreen(intent.describe()), lambda choice: self._exec_with_output(choice, intent)
+                )
+            else:
+                self.app.push_screen(ConfirmScreen(intent.describe()), lambda ok: self._maybe_exec(ok, intent))
         else:
             self._exec(intent)
 
@@ -272,6 +280,13 @@ class HomeScreen(Screen):
             self._exec(intent)
         else:
             self._status("cancelled")
+
+    def _exec_with_output(self, choice: str | None, intent: Intent) -> None:
+        if not choice:
+            self._status("cancelled")
+            return
+        intent.args["skip_shorts"], intent.args["skip_package"] = OUTPUT_FLAGS[choice]
+        self._exec(intent)
 
     @work(thread=True)
     def _exec(self, intent: Intent) -> None:

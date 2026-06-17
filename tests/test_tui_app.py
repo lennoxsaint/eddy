@@ -172,6 +172,56 @@ async def test_why_failed_modal_opens_for_failed_run(tmp_path):
         assert "Media error" in app.screen._d["headline"]
 
 
+async def test_focused_run_opens_output_chooser_then_starts_job(tmp_path):
+    from eddy.tui.screens.output import OutputScreen
+
+    app, data = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        app.screen.query_one("#cmd", Input).value = (
+            "edit this video: ~/codex.mp4 - only keep my Codex explanation"
+        )
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, OutputScreen)  # a focused edit asks what to PRODUCE
+        await pilot.press("v")  # just the video
+        await pilot.pause()
+        await pilot.pause()
+        assert data.jobs.list(), "picking an output should start the job"
+        argv = list(data.jobs._jobs.values())[0].argv
+        assert "--focus" in argv and "--extract" in argv
+        assert "--skip-shorts" in argv and "--skip-package" in argv  # 'video' = skip both
+
+
+async def test_focused_run_cancel_starts_nothing(tmp_path):
+    from eddy.tui.screens.output import OutputScreen
+
+    app, data = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        app.screen.query_one("#cmd", Input).value = "edit ~/codex.mp4 - only the demo"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, OutputScreen)
+        await pilot.press("escape")  # cancel the chooser
+        await pilot.pause()
+        assert not data.jobs.list()
+
+
+async def test_plain_run_still_uses_yes_no_confirm(tmp_path):
+    # a run WITHOUT a focus brief keeps the original confirm path (not the output chooser)
+    app, _ = _app(tmp_path)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+        app.screen.query_one("#cmd", Input).value = "run ~/clip.mp4"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmScreen)
+
+
 @pytest.mark.parametrize("state", ["idle", "working", "success", "error"])
 async def test_eagle_state_can_change(tmp_path, state):
     app, _ = _app(tmp_path)
