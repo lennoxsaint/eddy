@@ -116,6 +116,36 @@ def packed_lines(phrases: list[dict]) -> str:
     return "\n".join(f"[{p['start']:.2f}-{p['end']:.2f}] {p['text']}" for p in phrases)
 
 
+# v1.5 extract mode raises the protection budget: the model marks the on-topic spans it KEEPS as
+# protected_moments, which can exceed the normal 20% compression budget. There's no ceiling race to
+# win in an extract, so generous keep-protection is safe (and desirable).
+_EXTRACT_PROTECTION_FRAC = 0.6
+
+
+def _focus_block(focus: str | None, focus_mode: str | None) -> str:
+    """The USER FOCUS BRIEF prompt block. Empty when no brief. Soft 'steer' nudges what to cut first;
+    'extract' reframes the task as topical extraction and overrides the length budget."""
+    if not focus or not focus.strip():
+        return ""
+    focus = focus.strip()
+    if focus_mode == "extract":
+        return (
+            "USER FOCUS BRIEF — EXTRACT MODE (this OVERRIDES the length budget below):\n"
+            f"{focus}\n"
+            "This is a TOPICAL EXTRACT. KEEP ONLY the spans that serve this focus; cut everything "
+            "off-topic as MANDATORY tier, even if that removes the large majority of the runtime. Do "
+            "not preserve off-topic intros, tangents, setup, or transitions. Mark the on-topic spans "
+            "you keep as protected_moments. The result must be a tight, coherent video about ONLY this "
+            "topic — there is no minimum length and no quota to fill.\n\n"
+        )
+    return (
+        "USER FOCUS BRIEF — soft steer:\n"
+        f"{focus}\n"
+        "Center the edit on this. When the length budget forces a choice, cut tangents that don't "
+        "serve this focus FIRST; keep the hook, the on-topic payoff, and the CTA intact.\n\n"
+    )
+
+
 def _call(provider, receipts: Receipts, label: str, messages, schema, max_tokens=8192):
     t0 = time.time()
     try:
@@ -157,6 +187,8 @@ def initial_decisions(
     filler_hints: list[dict],
     beats: list[dict],
     cfg: EddyConfig,
+    focus: str | None = None,
+    focus_mode: str | None = None,
 ) -> EditDecisions:
     from eddy.edit.simulate import raw_beat_density
 
@@ -177,20 +209,29 @@ def initial_decisions(
     remove_s = max(0.0, content_s - ceiling_s)
     pct = (remove_s / content_s * 100) if content_s > 0 else 0.0
     protect_budget_s = cfg.loop.protection_budget_frac * content_s
-    length_budget = (
-        f"LENGTH BUDGET (firm):\n"
-        f"- Raw source is ~{content_s / 60:.0f} min ({content_s:.0f}s). HARD CEILING: "
-        f"{cfg.loop.length_ceiling_minutes:.0f} min ({ceiling_s:.0f}s).\n"
-        f"- To land under the ceiling you must remove roughly {remove_s:.0f}s "
-        f"(~{pct:.0f}% of the runtime). Cutting is the primary lever — reaching the ceiling is "
-        f"expected unless it would require cutting protected hook/payoff/CTA.\n"
-        f"- Protect at most ~{protect_budget_s:.0f}s total "
-        f"({cfg.loop.protection_budget_frac * 100:.0f}% of runtime); broad protections void your own cuts."
-    )
+    if focus_mode == "extract":
+        # an extract has no length to fill; the brief drives removal, not the ceiling.
+        length_budget = (
+            f"LENGTH (extract mode): raw source is ~{content_s / 60:.0f} min ({content_s:.0f}s). "
+            f"Keep only what the focus brief asks for — there is NO target to reach and NO minimum "
+            f"length. Removing the off-topic majority is the goal, not a side effect."
+        )
+    else:
+        length_budget = (
+            f"LENGTH BUDGET (firm):\n"
+            f"- Raw source is ~{content_s / 60:.0f} min ({content_s:.0f}s). HARD CEILING: "
+            f"{cfg.loop.length_ceiling_minutes:.0f} min ({ceiling_s:.0f}s).\n"
+            f"- To land under the ceiling you must remove roughly {remove_s:.0f}s "
+            f"(~{pct:.0f}% of the runtime). Cutting is the primary lever — reaching the ceiling is "
+            f"expected unless it would require cutting protected hook/payoff/CTA.\n"
+            f"- Protect at most ~{protect_budget_s:.0f}s total "
+            f"({cfg.loop.protection_budget_frac * 100:.0f}% of runtime); broad protections void your own cuts."
+        )
     density = raw_beat_density(beats, phrases)
     density_lines = "\n".join(f"- {b['label']}: {b['span_s']:.0f}s @ {b['raw_wpm']:.0f}wpm" for b in density)
     content = (
         f"{prompt}\n\n"
+        f"{_focus_block(focus, focus_mode)}"
         f"{length_budget}\n\n"
         f"BEAT DENSITY (raw, heaviest span first; long span + LOW wpm = draggy screen-reading, cut hardest):\n"
         f"{density_lines}\n\n"
@@ -202,9 +243,12 @@ def initial_decisions(
     )
     if flags := detect_injection(packed_lines(phrases)):
         receipts.log("prompt_injection_flagged", stage="cutplan", patterns=flags[:5])
+    # the user brief is untrusted free text too — scan it so an injected instruction is on the record.
+    if focus and (fflags := detect_injection(focus)):
+        receipts.log("prompt_injection_flagged", stage="focus_brief", patterns=fflags[:5])
     raw = _call(provider, receipts, "cutplan", [{"role": "user", "content": content}], DECISIONS_SCHEMA)
     decisions = EditDecisions.model_validate({**raw, "target_runtime_seconds": target_s})
-    decisions.x_eddy = EddyMeta(iteration=1, beats=beats)
+    decisions.x_eddy = EddyMeta(iteration=1, beats=beats, focus=focus or "", focus_mode=focus_mode or "")
     return decisions
 
 
@@ -231,8 +275,11 @@ def revise_decisions(
             "PACING AFTER YOUR LAST EDIT (post-cut; a long kept span at LOW wpm is still draggy — "
             f"cut harder there):\n{lines}\n\n"
         )
+    # carry the user focus brief through every revision (and through compiler repair passes, which
+    # rebuild decisions from raw output) so iteration 2+ never drifts off the requested topic.
     content = (
         f"{prompt}\n\n"
+        f"{_focus_block(previous.x_eddy.focus, previous.x_eddy.focus_mode)}"
         f"YOUR PREVIOUS DECISIONS:\n{prev_json}\n\n"
         f"{pacing_block}"
         f"REVISION DIRECTIVE:\n{json.dumps(directive, indent=1)}\n\n"
@@ -244,7 +291,8 @@ def revise_decisions(
     )
     parent_sha = hashlib.sha256(prev_json.encode()).hexdigest()[:12]
     decisions.x_eddy = EddyMeta(
-        iteration=iteration, parent_sha=parent_sha, directive=directive, beats=previous.x_eddy.beats
+        iteration=iteration, parent_sha=parent_sha, directive=directive, beats=previous.x_eddy.beats,
+        focus=previous.x_eddy.focus, focus_mode=previous.x_eddy.focus_mode,
     )
     return decisions
 
@@ -258,9 +306,15 @@ def compile_with_repair(
     src = m["sources"]["camera"]
     dur = probe_duration(Path(src))
     silence_spans = audio_silence_map(run_dir)
-    # deterministic setup→payoff integrity: protect transition/setup lines so cuts can't
-    # orphan the payoff they introduce
-    extra_protected = setup_protections(load_phrases(run_dir))
+    # v1.5 extract mode relaxes the gates that exist to PROTECT a keep-most compression — they fight
+    # a deliberate topical extract. The off-topic majority is full of setup/transition lines; auto-
+    # protecting them (and exempting them from the budget) would re-admit exactly the content the
+    # brief asked to drop, and _clip_by_protected would then shred the big off-topic cuts around them.
+    extract = decisions.x_eddy.focus_mode == "extract"
+    # deterministic setup→payoff integrity: protect transition/setup lines so cuts can't orphan the
+    # payoff they introduce — but skip it for an extract (see above).
+    extra_protected = [] if extract else setup_protections(load_phrases(run_dir))
+    budget_frac = _EXTRACT_PROTECTION_FRAC if extract else cfg.loop.protection_budget_frac
 
     for attempt in range(3):
         # v0.3.2: enforce the protection budget the prompt asks for but never checked, on EVERY
@@ -271,13 +325,13 @@ def compile_with_repair(
         # over-broad protections. Idempotent — a sub-budget set is returned untouched. The
         # deterministic setup_protections are added separately at compile and exempt from the budget.
         kept_prot, dropped_prot = enforce_protection_budget(
-            list(decisions.protected_moments), dur, cfg.loop.protection_budget_frac
+            list(decisions.protected_moments), dur, budget_frac
         )
         if dropped_prot:
             decisions.protected_moments = kept_prot
             receipts.log(
-                "protection_budget", source_s=round(dur), budget_frac=cfg.loop.protection_budget_frac,
-                kept=len(kept_prot), dropped=len(dropped_prot),
+                "protection_budget", source_s=round(dur), budget_frac=budget_frac,
+                kept=len(kept_prot), dropped=len(dropped_prot), extract=extract,
             )
         try:
             edl = compile_edl(

@@ -70,6 +70,11 @@ class EddyMeta(BaseModel):
     parent_sha: str = ""
     directive: list[dict] = Field(default_factory=list)
     beats: list[dict] = Field(default_factory=list)  # [{label, start_s, end_s}]
+    # v1.5 focus edit: a free-text user brief that steers the edit, and the mode it armed.
+    # x_eddy-only (not a top-level EditDecisions field, not a DECISIONS_SCHEMA enum) so the
+    # Claire v1.0 / benchmark shapes are unchanged. focus_mode: "" | "steer" | "extract".
+    focus: str = ""
+    focus_mode: str = ""
 
 
 class EditDecisions(BaseModel):
