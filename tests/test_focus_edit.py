@@ -20,6 +20,7 @@ class _P:
 
     def complete(self, messages, schema=None, max_tokens=None):
         self._seen["content"] = messages[0]["content"]
+        self._seen["max_tokens"] = max_tokens
         return {"cuts": [], "retakes": [], "protected_moments": [], "shorts_candidates": []}
 
 
@@ -34,7 +35,9 @@ def _run_dir(tmp_path):
 def test_focus_block_helper():
     assert _focus_block(None, None) == ""
     assert _focus_block("", "extract") == ""  # blank brief = no block
-    assert "EXTRACT MODE" in _focus_block("only the codex bit", "extract")
+    ex = _focus_block("only the codex bit", "extract")
+    assert "EXTRACT MODE" in ex
+    assert "LARGE" in ex and "cut spans" in ex  # coarse-removal directive (avoids JSON truncation)
     assert "soft steer" in _focus_block("center on pricing", "steer")
 
 
@@ -52,6 +55,8 @@ def test_initial_decisions_injects_extract_brief_and_records_it(tmp_path):
     assert "only keep the part where I explain Codex" in content
     assert "extract mode" in content.lower()  # length framing switched away from the firm budget
     assert "LENGTH BUDGET (firm)" not in content
+    assert "cut spans" in content  # coarse-removal directive present
+    assert seen["max_tokens"] == 12288  # extract gets more output headroom (anti-truncation)
     assert out.x_eddy.focus == "only keep the part where I explain Codex"
     assert out.x_eddy.focus_mode == "extract"
 
@@ -67,6 +72,7 @@ def test_initial_decisions_soft_steer_keeps_firm_length_budget(tmp_path):
     )
     assert "USER FOCUS BRIEF — soft steer" in seen["content"]
     assert "LENGTH BUDGET (firm)" in seen["content"]  # steer does NOT override the budget
+    assert seen["max_tokens"] == 8192  # steer keeps the normal output budget
     assert out.x_eddy.focus_mode == "steer"
 
 

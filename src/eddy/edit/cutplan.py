@@ -136,7 +136,10 @@ def _focus_block(focus: str | None, focus_mode: str | None) -> str:
             "off-topic as MANDATORY tier, even if that removes the large majority of the runtime. Do "
             "not preserve off-topic intros, tangents, setup, or transitions. Mark the on-topic spans "
             "you keep as protected_moments. The result must be a tight, coherent video about ONLY this "
-            "topic — there is no minimum length and no quota to fill.\n\n"
+            "topic — there is no minimum length and no quota to fill.\n"
+            "Express the removal as a SMALL number of LARGE, contiguous MANDATORY cut spans — each one "
+            "covering a whole off-topic region by start_s/end_s. Do NOT enumerate many tiny cuts; aim "
+            "for well under 30 cut spans total (a few big blocks, not hundreds of slivers).\n\n"
         )
     return (
         "USER FOCUS BRIEF — soft steer:\n"
@@ -246,7 +249,11 @@ def initial_decisions(
     # the user brief is untrusted free text too — scan it so an injected instruction is on the record.
     if focus and (fflags := detect_injection(focus)):
         receipts.log("prompt_injection_flagged", stage="focus_brief", patterns=fflags[:5])
-    raw = _call(provider, receipts, "cutplan", [{"role": "user", "content": content}], DECISIONS_SCHEMA)
+    # extract removes the off-topic majority, so even a coarse cut list is longer than a normal
+    # compression edit's — give it more output headroom (still safely under num_ctx) so the JSON
+    # response isn't truncated mid-object. Stays at 8192 for a normal/steer edit.
+    cut_tokens = 12288 if focus_mode == "extract" else 8192
+    raw = _call(provider, receipts, "cutplan", [{"role": "user", "content": content}], DECISIONS_SCHEMA, max_tokens=cut_tokens)
     decisions = EditDecisions.model_validate({**raw, "target_runtime_seconds": target_s})
     decisions.x_eddy = EddyMeta(iteration=1, beats=beats, focus=focus or "", focus_mode=focus_mode or "")
     return decisions
@@ -285,7 +292,11 @@ def revise_decisions(
         f"REVISION DIRECTIVE:\n{json.dumps(directive, indent=1)}\n\n"
         f"{fence('TRANSCRIPT', packed_lines(phrases))}"
     )
-    raw = _call(provider, receipts, f"revise_iter{iteration}", [{"role": "user", "content": content}], DECISIONS_SCHEMA)
+    cut_tokens = 12288 if previous.x_eddy.focus_mode == "extract" else 8192
+    raw = _call(
+        provider, receipts, f"revise_iter{iteration}", [{"role": "user", "content": content}],
+        DECISIONS_SCHEMA, max_tokens=cut_tokens,
+    )
     decisions = EditDecisions.model_validate(
         {**raw, "target_runtime_seconds": previous.target_runtime_seconds}
     )
