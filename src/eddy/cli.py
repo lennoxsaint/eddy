@@ -174,6 +174,8 @@ def run(
     dry_run: bool = typer.Option(False, "--dry-run", help="Check environment + that the footage decodes, then exit (no transcribe/render)."),
     format: Optional[str] = typer.Option(None, "--format", help="Content profile: default | tutorial | lesson | longform | podcast (raises the length ceiling)."),
     profile: Optional[str] = typer.Option(None, "--profile", help="Named per-channel profile from config [profiles]. Explicit flags override it."),
+    focus: Optional[str] = typer.Option(None, "--focus", help="Focus brief: what to keep / center the edit on (free text)."),
+    extract: Optional[bool] = typer.Option(None, "--extract/--no-extract", help="Force topical EXTRACT mode (keep ONLY the focus) on/off; default auto-detects from the brief."),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
     from eddy.config import load_config, resolve_profile
@@ -187,6 +189,26 @@ def run(
     # effective options: an explicit CLI flag wins; otherwise fall back to the profile, then defaults.
     target_minutes = target_minutes if target_minutes is not None else prof.target_minutes
     language = language if language is not None else prof.language
+    # focus brief: CLI flag > profile default. Mode: --extract/--no-extract wins; else auto-detect
+    # from phrasing ("only keep X" -> extract, softer wording -> steer).
+    focus = focus if focus is not None else prof.focus
+    focus_mode: Optional[str] = None
+    if focus:
+        from eddy.tui.intents import is_extract_brief
+
+        if extract is True:
+            focus_mode = "extract"
+        elif extract is False:
+            focus_mode = "steer"
+        else:
+            focus_mode = "extract" if is_extract_brief(focus) else "steer"
+        # an extract is a tight topical cut: shorts + the launch-kit package are meaningless on it,
+        # so default those OFF unless the user explicitly asked for them.
+        if focus_mode == "extract":
+            if skip_shorts is None:
+                skip_shorts = True
+            if skip_package is None:
+                skip_package = True
     skip_shorts = skip_shorts if skip_shorts is not None else bool(prof.skip_shorts)
     skip_package = skip_package if skip_package is not None else bool(prof.skip_package)
     eff_format = format if format is not None else (prof.format or "default")
@@ -222,6 +244,8 @@ def run(
             head, nxt = friendly_error(e)
             typer.echo(f"sources       FAIL {head}\n              → {nxt}", err=True)
             ok = False
+        if focus:
+            typer.echo(f"focus         ok   [{focus_mode}] {focus[:70]}")
         typer.echo("\ndry run: " + ("OK — ready to run" if ok else "problems found (see FAIL above)"))
         raise typer.Exit(0 if ok else 1)
 
@@ -237,6 +261,8 @@ def run(
             skip_package=skip_package,
             language=language,
             ceiling_minutes=ceiling_minutes,
+            focus=focus,
+            focus_mode=focus_mode,
         )
     except Exception as e:
         from eddy.beacon import send_failure_beacon

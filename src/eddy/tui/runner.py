@@ -228,6 +228,10 @@ class TuiData:
                     src,
                     target_minutes=intent.args.get("target_minutes"),
                     local_only=bool(intent.args.get("local_only")),
+                    focus=intent.args.get("focus"),
+                    focus_mode=intent.args.get("focus_mode"),
+                    skip_shorts=intent.args.get("skip_shorts"),
+                    skip_package=intent.args.get("skip_package"),
                 )
             elif a == "shorts":
                 job = self.jobs.start_shorts(src)

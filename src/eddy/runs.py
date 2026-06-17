@@ -73,7 +73,13 @@ def default_slug(source: Path) -> str:
     return f"{date.today().isoformat()}-{base}"[:80]
 
 
-def open_run(source: Path, slug: str | None = None, resume: bool = False) -> Path:
+def open_run(
+    source: Path,
+    slug: str | None = None,
+    resume: bool = False,
+    focus: str | None = None,
+    focus_mode: str | None = None,
+) -> Path:
     cfg = load_config()
     sources = discover_sources(source)
     incoming_sha = {k: sha256_file(v) for k, v in sources.items()}
@@ -109,6 +115,9 @@ def open_run(source: Path, slug: str | None = None, resume: bool = False) -> Pat
         "source_sha256": incoming_sha,
         "config": cfg.model_dump(),
         "eddy_version": __import__("eddy").__version__,
+        # v1.5: a set-once user focus brief lives in the immutable manifest so --resume keeps it even
+        # if the CLI flag is dropped. Read by edit_loop via manifest(run_dir)["run_settings"].
+        "run_settings": {"focus": focus or "", "focus_mode": focus_mode or ""},
     }
     from eddy.atomicio import atomic_write_text
 

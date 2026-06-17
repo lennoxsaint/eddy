@@ -115,6 +115,8 @@ class JobManager:
         local_only: bool = False,
         skip_shorts: bool | None = None,
         skip_package: bool | None = None,
+        focus: str | None = None,
+        focus_mode: str | None = None,
     ) -> Job:
         slug = self._free_slug(slug or default_slug(Path(source)))
         args = ["run", str(source), "--slug", slug]
@@ -130,6 +132,13 @@ class JobManager:
             args.append("--local-only")
         _flag3(args, "skip-shorts", skip_shorts)
         _flag3(args, "skip-package", skip_package)
+        if focus:
+            args += ["--focus", focus]
+            # the TUI already resolved the mode (auto-detected); pin it so the CLI doesn't re-decide.
+            if focus_mode == "extract":
+                args.append("--extract")
+            elif focus_mode == "steer":
+                args.append("--no-extract")
         return self._launch(slug, "run", args, self.runs_dir / slug)
 
     def start_shorts(self, source: str, *, slug: str | None = None, language: str | None = None) -> Job:

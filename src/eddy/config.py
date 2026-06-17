@@ -176,6 +176,7 @@ class RunProfile(BaseModel):
     language: str | None = None       # force a transcription language for this channel
     skip_shorts: bool | None = None
     skip_package: bool | None = None
+    focus: str | None = None          # default focus brief for this channel (e.g. a recurring topic)
 
 
 CONFIG_SCHEMA_VERSION = 1

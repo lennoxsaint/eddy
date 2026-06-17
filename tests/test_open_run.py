@@ -55,3 +55,27 @@ def test_resume_existing_same_footage_ok(tmp_path, runs_dir):
     v = _vid(tmp_path / "a" / "camera.mp4", b"AAAA")
     open_run(v, slug="s1")
     assert open_run(v, slug="s1", resume=True).name == "s1"
+
+
+def test_focus_brief_persisted_in_manifest(tmp_path, runs_dir):
+    # the focus brief must live in the immutable manifest so --resume keeps it (v1.5)
+    v = _vid(tmp_path / "a" / "camera.mp4", b"AAAA")
+    rd = open_run(v, slug="fx", focus="only keep the codex demo", focus_mode="extract")
+    rs = json.loads((rd / "manifest.json").read_text())["run_settings"]
+    assert rs == {"focus": "only keep the codex demo", "focus_mode": "extract"}
+
+
+def test_resume_keeps_focus_even_without_flag(tmp_path, runs_dir):
+    # open with a brief, reopen (resume) with NO brief -> the manifest's brief survives unchanged
+    v = _vid(tmp_path / "a" / "camera.mp4", b"AAAA")
+    open_run(v, slug="rx", focus="just the pricing story", focus_mode="steer")
+    rd = open_run(v, slug="rx", resume=True)  # no focus passed
+    rs = json.loads((rd / "manifest.json").read_text())["run_settings"]
+    assert rs["focus"] == "just the pricing story" and rs["focus_mode"] == "steer"
+
+
+def test_no_focus_yields_empty_run_settings(tmp_path, runs_dir):
+    v = _vid(tmp_path / "a" / "camera.mp4", b"AAAA")
+    rd = open_run(v, slug="nf")
+    rs = json.loads((rd / "manifest.json").read_text())["run_settings"]
+    assert rs == {"focus": "", "focus_mode": ""}

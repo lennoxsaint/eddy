@@ -198,7 +198,8 @@ def _directive_from(qa: dict, judge: dict, sim: dict, over_ceiling_streak: int =
 
 
 def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool = False,
-              ceiling_minutes: float | None = None) -> Path:
+              ceiling_minutes: float | None = None, focus: str | None = None,
+              focus_mode: str | None = None) -> Path:
     """Iterate to a gated EDL. Returns the chosen iteration dir."""
     run_dir = Path(run_dir)
     cfg = load_config()
@@ -207,6 +208,14 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     provider = get_editorial_provider(cfg, receipts)  # beat map/decisions/revise/judge; mechanical stays local
     _record_model_pin(run_dir, cfg, receipts)  # reproducibility: pin the brain, warn on drift
     target_s = (target_minutes or cfg.loop.default_target_minutes) * 60
+    # the user focus brief lives in the immutable manifest (set once at open_run); read it from there
+    # so a --resume without --focus keeps the same brief. An explicit arg still wins on the first call.
+    if focus is None or focus_mode is None:
+        rs = manifest(run_dir).get("run_settings", {}) if (run_dir / "manifest.json").exists() else {}
+        focus = focus if focus is not None else (rs.get("focus") or None)
+        focus_mode = focus_mode if focus_mode is not None else (rs.get("focus_mode") or None)
+    if focus:
+        receipts.log("focus_edit", focus=focus[:300], mode=focus_mode or "steer")
     threshold = cfg.loop.judge_threshold
 
     words = words_flat(run_dir)
@@ -270,6 +279,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
                 decisions = initial_decisions(
                     run_dir, provider, receipts, target_s,
                     retake_candidates(words), filler_candidates(words), beats, cfg,
+                    focus=focus, focus_mode=focus_mode,
                 )
             else:
                 # v0.3 branch-from-best: revise the BEST-so-far decisions using that best's
@@ -423,10 +433,12 @@ def autonomous_run(
     skip_package: bool = False,
     language: str | None = None,
     ceiling_minutes: float | None = None,
+    focus: str | None = None,
+    focus_mode: str | None = None,
 ) -> Path:
     """The product: footage in, launch kit out."""
     cfg = load_config()
-    run_dir = open_run(source, slug=slug, resume=resume)
+    run_dir = open_run(source, slug=slug, resume=resume, focus=focus, focus_mode=focus_mode)
     assert_sources_decodable(manifest(run_dir)["sources"])  # fail loud on corrupt/unsupported input
     receipts = Receipts(run_dir)
     state = RunState(run_dir)
@@ -443,7 +455,8 @@ def autonomous_run(
     transcribe_run(run_dir, language=language)
     _warn_multispeaker(run_dir, receipts)
 
-    chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume, ceiling_minutes=ceiling_minutes)
+    chosen = edit_loop(run_dir, target_minutes=target_minutes, resume=resume, ceiling_minutes=ceiling_minutes,
+                       focus=focus, focus_mode=focus_mode)
     ui.note(f"chosen iteration: {chosen.name}")
 
     # edit_loop used its own RunState and wrote the attempts/best_iter to disk. Reload here so

@@ -60,6 +60,26 @@ def test_launch_refuses_to_overwrite_a_live_job(tmp_path):
         jm.start_render(str(rd))  # same id, still live -> refuse (would orphan the first child)
 
 
+def test_start_run_threads_focus_and_extract(tmp_path):
+    jm = _jm(tmp_path, [_Proc(None)])
+    job = jm.start_run("/x/clip.mp4", focus="only the codex bit", focus_mode="extract")
+    assert "--focus" in job.argv
+    assert job.argv[job.argv.index("--focus") + 1] == "only the codex bit"
+    assert "--extract" in job.argv and "--no-extract" not in job.argv
+
+
+def test_start_run_steer_passes_no_extract(tmp_path):
+    jm = _jm(tmp_path, [_Proc(None)])
+    job = jm.start_run("/x/clip.mp4", focus="center on pricing", focus_mode="steer")
+    assert "--focus" in job.argv and "--no-extract" in job.argv
+
+
+def test_start_run_without_focus_adds_no_focus_flags(tmp_path):
+    jm = _jm(tmp_path, [_Proc(None)])
+    job = jm.start_run("/x/clip.mp4")
+    assert "--focus" not in job.argv and "--extract" not in job.argv and "--no-extract" not in job.argv
+
+
 def test_status_tracks_exit_code(tmp_path):
     p = _Proc(None)
     jm = _jm(tmp_path, [p])
