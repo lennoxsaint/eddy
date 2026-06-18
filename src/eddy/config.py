@@ -169,6 +169,12 @@ class GatesConfig(BaseModel):
     extract_bridge_gap_s: float = 6.0          # bridge consecutive keep blocks separated by <= this
     extract_min_block_s: float = 2.5           # drop an isolated keep block shorter than this (sliver)
     extract_phrase_snap_window_s: float = 1.5  # snap a block edge OUT to a phrase boundary within this
+    # On a pause-heavy screen-share demo, cutting every >=0.4s gap shatters a kept explanation into many
+    # clean-but-choppy splices. For an extract, KEEP natural sub-second pauses (cut only longer dead
+    # air) so blocks stay contiguous — and tolerate them in the output-silence gate so a deliberate
+    # demo beat isn't flagged as dead air. Normal edits keep the tighter 0.40/0.60 thresholds.
+    extract_silence_min_cut_s: float = 1.0     # extract: only silence >= this is removed (else kept)
+    extract_max_output_silence_s: float = 1.2  # extract: output-silence gate tolerance (> kept pause)
 
 
 class TelemetryConfig(BaseModel):

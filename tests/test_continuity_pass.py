@@ -108,6 +108,20 @@ def test_extract_does_not_bridge_a_retake():
     assert len(extract.ranges) == 2  # the retake gap is preserved (not re-admitted)
 
 
+def test_extract_keeps_subsecond_pause_that_normal_cuts():
+    # v1.6.4: a 0.7s word-free demo pause is CUT by a normal edit (splits the block) but KEPT by an
+    # extract (stays contiguous), because the extract silence floor is 1.0s, not 0.40s.
+    words = [{"start": round(i * 0.4, 3), "end": round(i * 0.4 + 0.3, 3), "word": f"w{i}"} for i in range(10)]
+    words += [{"start": round(6 + i * 0.4, 3), "end": round(6 + i * 0.4 + 0.3, 3), "word": f"x{i}"} for i in range(10)]
+    dur = words[-1]["end"] + 1.0
+    sil = [{"start": 4.5, "end": 5.2}]  # 0.7s, word-free (words stop at 3.9, resume at 6.0)
+    d = EditDecisions()
+    normal = compile_edl(d, words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False, silence_spans=sil, extract=False)
+    extract = compile_edl(d, words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False, silence_spans=sil, extract=True)
+    assert len(normal.ranges) == 2   # 0.7s pause removed -> two blocks
+    assert len(extract.ranges) == 1  # 0.7s pause kept -> one contiguous block
+
+
 def test_extract_false_is_identical_to_default():
     words = _make_words()
     dur = words[-1]["end"] + 1.0

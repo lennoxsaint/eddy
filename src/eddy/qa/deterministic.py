@@ -137,14 +137,18 @@ def run_deterministic(
     sim_report: dict | None = None,
     protected_count: int = 0,
     check_loudness: bool = False,
+    extract: bool = False,
 ) -> dict:
+    # an extract deliberately KEEPS natural sub-second demo pauses (see compile_edl), so the
+    # output-silence gate uses the matching higher tolerance — else it flags the very beats it kept.
+    max_out_silence = cfg.gates.extract_max_output_silence_s if extract else cfg.gates.max_output_silence_s
     gates = [
         probe_clean(video),
         av_drift(video, edl, cfg.gates.max_av_drift_s),
         black_or_frozen(video, run_dir),
         silence_gate(video, run_dir, cfg.gates.max_dead_air_s),
         silent_motion_gate(
-            video, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, protected_count
+            video, run_dir, cfg.gates.silence_noise_db, max_out_silence, protected_count
         ),
     ]
     if check_loudness:
