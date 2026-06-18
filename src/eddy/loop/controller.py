@@ -336,8 +336,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             receipts.log("contact_sheet_failed", error=str(e)[:200])
 
         qa = run_deterministic(
-            proxy, edl, run_dir, cfg, sim_report=sim, protected_count=len(decisions.protected_moments),
-            extract=decisions.x_eddy.focus_mode == "extract",
+            proxy, edl, run_dir, cfg, sim_report=sim, protected_count=len(decisions.protected_moments)
         )
         save_qa(qa, iter_dir)
 
@@ -560,7 +559,6 @@ def autonomous_run(
     final_qa = run_deterministic(
         final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
         check_loudness=cfg.audio.studio_sound,
-        extract=chosen_decisions.x_eddy.focus_mode == "extract",
     )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")
     receipts.log("final_render", path=str(final), qa_pass=final_qa["pass"])

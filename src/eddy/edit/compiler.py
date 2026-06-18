@@ -151,11 +151,11 @@ def compile_edl(
 
     # Audio-truth silence removal: collapse word-free silent spans (false starts,
     # swallowed words, pre-speech lip movement) that inter-word gap tightening misses.
-    # Protected beats keep their deliberate silence. An extract uses a HIGHER floor so natural
-    # sub-second demo pauses are kept (contiguous blocks) instead of cut (many choppy splices).
+    # Protected beats keep their deliberate silence.
     if silence_spans:
-        min_cut = gates_cfg.extract_silence_min_cut_s if extract else gates_cfg.silence_min_cut_s
-        sil = silence_cut_intervals(silence_spans, words, min_cut, gates_cfg.silence_handle_s)
+        sil = silence_cut_intervals(
+            silence_spans, words, gates_cfg.silence_min_cut_s, gates_cfg.silence_handle_s
+        )
         removes += _clip_by_protected(sil, protected)
 
     if tighten_gaps:
