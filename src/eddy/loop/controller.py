@@ -291,11 +291,21 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
 
         try:
             if decisions is None:
-                decisions = initial_decisions(
-                    run_dir, provider, receipts, target_s,
-                    retake_candidates(words), filler_candidates(words), beats, cfg,
-                    focus=focus, focus_mode=focus_mode,
-                )
+                # v1.7: best-of-N self-consistency for the iteration-1 EXTRACT draft only. Gated on
+                # ensemble_n>1 AND extract so normal/steer edits keep the single-draft path exactly.
+                if cfg.loop.ensemble_n > 1 and focus_mode == "extract":
+                    from eddy.edit.ensemble import best_of_n_decisions
+                    decisions = best_of_n_decisions(
+                        run_dir, provider, receipts, target_s,
+                        retake_candidates(words), filler_candidates(words), beats, cfg,
+                        focus=focus, focus_mode=focus_mode, n=cfg.loop.ensemble_n,
+                    )
+                else:
+                    decisions = initial_decisions(
+                        run_dir, provider, receipts, target_s,
+                        retake_candidates(words), filler_candidates(words), beats, cfg,
+                        focus=focus, focus_mode=focus_mode,
+                    )
             else:
                 # v0.3 branch-from-best: revise the BEST-so-far decisions using that best's
                 # own directive, so a regression is never carried forward (autoresearch

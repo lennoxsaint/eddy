@@ -323,3 +323,38 @@ the extract silence floor is back to the tested-clean 0.40s / 0.60s gate. The ho
 conclusion: deterministic post-processing has hit the local-model-variance wall. The validated win
 (brief-aware judge) stays; the real next lever for splice quality is a more deterministic/stronger
 editorial brain, not more tuning. Suite 668 green, coverage 75.0%, ruff + mypy clean.
+
+---
+
+## v1.7 — best-of-N self-consistency for the extract brain (/goal: stronger, lower-variance editorial brain)
+
+**The bar (5-draw $0 local extract baseline, single draft, temp 0.3, cached transcript):**
+clean-ship **0/5**; judge mean 6.07 / **stdev 1.154** (4.27–7.82); quality 7.376/0.658; blocks mean
+27.2 / **stdev 28.9** (5→82); dur 6.75min / stdev 5.56 (2.29→17.22). Draws 33–90 min each.
+
+**Non-determinism quantified (micro-harness, 9 iter-1 drafts, render-free):** the SAME prompt gives
+blocks 6→151 and dur 26s→45min. objective barely varies (8.1–9.1) and does NOT correlate with judge
+(the 9.1-objective draft scored judge 5.18). The brain is the variance source — the /goal thesis.
+
+**best-of-N (WIRED, opt-in `loop.ensemble_n`, default 1=OFF, EXTRACT-gated):** sample N iter-1 drafts,
+pick the winner by a deterministic render-free selector (feasibility band → objective → fewest blocks).
+Micro-harness best-of-3 vs single: blocks **stdev 59→5.3** (11× tighter), the catastrophic over-ceiling
+drafts (130–151 blocks / 35–45min) ELIMINATED, judge floor 5.64→5.88. This is a real, proven win on the
+STRUCTURAL determinism the brain controls. (`src/eddy/edit/ensemble.py`, `controller.py:293`, 8 tests.)
+NOT a win on judge variance (0.92→0.80): the objective selector doesn't track judge, and the judge is
+itself a noisy LLM — a partly-irreducible floor on judge stdev.
+
+**Clean-ship blocker is NOT the brain (key finding):** every draw fails the deterministic `no_dead_air`
+(2–3s spans) / `silent_motion` (32–102 spans >0.6s) gates. Root cause (verified on d5): `audio-silence.json`
+(energy, −34dB) flags regions as silent that Whisper transcribed as WORDS (quiet/trailing speech); the
+compiler correctly won't cut word-overlapping spans (never clip speech), so those survive. An
+audio-vs-transcript disagreement, not a bug — resolving it means risky speech-clipping or silence-threshold
+retuning (the v1.6.4 territory already reverted). A trim-instead-of-skip fix was tried and REVERTED
+(silent_motion 32→25, dead-air unchanged — barely helped, unproven hot-path change). Judge ceiling ~7.8<8.0
+(bad_splice + drag defects).
+
+**Honest conclusion:** the STRICT ship gate (gates pass AND judge≥8 in ≥4/5) is unreachable via the
+editorial brain alone on this rambling 62-min source — blocked by an orthogonal compiler/audio dead-air
+issue + a judge ceiling, exactly the /goal ceiling note's scenario. best-of-N delivers the genuine in-scope
+brain win (structural determinism). Per the ceiling note, relaxing criterion #2/#3 to "beats baseline floor
++ variance" needs Lennox's explicit approval — surfaced. Suite 676 green, cov 75.1%, ruff + mypy clean.
