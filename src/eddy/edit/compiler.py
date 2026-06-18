@@ -112,6 +112,7 @@ def compile_edl(
     protected = list(decisions.protected_moments) + list(extra_protected or [])
 
     removes: list[tuple[float, float]] = []
+    small_cut_bridges: list[tuple[float, float]] = []  # v1.6.3 extract bridge candidates
     for start, end, label in decisions.all_remove_intervals():
         if not (math.isfinite(start) and math.isfinite(end)):
             # NaN/inf survives every comparison below (all NaN comparisons are False) and would
@@ -124,10 +125,23 @@ def compile_edl(
         if start < 0 or end > duration_s + 1.0:
             problems.append({"type": "out_of_bounds", "start_s": start, "end_s": end, "duration_s": duration_s})
             continue
-        removes.append((max(0.0, start), min(duration_s, end)))
+        s, e = max(0.0, start), min(duration_s, end)
+        removes.append((s, e))
+        # an extract's small CUT spans are the gaps that chop one explanation into slivers; bridge
+        # them (drop the cut) so the on-topic keeps join. Retakes (duplicate takes) are never bridged.
+        if label != "retake" and e - s <= gates_cfg.extract_bridge_gap_s:
+            small_cut_bridges.append((s, e))
 
     if problems:
         raise CompileError(problems)
+
+    # v1.6.3 bridge-then-retighten: re-admit the small off-topic cut gaps so the extract reads as a
+    # few contiguous blocks instead of many slivers — but do it HERE, before silence removal, so the
+    # silence inside a re-admitted bridge is still cut below (a post-inversion range merge replayed
+    # that silence and failed the dead-air gate). Net: fewer blocks, clean audio. Extract only.
+    if extract and small_cut_bridges:
+        drop = set(small_cut_bridges)
+        removes = [iv for iv in removes if iv not in drop]
 
     # Protected moments win deterministically — but protection means "this content
     # survives", not "nothing inside may be touched". Models routinely protect whole
@@ -197,7 +211,7 @@ def compile_edl(
     # drop orphan slivers, and snap edges to phrase boundaries. Gated on `extract`, so a normal edit
     # is byte-identical.
     if extract:
-        merged = _bridge_keep_gaps(merged, phrases or [], gates_cfg, duration_s)
+        merged = _finalize_extract_blocks(merged, phrases or [], gates_cfg, duration_s)
 
     # Scoped cold-open: pull ONE strong payoff clip (<=15s) to the very front as a hook.
     # It also stays in its natural position in the body (teaser-then-context). Prepended
@@ -249,38 +263,24 @@ def _snap_out_to_phrase(t: float, phrases: list[dict], window: float, bound: flo
     return cand if 0.0 <= cand - t <= window else t
 
 
-def _bridge_keep_gaps(
+def _finalize_extract_blocks(
     ranges: list[EdlRange], phrases: list[dict], gates_cfg: GatesConfig, duration_s: float
 ) -> list[EdlRange]:
-    """v1.6 extract continuity. Turn many small keep ranges into a few contiguous blocks:
-    1. Bridge consecutive keeps whose gap <= extract_bridge_gap_s AND whose gap contains removed
-       SPEECH (re-admit the small bridge so one explanation isn't chopped into slivers). A gap that is
-       only SILENCE is never bridged — re-admitting it just re-introduces dead air (a v1.6 live run
-       failed the dead-air gate doing exactly that); the clean splice between two speech blocks stays.
-       Larger gaps — real tangents — stay cut. (With no phrases, fall back to gap-only for unit tests.)
-    2. Snap each block's edges OUT to the nearest phrase boundary within extract_phrase_snap_window_s
+    """v1.6 extract finalize (post-inversion):
+    1. Snap each block's edges OUT to the nearest phrase boundary within extract_phrase_snap_window_s
        (bounded by the neighbour block) so a block doesn't start/end mid-sentence.
-    3. Drop an isolated block shorter than extract_min_block_s (a topical-extract sliver reads as
+    2. Drop an isolated block shorter than extract_min_block_s (a topical-extract sliver reads as
        debris; the global min_range_s floor is too low here).
-    Only invoked for an extract — a normal edit never enters here."""
+    Gap BRIDGING moved to the remove level in v1.6.3 (so it excludes retakes and lets silence removal
+    clean a re-admitted bridge — a post-inversion range merge replayed silence and failed the dead-air
+    gate, and could not tell a retake from a cut). Only invoked for an extract."""
     if not ranges:
         return ranges
-    bridged: list[EdlRange] = [ranges[0]]
-    for r in ranges[1:]:
-        prev = bridged[-1]
-        gap = r.start - prev.end
-        # speech in the gap = a phrase overlapping (prev.end, r.start); only those gaps are worth
-        # re-admitting. No phrases supplied (unit tests) -> gap-only.
-        gap_has_speech = (not phrases) or any(p["end"] > prev.end and p["start"] < r.start for p in phrases)
-        if 0.0 <= gap <= gates_cfg.extract_bridge_gap_s and gap_has_speech:
-            prev.end = max(prev.end, r.end)
-            prev.end_handle_s = r.end_handle_s
-        else:
-            bridged.append(r)
+    blocks = list(ranges)
     win = gates_cfg.extract_phrase_snap_window_s
-    for i, r in enumerate(bridged):
-        lo = bridged[i - 1].end if i > 0 else None
-        hi = bridged[i + 1].start if i + 1 < len(bridged) else duration_s
+    for i, r in enumerate(blocks):
+        lo = blocks[i - 1].end if i > 0 else None
+        hi = blocks[i + 1].start if i + 1 < len(blocks) else duration_s
         ns = _snap_out_to_phrase(r.start, phrases, win, lo, "start")
         ne = _snap_out_to_phrase(r.end, phrases, win, hi, "end")
         if ns < r.start:  # grew earlier to a phrase start: boundary now sits on a word edge
@@ -288,7 +288,7 @@ def _bridge_keep_gaps(
         if ne > r.end:
             r.end_handle_s = 0.0
         r.start, r.end = round(ns, 3), round(ne, 3)
-    return [r for r in bridged if r.end - r.start >= gates_cfg.extract_min_block_s]
+    return [r for r in blocks if r.end - r.start >= gates_cfg.extract_min_block_s]
 
 
 def _snap_to_words(

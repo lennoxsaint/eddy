@@ -1,10 +1,13 @@
-"""v1.6 extract continuity: the deterministic bridge-merge turns the many small keep ranges a
-topical extract produces into a few contiguous blocks (so explanations aren't severed mid-thought),
-drops orphan slivers, snaps edges to phrase boundaries — and a NON-extract edit is left untouched."""
+"""v1.6 extract continuity. Two layers, tested where each lives:
+- REMOVE-LEVEL bridge (v1.6.3): in compile_edl(extract=True) the small CUT gaps that chop one
+  explanation into slivers are dropped (re-admitted) so the on-topic keeps join, while large
+  off-topic cuts and retakes stay; the silence inside a re-admitted bridge is still cut.
+- POST-INVERSION finalize (_finalize_extract_blocks): phrase-boundary snap + sliver-drop.
+A non-extract edit enters neither path and is byte-identical."""
 
 from eddy.config import GatesConfig, RenderConfig
-from eddy.edit.compiler import _bridge_keep_gaps, _snap_out_to_phrase, compile_edl
-from eddy.edit.schema import Cut, EditDecisions, EdlRange
+from eddy.edit.compiler import _finalize_extract_blocks, _snap_out_to_phrase, compile_edl
+from eddy.edit.schema import Cut, EditDecisions, EdlRange, Retake
 
 GATES = GatesConfig()
 RENDER = RenderConfig()
@@ -22,64 +25,29 @@ def _make_words(*, n=100, word_s=0.3, gap_s=0.1):
     return words
 
 
-# --- bridge-merge geometry --------------------------------------------------------------------
+# --- post-inversion finalize: sliver-drop ------------------------------------------------------
 
-def test_bridges_small_gaps_keeps_large_gaps_and_drops_slivers():
-    # gaps: 0.5, 4.0, 0.3 (all <=6 -> bridge); 12.0 (>6 -> stay cut); trailing 1.5s block is a sliver
-    rs = _ranges((0, 3), (3.5, 6), (10, 13), (25, 27), (27.3, 28), (40, 41.5))
-    out = _bridge_keep_gaps(rs, [], GATES, duration_s=60.0)
-    spans = [(r.start, r.end) for r in out]
-    assert spans == [(0.0, 13.0), (25.0, 28.0)]  # 6 fragments -> 2 contiguous blocks, sliver dropped
+def test_finalize_drops_isolated_slivers():
+    out = _finalize_extract_blocks(_ranges((0, 10), (20, 21.5)), [], GATES, duration_s=60.0)
+    assert [(r.start, r.end) for r in out] == [(0.0, 10.0)]  # the lone 1.5s block is debris
 
 
-def test_gap_exactly_at_threshold_bridges():
-    rs = _ranges((0, 3), (9, 12))  # gap == 6.0 == extract_bridge_gap_s -> bridge (<=)
-    out = _bridge_keep_gaps(rs, [], GATES, duration_s=60.0)
-    assert [(r.start, r.end) for r in out] == [(0.0, 12.0)]
+def test_finalize_keeps_blocks_at_or_above_min():
+    out = _finalize_extract_blocks(_ranges((0, 10), (20, 23)), [], GATES, duration_s=60.0)
+    assert len(out) == 2  # 3.0s >= extract_min_block_s (2.5)
 
 
-def test_gap_just_over_threshold_stays_separate():
-    rs = _ranges((0, 3), (9.1, 12))  # gap 6.1 > 6.0 -> stay separate
-    out = _bridge_keep_gaps(rs, [], GATES, duration_s=60.0)
-    assert len(out) == 2
-
-
-def test_isolated_sliver_is_dropped_but_short_block_adjacent_survives_via_bridge():
-    # a lone 1.5s block is debris; but a 1.5s block within bridge range of a big one is absorbed
-    dropped = _bridge_keep_gaps(_ranges((40, 41.5)), [], GATES, duration_s=60.0)
-    assert dropped == []
-    absorbed = _bridge_keep_gaps(_ranges((0, 10), (11, 12.5)), [], GATES, duration_s=60.0)
-    assert [(r.start, r.end) for r in absorbed] == [(0.0, 12.5)]
-
-
-def test_empty_and_single_range():
-    assert _bridge_keep_gaps([], [], GATES, 60.0) == []
-    one = _bridge_keep_gaps(_ranges((0, 5)), [], GATES, 60.0)
-    assert [(r.start, r.end) for r in one] == [(5.0 - 5.0, 5.0)]
-
-
-# --- speech-gated bridging (v1.6.1: don't bridge a silent gap -> no re-admitted dead air) ------
-
-def test_bridges_a_speech_filled_gap():
-    # the gap (3..5) holds a removed phrase -> bridge to restore the severed explanation
-    phrases = [{"start": 0.0, "end": 3.0, "text": "a"}, {"start": 3.4, "end": 4.6, "text": "mid"},
-               {"start": 5.0, "end": 8.0, "text": "b"}]
-    out = _bridge_keep_gaps(_ranges((0, 3), (5, 8)), phrases, GATES, duration_s=60.0)
-    assert [(r.start, r.end) for r in out] == [(0.0, 8.0)]
-
-
-def test_does_not_bridge_a_silent_gap():
-    # nothing spoken in (3..5) -> a clean splice; bridging would only re-admit silence (dead air)
-    phrases = [{"start": 0.0, "end": 3.0, "text": "a"}, {"start": 5.0, "end": 8.0, "text": "b"}]
-    out = _bridge_keep_gaps(_ranges((0, 3), (5, 8)), phrases, GATES, duration_s=60.0)
-    assert len(out) == 2  # left un-bridged
+def test_finalize_empty_and_single():
+    assert _finalize_extract_blocks([], [], GATES, 60.0) == []
+    one = _finalize_extract_blocks(_ranges((0, 5)), [], GATES, 60.0)
+    assert [(r.start, r.end) for r in one] == [(0.0, 5.0)]
 
 
 # --- phrase-boundary snapping -----------------------------------------------------------------
 
 def test_phrase_snap_grows_block_out_to_sentence_edges_within_window():
     phrases = [{"start": 4.6, "end": 5.4, "text": "a"}, {"start": 8.7, "end": 9.3, "text": "b"}]
-    out = _bridge_keep_gaps(_ranges((5.0, 9.0)), phrases, GATES, duration_s=60.0)
+    out = _finalize_extract_blocks(_ranges((5.0, 9.0)), phrases, GATES, duration_s=60.0)
     r = out[0]
     assert r.start == 4.6 and r.end == 9.3  # snapped out to phrase boundaries (0.4s / 0.3s, within 1.5s)
     assert r.start_handle_s == 0.0 and r.end_handle_s == 0.0  # boundary now sits on a phrase edge
@@ -91,14 +59,13 @@ def test_phrase_snap_respects_window():
 
 
 def test_phrase_snap_never_crosses_neighbour_bound():
-    # bound (a neighbour block edge) caps the outward move
     snapped = _snap_out_to_phrase(9.0, [{"start": 8.7, "end": 9.3, "text": "b"}], 1.5, 9.1, "end")
     assert snapped == 9.1
 
 
-# --- integration through compile_edl ----------------------------------------------------------
+# --- remove-level bridging through compile_edl -------------------------------------------------
 
-def _decisions_with_three_cuts(words):
+def _three_small_cuts(words):
     return EditDecisions(cuts=[
         Cut(start_s=words[10]["start"], end_s=words[12]["end"], tier="MANDATORY"),
         Cut(start_s=words[25]["start"], end_s=words[27]["end"], tier="MANDATORY"),
@@ -106,28 +73,46 @@ def _decisions_with_three_cuts(words):
     ])
 
 
-def test_extract_collapses_fragments_normal_edit_unchanged():
+def test_extract_collapses_small_cut_fragments_normal_edit_unchanged():
     words = _make_words()
     dur = words[-1]["end"] + 1.0
-    d_normal = _decisions_with_three_cuts(words)
-    d_extract = _decisions_with_three_cuts(words)
-
-    normal = compile_edl(d_normal, words, "cam.mp4", dur, RENDER, GATES, tighten_gaps=False)
+    normal = compile_edl(_three_small_cuts(words), words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False)
     extract = compile_edl(
-        d_extract, words, "cam.mp4", dur, RENDER, GATES, tighten_gaps=False, phrases=[], extract=True
+        _three_small_cuts(words), words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False, phrases=[], extract=True
     )
-    # three short cuts split the timeline into four small keeps; the bridge-merge fuses them (all
-    # inter-keep gaps are ~1s, well under 6s) into one contiguous block.
-    assert len(normal.ranges) == 4
-    assert len(extract.ranges) == 1
+    assert len(normal.ranges) == 4   # three small cuts -> four keeps
+    assert len(extract.ranges) == 1  # all three small cuts bridged away -> one contiguous block
+
+
+def test_extract_bridges_small_cuts_keeps_large_off_topic_cut():
+    words = _make_words()
+    dur = words[-1]["end"] + 1.0
+    cuts = [
+        Cut(start_s=words[10]["start"], end_s=words[12]["end"], tier="MANDATORY"),   # ~1.1s small -> bridged
+        Cut(start_s=words[30]["start"], end_s=words[70]["end"], tier="MANDATORY"),   # ~16s large  -> kept
+    ]
+    normal = compile_edl(EditDecisions(cuts=list(cuts)), words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False)
+    extract = compile_edl(
+        EditDecisions(cuts=list(cuts)), words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False, phrases=[], extract=True
+    )
+    assert len(normal.ranges) == 3
+    assert len(extract.ranges) == 2  # small cut bridged; large off-topic cut remains
+
+
+def test_extract_does_not_bridge_a_retake():
+    # a retake removal (a duplicate take) is never bridged, even when short
+    words = _make_words()
+    dur = words[-1]["end"] + 1.0
+    d = EditDecisions(retakes=[Retake(remove_start_s=words[10]["start"], remove_end_s=words[12]["end"], kept_take="last")])
+    extract = compile_edl(d, words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False, phrases=[], extract=True)
+    assert len(extract.ranges) == 2  # the retake gap is preserved (not re-admitted)
 
 
 def test_extract_false_is_identical_to_default():
     words = _make_words()
     dur = words[-1]["end"] + 1.0
-    base = compile_edl(_decisions_with_three_cuts(words), words, "cam.mp4", dur, RENDER, GATES, tighten_gaps=False)
+    base = compile_edl(_three_small_cuts(words), words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False)
     explicit = compile_edl(
-        _decisions_with_three_cuts(words), words, "cam.mp4", dur, RENDER, GATES,
-        tighten_gaps=False, phrases=[], extract=False,
+        _three_small_cuts(words), words, "c.mp4", dur, RENDER, GATES, tighten_gaps=False, phrases=[], extract=False
     )
     assert [(r.start, r.end) for r in base.ranges] == [(r.start, r.end) for r in explicit.ranges]
