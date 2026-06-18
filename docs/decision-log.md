@@ -274,3 +274,30 @@ omits one — or a truncated-then-salvaged response — now validates and lets p
 instead of aborting the run. This is general robustness (not extract-specific). Kept `num_ctx` at the
 fast default: the truncation was a `num_predict` ceiling, not a context overrun, so a bigger (slower)
 window wouldn't have helped. Suite 668→670 green, coverage 75.0%, ruff + mypy clean. Re-run pending.
+
+## 2026-06-18 — v1.6.3: remove-level bridging + the two "next steps", honestly
+
+Lennox asked to execute the two recommended next steps. One shipped; one is blocked on this machine:
+
+- **Step #1 (bridge-then-retighten) — SHIPPED.** Moved extract gap-bridging from a post-inversion
+  EdlRange merge to the REMOVE level: drop the small CUT spans (≤ `extract_bridge_gap_s`) that chop one
+  explanation into slivers BEFORE silence removal, so the on-topic keeps join and `silence_cut_intervals`
+  still cleans the silence inside a re-admitted bridge. Fixes two flaws of the post-inversion merge: it
+  replayed silence (dead-air gate) and couldn't tell a retake from a cut. `_bridge_keep_gaps` →
+  `_finalize_extract_blocks` (phrase-snap + sliver-drop only). Tests at `compile_edl` level: small cut
+  bridged, large off-topic cut kept, retake preserved, normal edit byte-identical.
+  **Honest validation:** a fresh 62-min local re-run stayed crash-free, $0, under ceiling, `dead_air`
+  10/10 — but landed at **49 blocks / 4.9 min** (judge 6.09), NOT fewer than the prior 19. Cause: the
+  local model is non-deterministic (this draw kept ~2× the content), and on a pause-heavy screen-share
+  demo the block count is dominated by **silence cuts at demo pauses**, which bridging deliberately does
+  not touch (to keep audio clean). The bridge is architecturally correct but its "fewer blocks" win is
+  swamped by silence-driven fragmentation on this source. The real remaining lever is a taste tradeoff:
+  raise the extract silence-cut threshold (`silence_min_cut_s` ~0.4→~1.0s) so natural sub-second demo
+  pauses are KEPT (contiguous) rather than cut (many clean-but-choppy splices). Not auto-applied.
+- **Step #2 (stronger editorial brain) — SKIPPED (Lennox's call).** Every clean cloud path is blocked
+  here: `claude_cli` inherits the global CLAUDE.md and refuses/prose-wraps the cut-JSON; `codex_cli`
+  won't start (`config.toml` `service_tier` invalid); no `ANTHROPIC_API_KEY` in env; only paid `openai`
+  gpt-5.1-mini works (metered + "mini", crosses the no-paid-API rule). The local qwen36-27b-codex is
+  purpose-fit for structured cut-JSON; Lennox chose to keep the $0 local pipeline.
+
+Suite green (670), coverage 75.0%, ruff + mypy clean. `vendor/yt_tools/` + locked brand untouched.
