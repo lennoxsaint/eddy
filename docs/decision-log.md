@@ -301,3 +301,19 @@ Lennox asked to execute the two recommended next steps. One shipped; one is bloc
   purpose-fit for structured cut-JSON; Lennox chose to keep the $0 local pipeline.
 
 Suite green (670), coverage 75.0%, ruff + mypy clean. `vendor/yt_tools/` + locked brand untouched.
+
+## 2026-06-18 — v1.6.4: extract silence-threshold tweak — tried, did NOT cleanly help
+
+The remaining lever from v1.6.3: an extract now KEEPS natural sub-second pauses (`extract_silence_min_cut_s`
+1.0 vs 0.40 normal) instead of cutting every ≥0.4s gap, with a matching output-silence gate tolerance
+(`extract_max_output_silence_s` 1.2) threaded through `run_deterministic`. Deterministically verified
+(a 0.7s pause is cut by a normal edit, kept by an extract). **Honest live result:** a fresh 62-min draw
+landed at 43 blocks / 11.3 min, judge 6.0 (continuity 4, pacing 3), and the `dead_air` quality signal
+dropped 10 → 6.67 — i.e. keeping pauses added perceptible dead air with NO clear block-count or judge
+win. The deeper finding across five live runs: the local model's NON-DETERMINISM dominates everything —
+the same prompt kept 2.6 / 4.9 / 11.3 min on different draws, so duration, block count, and judge swing
+far more run-to-run than any deterministic post-processing tweak moves them, and a 62-min rambling demo
+has inherent long silent screen-share stretches no cut threshold cleanly resolves. The one clearly
+VALIDATED win remains the brief-aware judge (2.18 → 5.7–6.9). The silence tweak is sound + config-gated
+but a marginal tradeoff; left in as an option pending Lennox's call (keep / soften to ~0.7 / revert).
+Suite 669 green, coverage 75.1%, ruff + mypy clean.
