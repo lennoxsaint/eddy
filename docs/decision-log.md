@@ -317,3 +317,9 @@ has inherent long silent screen-share stretches no cut threshold cleanly resolve
 VALIDATED win remains the brief-aware judge (2.18 → 5.7–6.9). The silence tweak is sound + config-gated
 but a marginal tradeoff; left in as an option pending Lennox's call (keep / soften to ~0.7 / revert).
 Suite 669 green, coverage 75.1%, ruff + mypy clean.
+
+**REVERTED (`8473fa8`):** Lennox's call — the tweak added dead air for no measurable win, so it's out;
+the extract silence floor is back to the tested-clean 0.40s / 0.60s gate. The honest standing
+conclusion: deterministic post-processing has hit the local-model-variance wall. The validated win
+(brief-aware judge) stays; the real next lever for splice quality is a more deterministic/stronger
+editorial brain, not more tuning. Suite 668 green, coverage 75.0%, ruff + mypy clean.
