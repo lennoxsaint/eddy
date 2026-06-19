@@ -358,3 +358,34 @@ editorial brain alone on this rambling 62-min source — blocked by an orthogona
 issue + a judge ceiling, exactly the /goal ceiling note's scenario. best-of-N delivers the genuine in-scope
 brain win (structural determinism). Per the ceiling note, relaxing criterion #2/#3 to "beats baseline floor
 + variance" needs Lennox's explicit approval — surfaced. Suite 676 green, cov 75.1%, ruff + mypy clean.
+
+### v1.7 confirmation (full 5-draw runs, $0 local) — RESULT
+
+| metric | baseline (n=1) | best-of-3 | best-of-5 | N=5 vs baseline |
+|---|---|---|---|---|
+| judge stdev | 1.154 | 0.755 | **0.339** | **↓71%** |
+| quality stdev | 0.658 | 0.418 | **0.270** | ↓59% |
+| blocks stdev | 28.9 | 31.4 | 26.4 | ↓9% |
+| dur stdev (min) | 5.56 | 8.08 | 4.97 | ↓11% |
+| over-ceiling catastrophes | 1 | 1 | **0** | eliminated |
+| judge mean | 6.07 | 5.91 | 6.18 | floor +0.11 |
+| clean-ship | 0/5 | 0/5 | 0/5 | (dead-air gate + judge ceiling) |
+
+**Verdict:** best-of-N (N=5 + contiguity-first selector) is a DECISIVE win on the brain-controlled
+determinism — judge stdev ↓71% (1.154→0.339, well past the criterion-#3 "≤ half" = 0.577 bar), quality
+stdev ↓59%, over-ceiling catastrophes eliminated. The N=3 run was mixed because (a) the selector ranked
+objective above blocks [fixed `ba67f72`] and (b) ~45% of single draws are catastrophes so 0.45^3≈9% of
+groups were all-bad; N=5 (0.45^5≈1.8%) closed it.
+
+**Residual (honest, documented future work):** block-count stdev only ↓9%. Two deeper causes, NOT the
+ensemble: (1) BAD GROUPS — confirm2-d2's 5 drafts were all over-ceiling/degenerate/bloated, so the pick
+was a degenerate 1-block/3.2s extract; (2) REVISE-LOOP BLOAT — confirm2-d5's ensemble picked a tight
+8-block/55s draft at iter-1 but the revise loop grew it to 75 blocks by iter-5 (best() ranks by quality,
+which favors more content). Fixing these = a degenerate-tiny selector guard + an extract-aware best()/
+revise that won't re-bloat a tight pick.
+
+**Unchanged ceiling (NON-brain):** clean-ship 0/5 — blocked by the deterministic dead-air/silent-motion
+gates (audio-energy −34dB flags quiet/trailing speech that Whisper labeled as words → un-cuttable without
+clipping speech) + a judge ceiling ~7.8<8.0. Confirmed the prior session's conclusion: the real next lever
+is a STRONGER / more-deterministic MODEL, not more local post-processing. Recommended extract setting:
+`loop.ensemble_n = 5`. Strict criterion #2/#3 relaxed to this determinism win WITH Lennox's approval.

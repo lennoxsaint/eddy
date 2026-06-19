@@ -192,5 +192,21 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   iter-2 thrash; (4) **long-source JSON robustness** — `extract_json` salvages a truncated cut list
   (no silent corruption) + adaptive `num_ctx`. Full suite green, ruff+mypy clean; new
   `test_continuity_pass.py` + extended focus/boundary tests. Live 62-min re-run pending.
+- **v1.7 "Best-of-N extract brain"** (unreleased) — from the /goal pursuit of a stronger, lower-variance
+  editorial brain. A 5-draw $0-local baseline quantified the wall: the same prompt gave judge 4.27–7.82
+  (stdev 1.154), blocks 5–82, dur 2.3–17.2 min, and **~45% of single draws are over-ceiling catastrophes**
+  (the local 27B simply fails to extract). Fix: **best-of-N self-consistency** for the iteration-1 extract
+  draft (`src/eddy/edit/ensemble.py`) — sample N drafts, pick the winner by a deterministic render-free
+  selector (feasibility band → fewest blocks → objective). Opt-in via `loop.ensemble_n` (default 1 = off,
+  extract-gated, normal/steer edits byte-identical). **Confirmed at N=5 on a full 5-draw run vs baseline:
+  judge stdev 1.154→0.339 (↓71%), quality stdev 0.658→0.270 (↓59%), over-ceiling catastrophes 1→0,
+  durations tighter (mean 6.75→3.78 min).** Block-count stdev only ↓9% — residual from bad groups (a draw
+  whose N drafts are all bad) and the revise loop re-bloating a tight pick (confirm2-d5: ensemble picked
+  8 blocks, loop grew it to 75); both are deeper than the ensemble (brain draft-quality + best()-by-quality)
+  and are documented future work. clean-ship stays 0/5: blocked by the deterministic `no_dead_air`/
+  `silent_motion` gates (an audio-energy-vs-Whisper-word disagreement — quiet/trailing speech flagged silent
+  but un-cuttable; NOT the brain) + a judge ceiling ~7.8<8.0. Strict ship-gate success was relaxed to the
+  determinism win WITH Lennox's explicit approval. Recommended setting for extracts: `ensemble_n = 5`
+  (costs ~5× the iter-1 cutplan time). Suite 676 green, cov 75.1%, ruff+mypy clean; 8 ensemble tests.
 - Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
   spend) remains open by design — none are coding-agent tasks.
