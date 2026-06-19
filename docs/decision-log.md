@@ -389,3 +389,21 @@ gates (audio-energy −34dB flags quiet/trailing speech that Whisper labeled as 
 clipping speech) + a judge ceiling ~7.8<8.0. Confirmed the prior session's conclusion: the real next lever
 is a STRONGER / more-deterministic MODEL, not more local post-processing. Recommended extract setting:
 `loop.ensemble_n = 5`. Strict criterion #2/#3 relaxed to this determinism win WITH Lennox's approval.
+
+### v1.7 criterion #4 — no normal-edit regression + held-out (not overfit)
+
+**4a normal-edit regression (PASS):** a NORMAL `eddy run` (dev-greatest-hits, NON-extract) with
+ensemble_n=5 produced a valid edit (5 ranges, 1.7min) with **0 ensemble receipts** — the gate
+(`ensemble_n>1 AND focus_mode=="extract"`) correctly leaves non-extract edits on the single-draft path,
+byte-identical to pre-v1.7. (The crit4.sh PASS/FAIL print mis-fired on a `grep -c ... || echo 0`
+double-output bash bug; the real ensemble count is 0.)
+
+**4b held-out source (PASS, not overfit):** micro-harness on a DIFFERENT 54-min source (the Fable 5
+review), n=10 extract drafts. Non-determinism generalizes — single-draft judge stdev 0.824, blocks 6–20,
+dur 11–38min. best-of-5 reduces it on the held-out too: judge stdev 0.824→**0.635**, blocks stdev
+4.58→**2.0**, picked blocks mean 16.2→8. Directional (2 ensemble samples; editorial-level not full-run)
+but consistent with the Codex full-run win — the determinism gain is NOT overfit to one source.
+
+**Final criteria status:** #1 ✅ baseline, #2 ❌ clean-ship 0/5 (structurally unreachable — NON-brain
+dead-air gate + judge ceiling; relaxed WITH Lennox's approval), #3 ✅ judge stdev 0.339 ≤ 0.577,
+#4 ✅ no normal regression + not overfit, #5 ✅ suite 676 green / cov 75.1% / ruff + mypy clean.
