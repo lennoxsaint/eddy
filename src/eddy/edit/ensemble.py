@@ -28,14 +28,18 @@ from eddy.transcribe.pack import phrases as load_phrases
 
 
 def _selector_key(objective: float, over_ceiling_s: float, n_ranges: int) -> tuple:
-    """Deterministic winner key (higher wins), mirroring `state.best()`'s feasibility-first ranking
-    but PRE-render (no gates/judge yet):
+    """Deterministic winner key (higher wins), feasibility-first, PRE-render (no gates/judge yet):
       1. feasibility band — closest to under-ceiling first (0 when under; more-over = more negative),
-      2. the model-proof `objective` score (quality.py, render-free),
-      3. fewest blocks (`-n_ranges`) — a more contiguous extract directly serves the continuity goal.
-    """
+      2. fewest blocks (`-n_ranges`) — the more contiguous extract; directly serves the continuity goal,
+      3. the model-proof `objective` score (quality.py, render-free) as the final tiebreak.
+
+    v1.7.1: blocks rank ABOVE objective (was below). The v1.7 N=3 confirmation exposed the flaw — the
+    `objective` half of quality_score is a near-constant, weak discriminator (8.1–9.1) that perversely
+    REWARDS bloated keeps (more content -> higher hook/closure/pacing signals), so ranking it above
+    block-count made the selector pick a 77-block draft over an 18-block one (confirm-d4). Contiguity is
+    the goal-relevant axis; objective only breaks ties between similarly-tight drafts."""
     band = -round(over_ceiling_s / 120.0)
-    return (band, round(objective, 4), -n_ranges)
+    return (band, -n_ranges, round(objective, 4))
 
 
 def score_draft(run_dir, decisions: EditDecisions, provider, receipts: Receipts,

@@ -35,18 +35,20 @@ def _patch_phrases(monkeypatch):
 
 # --- selector key ordering ---------------------------------------------------------------------
 
-def test_selector_key_band_beats_objective():
-    # an under-ceiling draft (band 0) outranks an over-ceiling one even with a much higher objective
+def test_selector_key_band_beats_all():
+    # an under-ceiling draft (band 0) outranks an over-ceiling one even with a higher objective + fewer blocks
     assert ens._selector_key(5.0, 0.0, 12) > ens._selector_key(9.9, 300.0, 2)
 
 
-def test_selector_key_same_band_prefers_higher_objective():
-    assert ens._selector_key(8.0, 0.0, 10) > ens._selector_key(6.0, 0.0, 3)
+def test_selector_key_same_band_prefers_fewer_blocks_over_objective():
+    # v1.7.1: among feasible drafts the more contiguous (fewer-block) extract wins even when the bloated
+    # draft scores a higher objective — the confirm-d4 fix (77-block obj 9.1 lost to 18-block obj 8.1).
+    assert ens._selector_key(8.1, 0.0, 18) > ens._selector_key(9.1, 0.0, 77)
 
 
-def test_selector_key_tie_prefers_fewer_ranges():
-    # same band + objective -> the more contiguous extract (fewer blocks) wins (continuity goal)
-    assert ens._selector_key(7.0, 0.0, 4) > ens._selector_key(7.0, 0.0, 9)
+def test_selector_key_objective_breaks_block_ties():
+    # same band + same block count -> higher objective wins (objective is only the final tiebreak now)
+    assert ens._selector_key(8.0, 0.0, 5) > ens._selector_key(6.0, 0.0, 5)
 
 
 # --- best_of_n selection ------------------------------------------------------------------------
