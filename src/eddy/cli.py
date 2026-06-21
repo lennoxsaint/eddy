@@ -187,6 +187,7 @@ def run(
         typer.echo(f"✗ {e}", err=True)
         raise typer.Exit(1) from e
     # effective options: an explicit CLI flag wins; otherwise fall back to the profile, then defaults.
+    user_set_target = target_minutes is not None  # captured before the profile fallback overwrites it
     target_minutes = target_minutes if target_minutes is not None else prof.target_minutes
     language = language if language is not None else prof.language
     # focus brief: CLI flag > profile default. Mode: --extract/--no-extract wins; else auto-detect
@@ -213,6 +214,20 @@ def run(
     skip_package = skip_package if skip_package is not None else bool(prof.skip_package)
     eff_format = format if format is not None else (prof.format or "default")
     ceiling_minutes = resolve_format(eff_format)["ceiling_minutes"]
+    # A runtime stated in the focus brief ("a 5-10 minute explanation") is the user's intent for how
+    # long the cut should run — honor it as the loop target + length ceiling so an extract lands at the
+    # requested length instead of the 12-min default. Only when no explicit --target-minutes and the
+    # default format (a named format deliberately raises/disables the ceiling, so never override that).
+    if focus and not user_set_target and eff_format == "default":
+        from eddy.tui.intents import duration_from_brief
+
+        band = duration_from_brief(focus)
+        if band:
+            target_minutes, ceiling_minutes = band
+            typer.echo(
+                f"[eddy] focus brief sets length → target {target_minutes:g} min, "
+                f"ceiling {ceiling_minutes:g} min"
+            )
     if local_only:
         from eddy.privacy import set_offline
 

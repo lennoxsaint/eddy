@@ -208,5 +208,17 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   but un-cuttable; NOT the brain) + a judge ceiling ~7.8<8.0. Strict ship-gate success was relaxed to the
   determinism win WITH Lennox's explicit approval. Recommended setting for extracts: `ensemble_n = 5`
   (costs ~5× the iter-1 cutplan time). Suite 676 green, cov 75.1%, ruff+mypy clean; 8 ensemble tests.
+- **v1.7.3 "Honor the brief's runtime" + stale-install root cause** (2026-06-22) — Lennox's live run of
+  "make it focus on my 5-10 minute explanation of what Codex is" did not produce a focused 5-10 min cut.
+  **Root cause #1 (dominant):** the `eddy` on PATH is a **pipx install frozen at v1.4.0** (built from
+  `~/eddy[mcp]` before focus existed) — `eddy run --help` has no `--focus`/`--extract`; all of
+  v1.5→v1.7 lives only in the working tree, never reinstalled. **Fix: reinstall pipx `eddy` editable
+  from the repo** so the binary tracks HEAD and never drifts again. **Root cause #2 (real gap on HEAD):**
+  the "5-10 minute" was never parsed — target defaulted to 12 min, ceiling 14 min. **Fix:**
+  `duration_from_brief()` (`tui/intents.py`) parses a runtime from the brief → loop target + length
+  ceiling, wired in `cli.run()` only when no explicit `--target-minutes` and the default format (named
+  formats keep their deliberate ceiling). +16 tests; suite **692 green**, cov 75.34%, ruff+mypy clean.
+  No full $0 render this turn (the fix is target+ceiling correctness, not a re-render). Known follow-up:
+  best-of-N selector still ranks over-ceiling against the **config** ceiling, not the per-run brief one.
 - Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
   spend) remains open by design — none are coding-agent tasks.

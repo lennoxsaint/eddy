@@ -407,3 +407,35 @@ but consistent with the Codex full-run win — the determinism gain is NOT overf
 **Final criteria status:** #1 ✅ baseline, #2 ❌ clean-ship 0/5 (structurally unreachable — NON-brain
 dead-air gate + judge ceiling; relaxed WITH Lennox's approval), #3 ✅ judge stdev 0.339 ≤ 0.577,
 #4 ✅ no normal regression + not overfit, #5 ✅ suite 676 green / cov 75.1% / ruff + mypy clean.
+
+## 2026-06-22 — v1.7.3: honor a runtime stated in the focus brief + the stale-install root cause
+
+**Trigger.** Lennox ran his footage with the brief "make it focus on my 5-10 minute explanation of
+what Codex is" and it did not produce a focused 5-10 min extract.
+
+**Root cause (verified, two layers):**
+1. **Dominant — stale install.** The `eddy` on PATH is a **pipx** install (`~/.local/bin/eddy` →
+   `~/.local/pipx/venvs/eddy`) frozen at **v1.4.0**, built from `/Users/lennoxsaint/eddy[mcp]` back
+   when the repo was v1.4.0. Its `eddy run --help` has **no `--focus`/`--extract`** — the entire
+   focus/extract feature (v1.5), brief-aware judge + continuity (v1.6), and best-of-5 (v1.7) live only
+   in the working tree and were never reinstalled. So the live binary literally cannot do a topical
+   extract. (The interactive TUI he launched, PID 65849, is that v1.4.0.) Fix: reinstall the pipx
+   `eddy` **editable** from the repo so the binary == HEAD and never drifts again.
+2. **Real gap even on HEAD — the stated duration was ignored.** `target_s = default_target_minutes*60`
+   (12 min) and the default ceiling is 14 min; the "5-10 minute" in the brief was never parsed. So even
+   after a reinstall, the requested length wouldn't be honored.
+
+**Decision.** Parse an explicit runtime out of the focus brief and use it as the loop target + length
+ceiling. New `duration_from_brief()` in `tui/intents.py`: a RANGE ("5-10 min") targets the top and caps
+there; a capped single ("under 8 min") targets a touch below the cap; a plain single ("a 10 min cut")
+targets that with small ceiling slack; sane band 15s–3h else None. Wired in `cli.run()` **only** when no
+explicit `--target-minutes` and the default format (a named format deliberately raises/disables the
+ceiling, so it's never overridden). Explicit flags always win.
+
+**Verified.** 16 new unit/CLI tests (range/word-`to`/reversed, capped single, hours, seconds, the
+top-5/year/version non-durations, overlong reject; CLI: band→target+ceiling, `--target-minutes` wins,
+named format preserved). Full suite **692 passed** / 5 skipped, cov 75.34%, ruff + mypy clean.
+**Not verified:** no full $0 render this turn — the end-to-end "lands at 5-10 min" claim rests on the
+target+ceiling now being correct, not on a re-render. Known follow-up: the best-of-N selector ranks
+`over_ceiling_s` against the **config** ceiling, not the per-run brief ceiling — first-draft selection
+won't yet prefer ≤10 min, though the revise loop + ship gate still enforce the run ceiling.

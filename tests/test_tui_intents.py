@@ -3,7 +3,16 @@ and the safety rule that long + destructive + NL actions all require confirmatio
 
 from __future__ import annotations
 
-from eddy.tui.intents import Intent, interpret_nl, is_extract_brief, normalize_source, parse_command
+import pytest
+
+from eddy.tui.intents import (
+    Intent,
+    duration_from_brief,
+    interpret_nl,
+    is_extract_brief,
+    normalize_source,
+    parse_command,
+)
 
 
 def test_run_command_parses_source_and_confirms():
@@ -146,3 +155,53 @@ def test_focus_only_attaches_to_run_not_other_verbs():
     # a focus brief on a non-run verb is ignored (no focus plumbing for transcribe/shorts)
     i = parse_command("transcribe ~/v.mp4 - only the intro")
     assert i.action == "transcribe" and "focus" not in i.args
+
+
+# --- duration parsed from a focus brief (honor "a 5-10 minute explanation") ----------------------
+
+def test_duration_range_targets_and_caps_at_the_top():
+    # the user's exact ask: a 5-10 minute extract should target 10 and never exceed 10
+    assert duration_from_brief("make it focus on my 5-10 minute explanation of what Codex is") == (10.0, 10.0)
+
+
+def test_duration_range_word_to_and_reversed_order():
+    assert duration_from_brief("a 5 to 10 minute explanation") == (10.0, 10.0)
+    assert duration_from_brief("between 10-5 minutes")[0] == 10.0  # reversed range still caps at the larger
+
+
+def test_duration_capped_single_targets_below_the_cap():
+    assert duration_from_brief("keep it under 8 minutes") == (7.2, 8.0)
+    assert duration_from_brief("no longer than 8 min") == (7.2, 8.0)
+
+
+def test_duration_plain_single_gets_small_ceiling_slack():
+    t, c = duration_from_brief("about a 10 minute cut")
+    assert t == 10.0 and 10.0 < c <= 11.5
+
+
+def test_duration_compact_and_hours():
+    assert duration_from_brief("10m")[0] == 10.0
+    t, c = duration_from_brief("trim it to 1.5 hours")
+    assert t == 90.0 and c == 103.5
+
+
+def test_duration_seconds_supported_but_sane():
+    t, c = duration_from_brief("a 30 second teaser")
+    assert t == 0.5 and c >= 0.5
+
+
+@pytest.mark.parametrize("brief", [
+    "the part where I explain what Codex is",   # no number at all
+    "the 5 best tips about Codex",              # number but no time unit
+    "everything we shipped in 2025",            # a year, not a duration
+    "version 4 of the demo",                    # a count, not a duration
+    "",
+    None,
+])
+def test_duration_none_when_no_sane_span(brief):
+    assert duration_from_brief(brief) is None
+
+
+def test_duration_overlong_is_rejected():
+    # a 6-hour span is not a plausible extract length -> fall back to defaults
+    assert duration_from_brief("a 6 hour stream") is None

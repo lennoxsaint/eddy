@@ -106,6 +106,70 @@ def is_extract_brief(focus: str | None) -> bool:
     return bool(focus and _EXTRACT_CUES.search(focus))
 
 
+# A creator who writes "a 5-10 minute explanation" or "keep it under 8 minutes" is stating how long
+# the cut should run — the deterministic loop should honor that as its target + length ceiling instead
+# of falling back to the 12-min default. These read a runtime out of a free-text brief.
+_DUR_UNIT = r"(?P<unit>minutes|minute|mins|min|hours|hour|hrs|hr|seconds|second|secs|sec|m|h)"
+# Qualifier phrases that make the stated number a CEILING ("under 8 min") rather than a soft target.
+_DUR_CAP_QUAL = (
+    r"no (?:longer|more) than|shorter than|less than|at most|up to|under|below|within|max(?:imum)?|<=|≤"
+)
+_DUR_RANGE = re.compile(
+    r"(?P<a>\d+(?:\.\d+)?)\s*(?:-|–|—|to|through|thru)\s*(?P<b>\d+(?:\.\d+)?)\s*" + _DUR_UNIT,
+    re.IGNORECASE,
+)
+_DUR_SINGLE = re.compile(
+    r"(?P<qual>" + _DUR_CAP_QUAL + r")?\s*(?P<n>\d+(?:\.\d+)?)\s*" + _DUR_UNIT,
+    re.IGNORECASE,
+)
+
+
+def _dur_to_min(value: float, unit: str) -> float:
+    u = unit.lower()
+    if u in ("h", "hr", "hrs", "hour", "hours"):
+        return value * 60.0
+    if u in ("s", "sec", "secs", "second", "seconds"):
+        return value / 60.0
+    return value  # minute family
+
+
+def _sane_band(target_minutes: float, ceiling_minutes: float) -> tuple[float, float] | None:
+    """Accept only a plausible extract length (15s–3h) so a stray year/count ('in 2025', 'top 5')
+    parsed as a duration is rejected. Clamp the ceiling to ≥ target and ≤ 180 min."""
+    t = round(float(target_minutes), 2)
+    if not 0.25 <= t <= 180.0:
+        return None
+    c = round(min(max(float(ceiling_minutes), t), 180.0), 2)
+    return t, c
+
+
+def duration_from_brief(focus: str | None) -> tuple[float, float] | None:
+    """Pull an explicit runtime out of a focus brief → (target_minutes, ceiling_minutes), or None.
+
+    Rules: a RANGE ("5-10 min") aims for the top of the range and caps there (never exceed the stated
+    upper bound). A capped single ("under 8 min") aims a touch below the cap. A plain single
+    ("about a 10 minute cut") targets that length with a small ceiling slack so it isn't a razor-edge
+    fail. Returns None when no sane time span is present (caller keeps the configured defaults)."""
+    if not focus:
+        return None
+    text = focus.strip()
+
+    m = _DUR_RANGE.search(text)
+    if m:
+        a = _dur_to_min(float(m.group("a")), m.group("unit"))
+        b = _dur_to_min(float(m.group("b")), m.group("unit"))
+        hi = max(a, b)
+        return _sane_band(hi, hi)
+
+    m = _DUR_SINGLE.search(text)
+    if m:
+        n = _dur_to_min(float(m.group("n")), m.group("unit"))
+        if m.group("qual"):  # the number is an explicit ceiling
+            return _sane_band(round(n * 0.9, 2), n)
+        return _sane_band(n, round(n * 1.15, 2))
+    return None
+
+
 def normalize_source(raw: str) -> str:
     """Turn a dragged/pasted/typed path token into a real local path. Handles a macOS Finder
     drag-drop (backslash-escaped spaces), one surrounding quote pair, and a file:// URL. Does NOT

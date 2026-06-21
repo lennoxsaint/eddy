@@ -82,3 +82,29 @@ def test_no_skip_shorts_flag_overrides_profile(monkeypatch, tmp_path):
     r = runner.invoke(app, ["run", str(src), "--profile", "p", "--no-skip-shorts"])
     assert r.exit_code == 0, r.output
     assert captured["skip_shorts"] is False
+
+
+# --- a runtime stated in the focus brief drives target + ceiling (the "5-10 minute" fix) ----------
+
+def test_focus_brief_duration_sets_target_and_ceiling(monkeypatch, tmp_path):
+    captured, src = _patch_run(monkeypatch, tmp_path, RunProfile())
+    r = runner.invoke(app, ["run", str(src), "--focus", "keep it to a 5-10 minute explanation of codex"])
+    assert r.exit_code == 0, r.output
+    assert captured["target_minutes"] == 10.0      # aims for the top of the stated range
+    assert captured["ceiling_minutes"] == 10.0     # and never exceeds it
+
+
+def test_explicit_target_minutes_beats_brief_duration(monkeypatch, tmp_path):
+    captured, src = _patch_run(monkeypatch, tmp_path, RunProfile())
+    r = runner.invoke(app, ["run", str(src), "--target-minutes", "7",
+                            "--focus", "a 5-10 minute explanation of codex"])
+    assert r.exit_code == 0, r.output
+    assert captured["target_minutes"] == 7.0       # explicit flag wins; brief duration ignored
+
+
+def test_named_format_not_overridden_by_brief_duration(monkeypatch, tmp_path):
+    captured, src = _patch_run(monkeypatch, tmp_path, RunProfile())
+    r = runner.invoke(app, ["run", str(src), "--format", "tutorial",
+                            "--focus", "a 5-10 minute explanation of codex"])
+    assert r.exit_code == 0, r.output
+    assert captured["ceiling_minutes"] == 600.0    # a deliberate format ceiling is preserved
