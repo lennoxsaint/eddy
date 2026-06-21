@@ -18,11 +18,13 @@ class FakeReceipts:
         self.events.append((event, kw))
 
 
-def test_ensemble_is_off_by_default():
-    # default ensemble_n==1 -> the loop takes the single-draft path -> normal/extract edits are
-    # byte-identical to pre-v1.7. The lever is strictly opt-in via config.
+def test_ensemble_default_is_proven_n5():
+    # v1.7.2: best-of-5 is the DEFAULT (the proven setting — judge stdev -71% on the full 5-draw
+    # confirmation; N=3 was too small for the ~45% catastrophe rate). Normal/steer edits are still
+    # unaffected: the loop only calls best_of_n when focus_mode=="extract", so they take the
+    # single-draft path regardless of this value.
     from eddy.config import LoopConfig
-    assert LoopConfig().ensemble_n == 1
+    assert LoopConfig().ensemble_n == 5
 
 
 def _edl(n_ranges=1, dur=120.0):

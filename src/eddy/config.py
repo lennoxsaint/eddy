@@ -86,11 +86,13 @@ class LoopConfig(BaseModel):
     ship_panel: bool = True  # v0.3: 3-lens majority panel at final ship
     ship_panel_size: int = 3
     # v1.7 best-of-N self-consistency for the iteration-1 EXTRACT draft. The local 27B brain is
-    # wildly non-deterministic (v1.7 baseline: blocks 6→151, dur 26s→45min on one source); sampling N
-    # drafts and picking the best by a deterministic render-free selector collapsed block-count stdev
-    # 59→5 in the micro-harness. 1 = OFF (single draft, byte-identical to pre-v1.7); >1 enables it.
-    # Gated to extract mode in the loop, so normal/steer edits are unaffected regardless of this value.
-    ensemble_n: int = 1
+    # wildly non-deterministic (v1.7 baseline: blocks 6→151, dur 26s→45min on one source) and ~45% of
+    # single draws are over-ceiling catastrophes; sampling N drafts and picking the best by a
+    # deterministic render-free selector cut judge stdev 1.154→0.339 (↓71%) and eliminated catastrophes
+    # on a full 5-draw confirmation. Default 5 = the PROVEN setting (0.45^5≈2% all-bad-group rate; N=3
+    # was too small). 1 = OFF (single draft, pre-v1.7). Gated to extract mode in the loop, so
+    # normal/steer edits are unaffected regardless of this value (they always take the single-draft path).
+    ensemble_n: int = 5
     max_model_calls_per_iteration: int = 4
     # v0.4 runaway guard, enforced at the iteration head: a pathological source on a cloud brain
     # could otherwise run up to max_iterations full-render rounds for hours at unbounded cost.
