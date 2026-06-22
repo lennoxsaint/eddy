@@ -7,7 +7,7 @@ import json
 import time
 from pathlib import Path
 
-from eddy.config import load_config
+from eddy.config import EddyConfig, load_config
 from eddy.cost import run_cost_summary
 from eddy.edit.compiler import CompileError, cut_transcript
 from eddy.edit.cutplan import (
@@ -452,6 +452,29 @@ def _warn_multispeaker(run_dir: Path, receipts: Receipts) -> None:
         receipts.log("multispeaker_warning", **det)
 
 
+def _run_plan(cfg: EddyConfig, skip_shorts: bool, skip_package: bool) -> list[str]:
+    """The ordered phase keys autonomous_run will actually execute for THIS run — the same conditionals
+    that gate the set_phase() calls below, declared up front so the TUI shows an honest 'step k of N'
+    (a 'just the video' run is ~5 stages, not the full 10). Keys are the major phases the TUI maps;
+    the variable-length edit loop is the single 'editing' step."""
+    plan = ["transcribe", "editing"]
+    if cfg.loop.enable_aggressive_trim:
+        plan.append("trim_to_fit")
+    if cfg.loop.enable_speed_ramp:
+        plan.append("speed_to_fit")
+    if cfg.loop.ship_panel:
+        plan.append("ship_panel")
+    plan.append("final_render")
+    if cfg.audio.studio_sound:
+        plan.append("studio_sound")
+    if not skip_shorts:
+        plan.append("shorts")
+    if not skip_package:
+        plan.append("package")
+    plan.append("done")
+    return plan
+
+
 def autonomous_run(
     source: Path,
     target_minutes: float | None = None,
@@ -475,9 +498,10 @@ def autonomous_run(
 
     if ui.color_enabled():
         ui.print_sprite("working", small=True)
-    ui.console().print(ui.banner("editing"))
+    ui.console().print(ui.banner("starting"))  # neutral: the live stage is shown by the phase, not here
     ui.note(f"run: {run_dir}")
 
+    state.set_plan(_run_plan(cfg, skip_shorts, skip_package))  # honest per-run step count for the TUI
     state.set_phase("transcribe")
     ui.note("transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)
@@ -628,6 +652,7 @@ def mine_shorts(
     ui.console().print(ui.banner("mining shorts"))
     ui.note(f"run: {run_dir}")
 
+    state.set_plan(["transcribe", "editing", "shorts", "done"])  # the shorts-only path is 4 stages
     state.set_phase("transcribe")
     ui.note("transcribing (this can take a few minutes on a long source)…")
     transcribe_run(run_dir, language=language)

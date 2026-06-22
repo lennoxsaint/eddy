@@ -439,3 +439,35 @@ named format preserved). Full suite **692 passed** / 5 skipped, cov 75.34%, ruff
 target+ceiling now being correct, not on a re-render. Known follow-up: the best-of-N selector ranks
 `over_ceiling_s` against the **config** ceiling, not the per-run brief ceiling — first-draft selection
 won't yet prefer ≤10 min, though the revise loop + ship gate still enforce the run ceiling.
+
+## 2026-06-22 — v1.7.4: simpler chooser + honest per-run progress (TUI)
+
+**Trigger.** Two live-run screenshots: (1) the "What should Eddy make?" chooser had a 4th button
+clipped off the right edge — Lennox couldn't read it; (2) progress always said "step 1 of 10" even
+though a "just the video" run skips Shorts + Titles.
+
+**Root causes.** (1) `OutputScreen` rendered four buttons (`Video / + Shorts / Full kit / Cancel`) in a
+fixed 64-col dialog with per-button margins and no width cap → Cancel overflowed. The choice keys were
+also shown 3× (inline text, buttons, footer). (2) `tui/phases.py` hardcoded a 10-stage `_ORDER`, so the
+total and the step index counted stages that wouldn't run; a run-start banner hardcoded to
+`EDDY · editing` (printed once, captured in the TUI log tail) also contradicted the live phase.
+
+**Decisions (Lennox-approved).**
+- Chooser: **drop the Cancel button** (3 buttons never clip); `esc` and a **click on the backdrop**
+  both cancel (new `on_click` → `dismiss(None)`). The triple key-hint collapses to one line describing
+  what each output produces (`Video = the edited long · + Shorts adds clips · Full kit = titles…`).
+- Progress: the engine records the **actual ordered stages this run will run** (`_run_plan` mirrors the
+  same skip-flag/config conditionals that gate `set_phase`) into `state.json` (`RunState.set_plan`); the
+  monitor renders a **stage breadcrumb** (`✓ done · ▸ current · dim pending`) + an honest "step k of N"
+  via `phases.breadcrumb`/plan-aware `phases.progress`. The variable-length edit loop stays one
+  "Editing" step but shows the live "(pass N)". Banner subtitle changed `editing` → neutral `starting`.
+- `phases.py` stays Textual-free; the engine imports nothing from the TUI (the plan is a `list[str]` of
+  phase keys the engine already owns — the TUI only renders it). Older runs / a direct `edit_loop`
+  fall back to the static full order.
+
+**Verified.** New tests: `test_tui_output.py` (3 buttons, no `#cancel`, esc + backdrop-click cancel,
+flags intact), `test_tui_phases.py` (per-run `progress` "of 5/6/4" vs static "of 10", breadcrumb
+markers), `test_run_plan.py` (video-only omits shorts+package; flags toggle optional stages). Live
+render check: a default video-only run = **6 stages** (studio_sound on), not 10. Full suite **704
+passed** / 5 skipped, cov 75.29%, ruff + mypy clean. **Not verified:** no full TUI run rendered to
+completion this turn — the rendering claims rest on the unit coverage above + a static render check.

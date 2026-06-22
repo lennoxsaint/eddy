@@ -83,6 +83,7 @@ ConfirmScreen, DoctorScreen, FailureScreen, PreviewScreen, OutputScreen {
 }
 
 #dbtns {
+    width: 100%;
     height: auto;
     align: center middle;
     margin-top: 1;

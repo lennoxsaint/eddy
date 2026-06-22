@@ -38,3 +38,34 @@ def test_empty_and_placeholder():
 def test_label_combines_friendly_and_step():
     lab = phases.label("final_render")
     assert lab.startswith("Rendering video") and "step" in lab
+
+
+# --- per-run plan: honest 'step k of N' instead of a fixed 10 -------------------------------------
+
+_VIDEO_PLAN = ["transcribe", "editing", "ship_panel", "final_render", "done"]  # a 'just the video' run
+
+
+def test_progress_counts_against_the_run_plan_not_the_fixed_ten():
+    # the SAME phase reads as 'of 5' on this run and 'of 10' with no plan (the old behaviour)
+    assert phases.progress("iteration_2", _VIDEO_PLAN) == "(step 2 of 5)"
+    assert phases.progress("final_render", _VIDEO_PLAN) == "(step 4 of 5)"
+    assert "of 10" in phases.progress("final_render")  # no plan -> static fallback
+
+
+def test_progress_shorts_only_plan_is_four_steps():
+    plan = ["transcribe", "editing", "shorts", "done"]
+    assert phases.progress("plan", plan) == "(step 2 of 4)"  # the shorts 'plan' phase folds to editing
+    assert phases.progress("shorts", plan) == "(step 3 of 4)"
+
+
+def test_breadcrumb_marks_done_current_and_pending():
+    bc = phases.breadcrumb("iteration_2", _VIDEO_PLAN)
+    assert "✓ Transcribe" in bc          # a completed stage
+    assert "▸ Editing (pass 2)" in bc    # the current stage shows the live pass number
+    assert "Final checks" in bc and "Render" in bc and "Done" in bc  # what's left
+    # the current stage is the only one with the ▸ marker
+    assert bc.count("▸") == 1
+
+
+def test_breadcrumb_failed_phase_is_blank():
+    assert phases.breadcrumb("loop_failed_no_edl", _VIDEO_PLAN) == ""

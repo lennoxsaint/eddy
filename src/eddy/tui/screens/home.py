@@ -183,7 +183,14 @@ class HomeScreen(Screen):
     def _update_monitor(self, slug: str) -> None:
         d = self.data.run_detail(slug)
         st = d["state"]
-        lines = [f"[{_GOLD} bold]{escape(slug)}[/]", phases.label(st.get("phase"))]
+        plan = st.get("plan")
+        lines = [f"[{_GOLD} bold]{escape(slug)}[/]"]
+        crumbs = phases.breadcrumb(st.get("phase"), plan)
+        if crumbs:
+            lines.append(crumbs)
+        step = phases.progress(st.get("phase"), plan)
+        if step:
+            lines.append(f"[{_DIM}]{step}[/]")
         verdict = run_verdict(st)
         if verdict:
             lines.append(verdict)

@@ -100,6 +100,13 @@ class RunState:
         self.data["phase"] = phase
         self.save()
 
+    def set_plan(self, keys: list[str]) -> None:
+        """Record the ordered phase keys THIS run will actually execute (skip-flags + config decide
+        it), so the TUI can show an honest 'step k of N' / breadcrumb instead of a fixed total. The
+        edit loop's own RunState reloads preserve it — save() writes the whole dict."""
+        self.data["plan"] = list(keys)
+        self.save()
+
 
 def print_status(run_dir: Path) -> None:
     s = RunState(run_dir)

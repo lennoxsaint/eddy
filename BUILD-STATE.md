@@ -220,5 +220,17 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   formats keep their deliberate ceiling). +16 tests; suite **692 green**, cov 75.34%, ruff+mypy clean.
   No full $0 render this turn (the fix is target+ceiling correctness, not a re-render). Known follow-up:
   best-of-N selector still ranks over-ceiling against the **config** ceiling, not the per-run brief one.
+- **v1.7.4 "Simpler chooser + honest progress" (TUI)** (2026-06-22) — from two live-run screenshots.
+  **(1) Chooser:** the "What should Eddy make?" modal clipped its 4th button (Cancel) — 4 buttons in a
+  fixed 64-col dialog overflowed. Dropped the Cancel button (3 buttons never clip); `esc` + a **click on
+  the backdrop** (`OutputScreen.on_click`) both cancel; the triple-redundant key hints collapse to one
+  "what each makes" line. **(2) Progress:** "step 1 of 10" was fixed and wrong for runs that skip stages.
+  The engine now records the **actual per-run stage plan** (`_run_plan` + `RunState.set_plan` → state.json)
+  and the monitor renders a **stage breadcrumb** (`✓ done · ▸ current · dim pending`) + honest "step k of
+  N" (`phases.breadcrumb` / plan-aware `phases.progress`); edit loop stays one "Editing" step with a live
+  "(pass N)"; banner subtitle `editing` → `starting`. `phases.py` stays Textual-free; engine imports no
+  TUI. +13 tests (`test_tui_output.py`, `test_tui_phases.py`, `test_run_plan.py`); suite **704 green**,
+  cov 75.29%, ruff+mypy clean. A default video-only run shows 6 honest stages, not 10. No full TUI run
+  rendered to completion this turn.
 - Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
   spend) remains open by design — none are coding-agent tasks.
