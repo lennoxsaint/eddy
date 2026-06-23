@@ -17,6 +17,10 @@ on your machine. **If** you have a `claude` or `codex` CLI installed, or an `ANT
 
 Other steps in the default tier:
 - **Transcription** (Whisper) runs locally. On first use it downloads model weights from HuggingFace.
+- **Studio Sound** is Eddy's local studio-mic cleanup pass by default: FFmpeg-based denoise where
+  available, mouth-click cleanup where available, speech EQ, compression/limiting, and loudness
+  normalization. It operates on rendered local files and records before/after loudness proof. Exact
+  Descript Studio Sound is only used when you explicitly route a Descript project workflow.
 - **Thumbnails** are optional and only run if you set an image-API key (`GEMINI_API_KEY` /
   `GOOGLE_API_KEY` / `OPENAI_API_KEY`). When they run, selected **face frames** are uploaded to that
   image API. With no key, the step skips with a receipt and the kit still ships.

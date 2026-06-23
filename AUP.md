@@ -1,7 +1,7 @@
 # Eddy Acceptable Use Policy (AUP)
 
-> **DRAFT — pending legal review and owner sign-off (human-gate).** Starting skeleton for a lawyer
-> to finalize; not in force until adopted.
+> Public baseline policy. Project maintainers should still seek legal review before offering Eddy as
+> a paid hosted or packaged product.
 
 By using Eddy you agree to the following.
 

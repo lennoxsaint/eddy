@@ -61,3 +61,8 @@ def test_silence_gate_catches_real_dead_air(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda argv, **k: _proc(stderr="silence_duration: 9.0\n"))
     r = deterministic.silence_gate(Path("v.mp4"), Path("."), 2.0)
     assert r["pass"] is False  # a real 9s dead-air span now actually fails the gate
+
+
+def test_visual_blink_luma_signature():
+    assert deterministic._blink_flag_from_luma(90.0, 0.5, 88.0) is True
+    assert deterministic._blink_flag_from_luma(90.0, 87.0, 88.0) is False

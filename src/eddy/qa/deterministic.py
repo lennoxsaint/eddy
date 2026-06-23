@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import json
 import re
+import importlib
 from pathlib import Path
+from typing import Any
 
 from eddy.config import EddyConfig
 from eddy.edit.schema import Edl
 from eddy.media.probe import stream_summary
+
+PILImage: Any
+try:
+    PILImage = importlib.import_module("PIL.Image")
+except Exception:  # pragma: no cover
+    PILImage = None
 
 
 def probe_clean(video: Path) -> dict:
@@ -69,6 +77,51 @@ def black_or_frozen(video: Path, run_dir: Path) -> dict:
         "black": black[:5],
         "frozen": freeze[:5],
     }
+
+
+def _blink_flag_from_luma(before: float, middle: float, after: float) -> bool:
+    """Detect a splice flash: the middle frame goes near-black/near-white while neighbours do not."""
+    near_blank = middle <= 8 or middle >= 247
+    neighbours_not_blank = 12 < before < 243 and 12 < after < 243
+    sharp_return = abs(before - middle) >= 45 and abs(after - middle) >= 45
+    return bool(near_blank and neighbours_not_blank and sharp_return)
+
+
+def _frame_luma(path: Path) -> float:
+    if PILImage is None:
+        raise RuntimeError("Pillow unavailable")
+    img = PILImage.open(path).convert("L").resize((32, 18))
+    hist = img.histogram()
+    total = sum(hist) or 1
+    return sum(i * c for i, c in enumerate(hist)) / total
+
+
+def visual_blink_gate(video: Path, edl: Edl, run_dir: Path, sample_window_s: float = 0.04) -> dict:
+    """Sample frames around every output splice and fail if a black/white flash appears at the cut."""
+    if len(edl.ranges) <= 1:
+        return {"gate": "visual_blink", "pass": True, "splices_checked": 0, "flashes": []}
+    from eddy.media.frames import extract_frame
+
+    splices = []
+    cursor = 0.0
+    for r in edl.ranges[:-1]:
+        cursor += (r.end - r.start) / (r.speed or 1.0)
+        splices.append(cursor)
+    out_dir = Path(run_dir) / "qa" / "blink-frames"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    flashes = []
+    for i, t in enumerate(splices):
+        frames = []
+        try:
+            for tag, at in (("before", t - sample_window_s), ("middle", t), ("after", t + sample_window_s)):
+                p = out_dir / f"splice-{i:04d}-{tag}.jpg"
+                extract_frame(video, at, p, run_dir, height=180)
+                frames.append(_frame_luma(p))
+        except Exception as e:
+            return {"gate": "visual_blink", "pass": False, "error": str(e)[:300], "splice": i}
+        if _blink_flag_from_luma(*frames):
+            flashes.append({"splice": i, "out_s": round(t, 3), "luma": [round(v, 1) for v in frames]})
+    return {"gate": "visual_blink", "pass": not flashes, "splices_checked": len(splices), "flashes": flashes[:20]}
 
 
 def silence_gate(video: Path, run_dir: Path, max_dead_air_s: float) -> dict:
@@ -137,6 +190,7 @@ def run_deterministic(
     sim_report: dict | None = None,
     protected_count: int = 0,
     check_loudness: bool = False,
+    check_visual_blink: bool = False,
 ) -> dict:
     gates = [
         probe_clean(video),
@@ -149,6 +203,8 @@ def run_deterministic(
     ]
     if check_loudness:
         gates.append(loudness_gate(video, cfg.audio.target_lufs))
+    if check_visual_blink:
+        gates.append(visual_blink_gate(video, edl, run_dir))
     if sim_report is not None:
         gates.append({"gate": "sim_pass", "pass": sim_report.get("pass", False)})
     return {"gates": gates, "pass": all(g["pass"] for g in gates)}

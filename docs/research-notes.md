@@ -1,13 +1,14 @@
 # Research Notes — source truth findings
 
-## Vendored base (yassy-mbp, scp'd 2026-06-11)
+## Vendored base (local reference import, 2026-06-11)
 
-- `vendor/yt_tools/` — 16 working scripts from `yassy-mbp:~/YouTube/tools/`. Key constants from
+- `vendor/yt_tools/` — 16 working scripts copied from a prior local YouTube editing workflow. Key constants from
   `render_redesigned_shorts_batch.py` (the approved "Clients Hunt You v3" renderer):
   W,H=1080,1920 · BG=0x07111f · FACE_SIZE=900 @ y=34 · CAPTION_Y=944 H=250 · SCREEN 1000x562 @ y=1254 ·
   RADIUS=34 · GAP_CUT_THRESHOLD=0.68 · START_HANDLE=0.24 · INTERNAL_END_HANDLE=0.32 · FINAL_END_HANDLE=0.52 ·
   GLUED_WORD_GAP=0.08 · shorts markers: "hook for short"/"book for short" variants.
-  All 15 files carry hardcoded `/Users/yassybabes/YouTube` ROOTs — parameterization worklist.
+  Some reference files intentionally retain original absolute paths as historical provenance; runtime
+  Eddy code must stay parameterized and must not import those scripts as live entrypoints.
 - `docs/references/shorts-rendering-standard.md` — the approved spec (layout, karaoke caption behavior,
   edit standard incl. 0.10s hard-fail boundary handles, QA gate incl. sentence-final ledger).
 

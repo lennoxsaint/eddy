@@ -1,6 +1,6 @@
 # Two-layer ingest (camera + screen) for proper Shorts
 
-Eddy renders Shorts in Yasmine's approved stacked layout — **talking-head on top, screen
+Eddy renders Shorts in the approved stacked layout — **talking-head on top, screen
 recording uncropped on the bottom, karaoke captions in the gap between them** (navy background,
 1080×1920). This layout only works when Eddy is given the two layers *separately*. If it only
 receives a single composite (camera PIP burned into the screen recording), it falls back to a
@@ -9,8 +9,8 @@ degraded single-panel layout.
 ## How to record + export (Descript)
 
 Film with two tracks: your **camera** (talking head) and the **screen** recording. Export them as
-**separate files**, not a flattened composite. Yasmine's bridge for this is
-`yassy-mbp:~/YouTube/tools/descript_multitrack_delivery.py` (camera + screen tracks at offset 0).
+**separate files**, not a flattened composite. Name them `camera.mp4` and `screen.mp4` or use
+equivalent filenames containing `camera`/`cam`/`face` and `screen`/`display`.
 
 ## How to hand them to Eddy
 
@@ -31,7 +31,7 @@ eddy run path/to/my-video/
 dual path automatically when a `screen` file is present. A single file (or a folder with one video)
 still works — it just uses the degraded single-composite layout.
 
-## Geometry (Yasmine's standard, do not restyle without approval)
+## Geometry (approved standard, do not restyle without approval)
 
 - Face: 900×900 square, centered, top (Y=34), 34px rounded corners — camera center-cropped to square.
 - Captions: 1080×250 band at Y=944 (the gap above the screen), blue current-word highlight.

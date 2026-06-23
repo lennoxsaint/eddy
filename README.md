@@ -1,20 +1,20 @@
 # Eddy
 
-**Drop raw footage in. Get a complete YouTube launch kit out.**
+**Drop raw footage in. Get a complete YouTube edit out.**
 
 Eddy is a local-first agentic video editor. You record like a human — retakes, false starts,
-long gaps, messy texture — and Eddy loops a local model over the footage (transcript → cut plan →
-simulation → proxy render → QA → judge) until the edit is actually done, then packages the launch:
+long gaps, messy texture — and Eddy loops over the footage (transcript → cut plan →
+simulation → proxy render → QA → judge → repair) until the edit passes gates, then packages the launch:
 
 - edited long video (publish-ready)
-- shorts with karaoke captions in your approved layout
+- Shorts with karaoke captions when the footage contains genuinely strong standalone clips
 - thumbnail candidates
 - 10 grounded title candidates
 - chapters + YouTube description
 
-Editing is **free and unlimited** by default: the editorial brain runs on your own hardware via
-Ollama. Weaker machine? `eddy doctor` detects your hardware and recommends a cloud brain instead —
-Anthropic/OpenAI APIs, or your existing ChatGPT/Claude subscription via the `codex`/`claude` CLIs.
+Editing is **free and unlimited** when you use a local brain. `eddy doctor` detects what is available
+and picks the best safe route it can: Ollama/local models, your existing `codex` or `claude` CLI, or
+configured Anthropic/OpenAI APIs.
 
 Your raw video and audio never leave your machine, nothing is ever published, and sources are
 never modified (hash-verified). By default (`editorial='auto'`) the editorial brain uses the
@@ -24,14 +24,25 @@ image API. Run with `--local-only` (or `EDDY_OFFLINE=1`) to keep everything full
 [PRIVACY.md](PRIVACY.md) for the exact per-tier data flow. Every model call is written to receipts
 you can audit.
 
-## Quickstart
+## Quickstart for creators
 
 ```bash
-pipx install /path/to/eddy        # or: pip install -e .
+git clone https://github.com/lennoxsaint/eddy.git
+cd eddy
+python3 scripts/install_agent_skill.py --agent auto --install-editable
 eddy doctor                        # detects hardware, recommends a brain, writes config
 eddy run path/to/footage/          # camera.mp4 [+ screen.mp4 + mic.wav], or one composite .mp4
 eddy run talk.mp4 --focus "only keep the part where I explain X"   # topical extract
 ```
+
+## Quickstart for Codex or Claude
+
+Give the repo link to Codex or Claude and say:
+
+> Install this Eddy skill, then edit the attached raw footage into a finished YouTube video.
+
+The root `SKILL.md` and `scripts/install_agent_skill.py` are designed for that flow. Once installed,
+the agent should run `eddy run` against the attached footage, then report the local output paths.
 
 Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
 (configurable via `paths.runs_dir`). Reclaim scratch afterwards with `eddy clean <run>`.
@@ -73,8 +84,8 @@ reads the result. There's also a one-shot Claude Code plugin (`/eddy-run`, `/edd
 
 ## Status
 
-v0.1 — building. Board: Linear team EDD / project "Eddy v1". Product contract: `docs/PRD.md`.
-Origin story and decisions: `docs/decision-log.md`.
+Open-source under MIT. Eddy never uploads or publishes videos by itself. Product contract:
+`docs/PRD.md`. Origin story and decisions: `docs/decision-log.md`.
 
 ## For agents
 

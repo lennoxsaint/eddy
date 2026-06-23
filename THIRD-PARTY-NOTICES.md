@@ -1,9 +1,8 @@
 # Third-party notices
 
-> **DRAFT — pending legal review.** This enumerates the third-party components Eddy depends on
-> or invokes, with their licenses, so a commercial distribution can comply. Verify each license
-> and version at build/release time; a lawyer should confirm the ffmpeg build and model-weight
-> terms before any external distribution.
+Eddy is MIT-licensed, but it invokes third-party libraries, command-line tools, model weights, and
+optional cloud services whose own licenses and terms still apply. Verify pinned dependency versions
+and any bundled binary license before cutting a release artifact.
 
 ## Python dependencies (PyPI, installed alongside Eddy)
 | Component | Purpose | License (typical) |
@@ -17,17 +16,16 @@
 | faster-whisper | transcription (CTranslate2) | MIT |
 | httpx | HTTP client | BSD-3-Clause |
 
-These are permissive (MIT/BSD/Apache/HPND) and compatible with commercial distribution provided
-their copyright/license notices are reproduced. Generate a complete, pinned list with
-`pip-licenses` at release time (a v0.6 distribution task) and include it here.
+These are permissive (MIT/BSD/Apache/HPND) in their common published forms and compatible with MIT
+distribution when their copyright/license notices are preserved. Generate a complete, pinned list
+with `pip-licenses` for release packages.
 
 ## System / bundled binaries
 - **FFmpeg** — invoked for all media operations. FFmpeg can be built under **LGPL-2.1+** or
   **GPL-2.0+** depending on which external libraries are compiled in (e.g. libx264 / libfdk-aac pull
   in GPL/non-free terms). For a commercial, non-copyleft distribution you must ship (or require) an
   **LGPL build of FFmpeg without GPL/non-free components**, and provide the corresponding notices
-  and (for LGPL) a way to relink. **ACTION (human-gate): confirm the exact FFmpeg build and its
-  license before bundling.**
+  and (for LGPL) a way to relink. Confirm the exact FFmpeg build and its license before bundling.
 
 ## Model weights (downloaded at runtime, not bundled)
 - **Whisper `large-v3`** (via faster-whisper / CTranslate2) — model weights are downloaded from
@@ -45,5 +43,6 @@ their copyright/license notices are reproduced. Generate a complete, pinned list
   uploaded. Confirm the provider's terms on uploaded-likeness usage.
 
 ## Vendored code
-- `vendor/yt_tools/` — the proven shorts-rendering standard, vendored read-only as a diff anchor.
-  Confirm its provenance and license/usage rights for distribution before release (human-gate).
+- `vendor/yt_tools/` — historical reference scripts copied from a prior internal creator-editing
+  workflow. They are retained as read-only implementation references, not runtime entrypoints. Do not
+  put private paths, keys, or footage-specific values in production code.

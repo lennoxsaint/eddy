@@ -358,6 +358,7 @@ def compile_with_repair(
                 silence_spans=silence_spans, extra_protected=extra_protected,
                 phrases=phrases, extract=extract,
             )
+            edl.sources = {k: v for k, v in m["sources"].items() if k != "mic"}
             return decisions, edl
         except CompileError as e:
             receipts.log("compile_error", attempt=attempt, problems=e.problems[:10])

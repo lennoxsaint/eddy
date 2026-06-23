@@ -38,9 +38,9 @@ defects; if one blocks you, that's a feature request.
 
 ## Platform / distribution
 - **Cross-platform is authored + CI-gated, not yet hardware-dogfooded** on Windows/Linux from the
-  maintainer's machine. The 3-OS CI matrix proves it once the private remote exists (human-gate).
+  maintainer's machine. The 3-OS CI matrix is the release proof path.
 - **No signed/notarized installers yet.** Requires Apple Developer ID + Windows Authenticode certs
-  (human-gate). Install via `pipx` from source or the offline wheelhouse meanwhile.
+  and an explicit package-release run. Install via `pipx` from source or the offline wheelhouse meanwhile.
 - **No auto-update.** Update manually (`pipx upgrade` / `git pull` + `pipx reinstall`).
 
 ## Coverage

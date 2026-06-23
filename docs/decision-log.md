@@ -2,22 +2,32 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-23 — Public Eddy repo + unattended gate-passing editor
+
+1. **Repo identity:** `/Users/lennoxsaint/eddy` is the canonical public MIT Eddy editor repo.
+2. **Install surface:** root `SKILL.md` + `scripts/install_agent_skill.py` let Codex/Claude install Eddy from a GitHub link.
+3. **Loop policy:** Eddy must keep repairing and rerendering until deterministic gates pass, stopping only for impossible blockers with exact receipts.
+4. **Studio Sound:** Eddy's default Studio Sound is local studio-mic cleanup: denoise where available, mouth-click cleanup where available, speech EQ, compression/limiting, and loudness normalization. Exact Descript Studio Sound is optional only when a Descript workflow is explicitly chosen.
+5. **Long layout:** separate screen + camera sources render with stable screen continuity and a bottom-right rounded camera square.
+6. **Shorts:** target five Shorts, but output fewer when fewer standalone segments pass editorial and deterministic QA.
+7. **Publishing boundary:** no video upload, publish, schedule, or send actions are part of Eddy.
+
 ## 2026-06-11 — Full grilling completed, v1 locked (Claude Code session)
 
 1. **Scope: full launch kit.** Drop footage in → thumbnails + title + edited long + shorts w/ karaoke captions + chapters/description. No publishing.
 2. **Loop priority: cut quality first.** Polish only after structure converges.
 3. **Approval: after final render.** Fully autonomous run; Lennox reviews the finished kit.
 4. **Brain: local-only default (Ollama qwen3.6-27b).** Core promise = free unlimited editing. Five providers ship working: Ollama, Anthropic API, OpenAI API, codex CLI (ChatGPT subscription), claude CLI (Claude subscription).
-5. **Architecture: standalone engine** in this repo; Yasmine's proven tooling vendored as the base (`vendor/yt_tools/`, never edited). No Descript, no Chrome MCP, no agent-session coupling.
+5. **Architecture: standalone engine** in this repo; the proven reference tooling vendored as the base (`vendor/yt_tools/`, never edited). No Descript, no Chrome MCP, no agent-session coupling.
 6. **Transcription: faster-whisper local**, word-level, cached by source hash.
 7. **Thumbnails: Gemini + OpenAI images** — the only paid path, cost-logged, skip-with-receipt without keys.
 8. **Onboarding: `eddy doctor`** — hardware + credential detection → tier recommendation → config write.
-9. **Done gate: deterministic QA + judge ≥8/10, max 5 iterations**, best-attempt shipping with receipts.
+9. **Original done gate:** deterministic QA + judge >=8/10 with bounded iterations. Superseded by the 2026-06-23 loop-until-pass decision above.
 10. **Input: camera+screen+mic or single composite** — degraded (no-screen) layout is the primary path.
 11. **Two-artifact contract:** model emits Claire-schema remove-list `edit-decisions.json`; deterministic compiler emits video-use-schema `edl.json`. Converter to prior-pipeline benchmark format for objective diffs.
 12. **Judge is text-only** — boundary splice cards + stats, defect-list-first, consistency-checked; demotes to advisory if unstable at q4.
 13. **Build tracked live on Linear** team EDD, project "Eddy v1", tiny sequenced issues.
-14. **Ship-readiness in v1:** pipx-installable, no personal hardcoded paths, stranger-readable quickstart. Public release remains a separate explicit approval.
+14. **Ship-readiness in v1:** pipx-installable, no personal hardcoded paths, stranger-readable quickstart. Superseded by the 2026-06-23 public MIT repo decision above.
 
 ## 2026-06-10 — First grilling packet (Codex session 019ead42-117d-7aa3-a28c-d8aa5ab1e87b)
 
@@ -48,7 +58,7 @@ Durable product/architecture decisions. Newest first. Format: date · decision �
 ## 2026-06-16 — v1.0 GA hardening (autonomous run) + EDD-84 disposition
 
 - **Ledger reality:** this autonomous build tracked progress in `BUILD-STATE.md` (compaction-proof, in-tree) rather than live Linear issues — the Linear path (`scripts/linear.py`) requires a remote + key that is a human-gate item. So Linear issue IDs referenced in the plan (incl. **EDD-84**) were NOT mutated by this run.
-- **EDD-84 — documented, not silently closed:** EDD-84 is an external Linear (team EDD) tracking item from the production-readiness audit. Its exact body was not reconcilable inside this offline build (no verified Linear access this session), so it is explicitly **carried into the human-gate batch** for reconciliation: when the private remote + Linear key exist, reconcile EDD-84 (and the rest of team EDD) against the actually-shipped v0.4→v1.0 work recorded in `BUILD-STATE.md` and the git tags. It is referenced as an open item in `docs/KNOWN-LIMITS.md`. No claim is made here that EDD-84's specific defect was fixed — only that it is tracked and routed to reconciliation.
+- **EDD-84 — documented, not silently closed:** EDD-84 is an external Linear (team EDD) tracking item from the production-readiness audit. Its exact body was not reconcilable inside this offline build (no verified Linear access this session), so it is explicitly **carried into the later reconciliation batch**: when Linear access is available, reconcile EDD-84 (and the rest of team EDD) against the actually-shipped v0.4→v1.0 work recorded in `BUILD-STATE.md` and the git tags. It is referenced as an open item in `docs/KNOWN-LIMITS.md`. No claim is made here that EDD-84's specific defect was fixed — only that it is tracked and routed to reconciliation.
 - **GA docs added:** `docs/RELEASE.md` (required-green gate + signing/notarize human-gate + update/rollback), `docs/SUPPORT.md` (triage runbook: doctor → dry-run → bundle), `docs/KNOWN-LIMITS.md` (honest scope boundaries), `docs/REPRODUCIBILITY.md` (two-tier model + exact-mode seed), `docs/AIRGAP.md` (offline wheelhouse + model staging).
 
 ## 2026-06-16 — v1.1 "Eddy's Face": mascot + MCP server + Claude Code plugin

@@ -10,22 +10,46 @@ DeepFilterNet pass is a bonus when the binary is installed.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 from eddy.config import AudioConfig
 from eddy.media.ffmpeg import FFMPEG, run_ffmpeg
 
 
+@functools.lru_cache(maxsize=1)
+def _available_audio_filters() -> frozenset[str]:
+    try:
+        proc = subprocess.run([FFMPEG, "-hide_banner", "-filters"], capture_output=True, text=True, timeout=15)
+    except Exception:
+        return frozenset()
+    names = set(re.findall(r"^\s*[TSC.]{3}\s+([a-z0-9_]+)\s+", proc.stdout, re.MULTILINE))
+    return frozenset(names)
+
+
 def _speech_eq(cfg: AudioConfig) -> str:
-    return (
-        f"highpass=f={cfg.highpass_hz},"
-        "afftdn=nf=-25,"
-        f"equalizer=f={cfg.presence_hz}:t=q:w=2:g={cfg.presence_gain_db},"
-        "alimiter=limit=0.95"
-    )
+    filters = _available_audio_filters()
+    chain = [f"highpass=f={cfg.highpass_hz}"]
+    if "afftdn" in filters:
+        chain.append("afftdn=nf=-25")
+    if cfg.mouth_click_cleanup:
+        # These filters are optional across ffmpeg builds. Use them when present, skip silently when
+        # absent so the studio-sound pass remains portable.
+        if "adeclick" in filters:
+            chain.append("adeclick")
+        if "deesser" in filters:
+            chain.append("deesser")
+    chain.append(f"equalizer=f={cfg.presence_hz}:t=q:w=2:g={cfg.presence_gain_db}")
+    if "acompressor" in filters:
+        chain.append(
+            f"acompressor=threshold={cfg.compressor_threshold_db}dB:ratio={cfg.compressor_ratio}:attack=8:release=80"
+        )
+    chain.append("alimiter=limit=0.95")
+    return ",".join(chain)
 
 
 def measure_lufs(media: Path) -> float | None:
@@ -122,8 +146,23 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
         out.replace(video)
         after = measure_lufs(video)
         if receipts is not None:
-            receipts.log("studio_sound", applied=True, lufs_before=before, lufs_after=after, deep_filter=(src == dfn))
-        return {"applied": True, "lufs_before": before, "lufs_after": after}
+            receipts.log(
+                "studio_sound",
+                applied=True,
+                mode="local_studio_mic",
+                lufs_before=before,
+                lufs_after=after,
+                deep_filter=(src == dfn),
+                mouth_click_cleanup=cfg.mouth_click_cleanup,
+                filter_chain=_speech_eq(cfg),
+            )
+        return {
+            "applied": True,
+            "mode": "local_studio_mic",
+            "lufs_before": before,
+            "lufs_after": after,
+            "mouth_click_cleanup": cfg.mouth_click_cleanup,
+        }
     except Exception as e:
         if receipts is not None:
             receipts.log("studio_sound", applied=False, error=str(e)[:300])

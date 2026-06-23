@@ -25,6 +25,7 @@ from eddy.render.captions import burn_captions, caption_events
 from eddy.render.long import latest_iteration_dir
 from eddy.runs import SourceError, manifest
 from eddy.transcribe.whisper import words_flat
+from eddy.qa.deterministic import loudness_gate, silent_motion_gate
 
 MARKER_PATTERNS = (
     ("hook", "for", "short"),
@@ -255,6 +256,15 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             studio_sound(final, run_dir, cfg.audio, receipts=receipts)
 
         final_summary = stream_summary(final)
+        silence_qa = silent_motion_gate(final, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, 0)
+        loudness_qa = loudness_gate(final, cfg.audio.target_lufs) if cfg.audio.studio_sound else {"pass": True}
+        boundary_pairs = []
+        for s, e in segs:
+            seg_words = [w for w in words if s <= w["start"] and w["end"] <= e + 0.05]
+            if seg_words:
+                boundary_pairs.append((s - seg_words[0]["start"], e - seg_words[-1]["end"]))
+        min_pre = min((pre for pre, _post in boundary_pairs), default=0.0)
+        min_post = min((post for _pre, post in boundary_pairs), default=0.0)
         fv = final_summary["video"]  # None only if our own render produced no video stream — QA-fail it
         entry = {
             "slug": slug,
@@ -265,6 +275,9 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             "segments": len(segs),
             "caption_events": len(events),
             "sentence_final": ends_on_complete_sentence(words),
+            "silence_qa": silence_qa,
+            "loudness_qa": loudness_qa,
+            "boundary_qa": {"min_pre_handle_s": round(min_pre, 3), "min_post_handle_s": round(min_post, 3)},
             "layout": "dual" if dual else "single_composite",
             "qa_pass": (
                 fv is not None
@@ -272,6 +285,9 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
                 and fv["height"] == L.H
                 and len(events) > 0
                 and final_summary["audio"] is not None
+                and ends_on_complete_sentence(words)
+                and silence_qa["pass"]
+                and loudness_qa["pass"]
             ),
             "status": "rendered",
         }

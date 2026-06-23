@@ -82,6 +82,14 @@ def _cost_cap_hit(spend_usd: float, cap_usd: float) -> bool:
     return cap_usd > 0 and spend_usd >= cap_usd
 
 
+def _failure_signature(qa: dict, judge: dict, sim: dict) -> str:
+    """Stable-ish signature for repeated no-progress failures."""
+    failed_gates = sorted(g.get("gate", "unknown") for g in qa.get("gates", []) if not g.get("pass"))
+    judge_defects = sorted((d.get("type") or d.get("fix_op") or "defect") for d in judge.get("defects", [])[:5])
+    length_state = "under" if sim.get("under_ceiling", True) else "over"
+    return json.dumps({"gates": failed_gates, "judge": judge_defects, "length": length_state}, sort_keys=True)
+
+
 def _fmt_dur(s: float) -> str:
     s = int(max(0, s))
     return f"{s // 60}m{s % 60:02d}s" if s >= 60 else f"{s}s"
@@ -261,6 +269,8 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
     # v0.3.2: min over_ceiling_s seen — the length convergence axis (1e9 sentinel = none yet)
     best_over = state.data.get("best_over", 1e9)
     over_ceiling_streak = state.data.get("over_ceiling_streak", 0)
+    last_failure_signature = ""
+    identical_failure_count = 0
     if resume and state.data["iteration"] >= 1:
         prev_dir = run_dir / "iterations" / f"{state.data['iteration']:02d}"
         if (prev_dir / "edit-decisions.json").exists():
@@ -394,6 +404,23 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             state.set_phase("loop_done")
             return iter_dir
 
+        sig = _failure_signature(qa, judge, sim)
+        identical_failure_count = identical_failure_count + 1 if sig == last_failure_signature else 1
+        last_failure_signature = sig
+        if cfg.loop.require_gate_pass and identical_failure_count >= cfg.loop.identical_failure_limit:
+            receipts.log(
+                "impossible_blocker",
+                reason="identical_failure_signature",
+                repeats=identical_failure_count,
+                signature=json.loads(sig),
+                iteration=iteration,
+            )
+            raise EditLoopError(
+                "Eddy hit the same failing QA signature repeatedly after repair attempts. "
+                "This is treated as an impossible blocker until the source media, dependency, or "
+                "editorial instruction changes. See receipts event 'impossible_blocker'."
+            )
+
         directive = _directive_from(qa, judge, sim, over_ceiling_streak, focus_mode=focus_mode)
         (iter_dir / "revision-directive.json").write_text(json.dumps(directive, indent=1))
 
@@ -410,6 +437,17 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         )
         state.set_plateau(no_improve, prev_best_q, best_over)
         if should_stop:
+            if cfg.loop.require_gate_pass:
+                receipts.log(
+                    "plateau_ignored_require_gate_pass",
+                    iteration=iteration,
+                    best_quality=cur_best_q,
+                    over_ceiling_s=round(over_ceiling_s, 1),
+                    rounds=no_improve,
+                )
+                no_improve = 0
+                state.set_plateau(no_improve, prev_best_q, best_over)
+                continue
             receipts.log(
                 "plateau_stop", iteration=iteration, best_quality=cur_best_q,
                 over_ceiling_s=round(over_ceiling_s, 1), rounds=no_improve,
@@ -430,6 +468,13 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
             "The editorial model kept emitting decisions the compiler rejected (see receipts "
             "'iteration_failed' problems, e.g. cuts inside protected_moments). Set "
             "provider.editorial=claude_cli (or auto) for a stronger brain, then re-run."
+        )
+    if cfg.loop.require_gate_pass and not best["gates_passed"]:
+        receipts.log("loop_failed_no_gate_passing_edit", **best)
+        state.set_phase("loop_failed_no_gate_passing_edit")
+        raise EditLoopError(
+            f"No gate-passing edit after {cfg.loop.max_iterations} attempts. "
+            "See receipts for the final failing QA signature and exact blocker."
         )
     receipts.log("best_attempt", **best, shipped_with_failures=not best["gates_passed"])
     state.set_phase("loop_done_best_attempt")
@@ -593,6 +638,7 @@ def autonomous_run(
     final_qa = run_deterministic(
         final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
         check_loudness=cfg.audio.studio_sound,
+        check_visual_blink=True,
     )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")
     receipts.log("final_render", path=str(final), qa_pass=final_qa["pass"])

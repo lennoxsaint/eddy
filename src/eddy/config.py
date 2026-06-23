@@ -77,7 +77,9 @@ class TranscribeConfig(BaseModel):
 
 
 class LoopConfig(BaseModel):
-    max_iterations: int = 15  # v0.3: raised from 5; plateau is the real brake
+    max_iterations: int = 50  # unattended editor: keep repairing much longer before declaring a blocker
+    require_gate_pass: bool = True  # never ship known QA failures as "done"
+    identical_failure_limit: int = 3  # repeated same failure signature => impossible blocker, not more thrash
     judge_threshold: float = 8.0
     plateau_rounds: int = 2  # v0.3: stop after K rounds with no best-quality gain
     length_ceiling_minutes: float = 14.0  # v0.3: length guardrail (constraint, not a target)
@@ -130,16 +132,19 @@ class RenderConfig(BaseModel):
     cut_pad_before_ms: int = 120
     cut_pad_after_ms: int = 160
     boundary_fade_ms: int = 30
+    long_camera_size: int = 260
+    long_camera_radius: int = 100
+    long_camera_margin: int = 0
 
 
 class ShortsConfig(BaseModel):
-    count: int = 3
+    count: int = 5
     min_s: float = 20.0
     max_s: float = 59.0
 
 
 class AudioConfig(BaseModel):
-    """Local 'studio sound' — denoise/dereverb + speech EQ + loudness normalization."""
+    """Local 'studio sound' — denoise/dereverb, mouth-click cleanup, speech EQ, loudness."""
     studio_sound: bool = True
     deep_filter_binary: str = "deep-filter"  # DeepFilterNet CLI if present; else ffmpeg-only
     target_lufs: float = -14.0  # YouTube integrated loudness
@@ -148,6 +153,9 @@ class AudioConfig(BaseModel):
     highpass_hz: int = 80
     presence_hz: int = 3500  # gentle speech-presence lift
     presence_gain_db: float = 2.0
+    mouth_click_cleanup: bool = True
+    compressor_threshold_db: float = -18.0
+    compressor_ratio: float = 2.5
 
 
 class ThumbnailsConfig(BaseModel):

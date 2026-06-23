@@ -7,12 +7,23 @@ to kill pops, no double-encode at concat."""
 from __future__ import annotations
 
 import concurrent.futures
+import importlib
 import os
 from pathlib import Path
+from typing import Any
 
 from eddy.config import RenderConfig
 from eddy.edit.schema import Edl, EdlRange
 from eddy.media.ffmpeg import concat_quote, run_ffmpeg, video_encoder_args
+
+PILImage: Any
+PILImageDraw: Any
+try:
+    PILImage = importlib.import_module("PIL.Image")
+    PILImageDraw = importlib.import_module("PIL.ImageDraw")
+except Exception:  # pragma: no cover - pillow is a runtime dependency, but keep import-safe
+    PILImage = None
+    PILImageDraw = None
 
 SEEK_PREROLL_S = 2.0
 
@@ -70,6 +81,71 @@ def _segment_args(
     return args
 
 
+def _rounded_mask(path: Path, size: tuple[int, int], radius: int) -> Path:
+    if PILImage is None or PILImageDraw is None:
+        raise RuntimeError("Pillow is required for rounded camera masks")
+    if path.exists():
+        return path
+    img = PILImage.new("L", size, 0)
+    PILImageDraw.Draw(img).rounded_rectangle((0, 0, size[0] - 1, size[1] - 1), radius=radius, fill=255)
+    img.save(path)
+    return path
+
+
+def _segment_args_dual(
+    camera: Path,
+    screen: Path,
+    mask: Path,
+    out: Path,
+    start: float,
+    end: float,
+    fade_s: float,
+    render_cfg: RenderConfig,
+    proxy_height: int | None,
+    proxy_preset: str,
+    speed: float = 1.0,
+) -> list[str]:
+    duration = max(0.05, end - start)
+    seek_start = max(0.0, start - SEEK_PREROLL_S)
+    output_seek = start - seek_start
+    speed = speed or 1.0
+
+    out_h = proxy_height or 1080
+    out_w = int(round(out_h * 16 / 9))
+    if out_w % 2:
+        out_w += 1
+    cam_size = max(80, int(round(render_cfg.long_camera_size * out_h / 1080)))
+    margin = max(0, int(round(render_cfg.long_camera_margin * out_h / 1080)))
+    cam_x = out_w - cam_size - margin
+    cam_y = out_h - cam_size - margin
+    crop_expr = "min(iw\\,ih)"
+    graph = (
+        f"[0:v]scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,"
+        f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=rgba[screen];"
+        f"[1:v]crop={crop_expr}:{crop_expr}:(iw-{crop_expr})/2:0,"
+        f"scale={cam_size}:{cam_size},setsar=1,fps=30,format=rgba[camraw];"
+        "[camraw][2:v]alphamerge[cam];"
+        f"[screen][cam]overlay={cam_x}:{cam_y}:format=auto,setpts=PTS-STARTPTS[v];"
+        f"[1:a]afade=t=in:st=0:d={fade_s:.3f},"
+        f"afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f},asetpts=PTS-STARTPTS[a]"
+    )
+    if abs(speed - 1.0) > 1e-6:
+        graph = graph.replace("setpts=PTS-STARTPTS[v]", f"setpts=PTS/{speed:.6f},fps=30[v]")
+        graph = graph.replace("asetpts=PTS-STARTPTS[a]", f"atempo={speed:.6f},asetpts=PTS-STARTPTS[a]")
+    out_t = duration / speed
+    args = ["-ss", f"{seek_start:.3f}", "-i", str(screen), "-ss", f"{seek_start:.3f}", "-i", str(camera)]
+    args += ["-i", str(mask)]
+    if output_seek > 0:
+        args += ["-ss", f"{output_seek:.3f}"]
+    args += ["-t", f"{out_t:.3f}", "-filter_complex", graph, "-map", "[v]", "-map", "[a]"]
+    if proxy_height:
+        args += ["-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-c:a", "aac", "-b:a", "96k"]
+    else:
+        args += [*video_encoder_args("7000k"), "-c:a", "aac", "-b:a", "160k"]
+    args += ["-movflags", "+faststart", str(out)]
+    return args
+
+
 def render_edl(
     edl: Edl,
     out_path: Path,
@@ -79,10 +155,17 @@ def render_edl(
     proxy: bool = False,
     workers: int = 4,
 ) -> Path:
-    source = Path(next(iter(edl.sources.values())))
+    source = Path(edl.sources.get("camera") or next(iter(edl.sources.values())))
+    screen = Path(edl.sources["screen"]) if edl.sources.get("screen") else None
     seg_dir = out_path.parent / (out_path.stem + "_segments")
     seg_dir.mkdir(parents=True, exist_ok=True)
     fade_s = render_cfg.boundary_fade_ms / 1000
+    mask = None
+    if screen is not None:
+        proxy_h = render_cfg.proxy_height if proxy else 1080
+        cam_size = max(80, int(round(render_cfg.long_camera_size * proxy_h / 1080)))
+        radius = max(10, int(round(render_cfg.long_camera_radius * proxy_h / 1080)))
+        mask = _rounded_mask(seg_dir / f"camera-mask-{cam_size}-r{radius}.png", (cam_size, cam_size), radius)
 
     def one(job: tuple[int, EdlRange]) -> Path:
         idx, r = job
@@ -97,16 +180,19 @@ def render_edl(
         # leaves a .partial (ignored by the cache check above), never a truncated final segment
         # that --resume would blindly reuse.
         partial = seg_out.with_name(f"{seg_out.stem}.partial{seg_out.suffix}")
-        run_ffmpeg(
-            _segment_args(
+        if screen is not None and mask is not None:
+            args = _segment_args_dual(
+                source, screen, mask, partial, r.start, r.end, fade_s, render_cfg,
+                render_cfg.proxy_height if proxy else None, render_cfg.proxy_preset, getattr(r, "speed", 1.0),
+            )
+        else:
+            args = _segment_args(
                 source, partial, r.start, r.end, fade_s,
                 render_cfg.proxy_height if proxy else None,
                 render_cfg.proxy_preset,
                 getattr(r, "speed", 1.0),
-            ),
-            run_dir=run_dir,
-            receipts=None,  # per-segment receipts are noise; the concat logs the render
-        )
+            )
+        run_ffmpeg(args, run_dir=run_dir, receipts=None)
         os.replace(partial, seg_out)
         return seg_out
 
@@ -122,5 +208,12 @@ def render_edl(
         receipts=receipts,
     )
     if receipts is not None:
-        receipts.log("render", out=str(out_path), proxy=proxy, segments=len(paths), edl_duration_s=edl.total_duration_s)
+        receipts.log(
+            "render",
+            out=str(out_path),
+            proxy=proxy,
+            segments=len(paths),
+            edl_duration_s=edl.total_duration_s,
+            layout="screen_with_bottom_right_camera" if screen is not None else "single_source",
+        )
     return out_path

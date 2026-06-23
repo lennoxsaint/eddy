@@ -157,7 +157,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.4 apostrophe concat (shared concat_quote) + path gate (is_relative_to, all outputs); suite 134 → 142 green.
 - v0.4 slug wrong-footage guard (re-hash on reopen) + --resume wired; suite 142 → 147 green.
 - v0.4 git-derived version (was stale 0.1.0) + eddy --version + receipt stamp; suite 147 → 150 green.
-- v0.4 CI: .github/workflows/ci.yml (ruff+mypy+pytest); cleaned 33 ruff issues (incl. moving controller.py imports) + 9 mypy errors to zero; suite stays 150 green. (CI runs live once the private remote exists — human-gate.)
+- v0.4 CI: .github/workflows/ci.yml (ruff+mypy+pytest); cleaned 33 ruff issues (incl. moving controller.py imports) + 9 mypy errors to zero; suite stays 150 green. Historical note superseded by the public GitHub repo decision on 2026-06-23.
 - v0.4 cumulative (resume-surviving) model-call + per-process wall-clock budget (was dead config); suite 150 → 154 green.
 - v0.4 model pin (provider+model recorded per run, drift warning); suite 154 → 158 green.
 - v0.4 privacy honesty: --local-only/EDDY_OFFLINE forces local brain + whisper local_files_only + thumbnail skip + egress disclosure + PRIVACY.md/README fix; suite 158 → 162 green.
@@ -165,7 +165,7 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
 - v0.5 QA detect fix (175→), duration resolution, whisper language, ingest gates, no-speech gate, conftest+fixtures: suite to 194.
 - v0.5 unit-test sweep (8-agent Workflow, self-verified): doctor/retakes/protect/pack/captions/copy/layout/simulate; +88 tests; suite 194 → 282 green, ruff+mypy clean.
 
-## Post-GA (trunk-based on `main`, private GitHub remote)
+## Post-GA (trunk-based on `main`, public GitHub remote)
 - **v1.1–v1.2** — mascot/MCP/plugin + the full-screen Textual TUI (tagged v1.1.0, v1.2.0).
 - **v1.3 "Eddy, simpler"** — TUI minimalism + honest feedback + reach (tagged v1.3.0; see docs/decision-log.md).
 - **v1.4 "No Sharp Edges"** (tagged v1.4.0) — 13-item batch from a 7-subsystem assessment, all autonomous:

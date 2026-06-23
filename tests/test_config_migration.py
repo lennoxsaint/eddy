@@ -31,5 +31,11 @@ def test_load_config_tolerates_malformed_does_not_crash(tmp_path, capsys):
     bad.write_text('[loop]\nmax_iterations = "not a number"\n')
     cfg = load_config(bad)
     assert isinstance(cfg, EddyConfig)  # defaults, not a ValidationError that bricks every command
-    assert cfg.loop.max_iterations == 15  # default
+    assert cfg.loop.max_iterations == 50  # unattended gate-pass default
     assert "could not load config" in capsys.readouterr().err
+
+
+def test_loop_defaults_require_gate_pass():
+    cfg = EddyConfig()
+    assert cfg.loop.require_gate_pass is True
+    assert cfg.loop.identical_failure_limit == 3
