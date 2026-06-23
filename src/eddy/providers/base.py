@@ -237,14 +237,22 @@ class FallbackProvider:
 
 
 def _editorial_available(cfg: EddyConfig) -> str | None:
-    """First available stronger editorial brain: claude_cli (binary on PATH) > anthropic
-    (API key present). None if no upgrade is available."""
+    """First available default editorial brain.
+
+    Product contract: Codex/Claude/API is the default editorial brain; local models are the
+    unlimited/private option when the user asks for local/offline or no cloud/CLI brain is available.
+    """
     import os
     import shutil
 
+    codex = cfg.provider.codex_cli
+    if shutil.which(codex.binary or "codex"):
+        return "codex_cli"
     claude = cfg.provider.claude_cli
     if shutil.which(claude.binary or "claude"):
         return "claude_cli"
+    if os.environ.get(cfg.provider.openai.api_key_env):
+        return "openai"
     if os.environ.get(cfg.provider.anthropic.api_key_env):
         return "anthropic"
     return None

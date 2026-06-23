@@ -23,6 +23,7 @@ def test_face_panel_fits_horizontally_and_is_centered():
     # centered: left margin equals right margin
     right_margin = L.W - (L.FACE_X + L.FACE_SIZE)
     assert L.FACE_X == right_margin
+    assert (L.FACE_X, L.FACE_Y, L.FACE_SIZE) == (75, 30, 930)
 
 
 def test_screen_panel_fits_and_is_centered():
@@ -30,6 +31,7 @@ def test_screen_panel_fits_and_is_centered():
     assert L.SCREEN_X + L.SCREEN_W <= L.W
     right_margin = L.W - (L.SCREEN_X + L.SCREEN_W)
     assert L.SCREEN_X == right_margin
+    assert (L.SCREEN_X, L.SCREEN_Y, L.SCREEN_W, L.SCREEN_H) == (40, 1300, 1000, 562)
 
 
 def test_degraded_panel_fits_and_is_centered():

@@ -58,8 +58,8 @@ class CliProviderConfig(BaseModel):
 class ProviderConfig(BaseModel):
     active: str = "ollama"
     # which brain runs the editorial-reasoning passes (beat map, cut decisions, revisions,
-    # judge). "auto" = prefer a stronger brain (claude_cli > anthropic) when available, else
-    # fall back to `active`. "local" pins it to `active`. Or name a provider explicitly.
+    # judge). "auto" = prefer Codex/Claude/API when available, else fall back to `active`.
+    # "local" pins it to `active`. Or name a provider explicitly.
     editorial: str = "auto"
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
@@ -144,9 +144,18 @@ class ShortsConfig(BaseModel):
 
 
 class AudioConfig(BaseModel):
-    """Local 'studio sound' — denoise/dereverb, mouth-click cleanup, speech EQ, loudness."""
+    """Local 'studio sound' — speech enhancement, denoise/dereverb, click repair, loudness."""
     studio_sound: bool = True
-    deep_filter_binary: str = "deep-filter"  # DeepFilterNet CLI if present; else ffmpeg-only
+    require_heavy_backend: bool = True
+    studio_sound_env: str = "~/.cache/eddy/studio-sound/resemble-enhance-py311"
+    heavy_model_device: str = "auto"  # auto | cuda | mps | cpu
+    deep_filter_binary: str = "deepFilter"  # DeepFilterNet CLI if present; else blocked/ffmpeg fallback
+    # Ordered heavy-model backends. Eddy attempts these before ffmpeg-only polish when installed.
+    heavy_model_preference: list[str] = Field(
+        default_factory=lambda: ["deepfilternet"]
+    )
+    write_ab_samples: bool = True
+    click_threshold: float = 0.82
     target_lufs: float = -14.0  # YouTube integrated loudness
     true_peak_db: float = -1.5
     lra: float = 11.0
@@ -179,6 +188,7 @@ class GatesConfig(BaseModel):
     silence_min_cut_s: float = 0.40  # audio-silent span >= this (and no words) gets removed
     silence_handle_s: float = 0.10  # silence left each side of a removed silent span
     max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
+    allow_redaction: bool = False  # default is no blur/redaction; use explicit opt-in for privacy edits
     # v1.6 extract continuity (only applied when compile_edl runs with extract=True): consolidate the
     # many small keep ranges a topical extract produces into a few contiguous blocks, so explanations
     # aren't severed mid-thought. A normal/steer edit never enters this path.

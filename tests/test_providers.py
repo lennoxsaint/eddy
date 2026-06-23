@@ -5,7 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from eddy.config import CliProviderConfig
+from eddy.config import EddyConfig
 from eddy.providers.base import ProviderError
+from eddy.providers import base as provider_base
 from eddy.providers.cli_subprocess import CliProvider
 
 
@@ -91,3 +93,21 @@ def test_persistent_pairing_guard_eventually_fails(monkeypatch):
     )
     with pytest.raises(ProviderError, match="exited 43"):
         _provider().complete([{"role": "user", "content": "hi"}])
+
+
+def test_editorial_auto_prefers_codex_then_claude_then_api(monkeypatch):
+    cfg = EddyConfig()
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda b: "/usr/bin/codex" if b == "codex" else None)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert provider_base._editorial_available(cfg) == "codex_cli"
+
+    monkeypatch.setattr(shutil, "which", lambda b: "/usr/bin/claude" if b == "claude" else None)
+    assert provider_base._editorial_available(cfg) == "claude_cli"
+
+    monkeypatch.setattr(shutil, "which", lambda _b: None)
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "y")
+    assert provider_base._editorial_available(cfg) == "openai"

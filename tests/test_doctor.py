@@ -66,14 +66,14 @@ def test_codex_cli_chosen_when_no_local_setup():
     found = make_found(ram_gb=8, models=[], codex_cli=True)
     provider, reason = recommend(found)
     assert provider == "codex_cli"
-    assert "codex CLI" in reason
+    assert "codex cli" in reason.lower()
 
 
 def test_claude_cli_chosen_when_no_codex():
     found = make_found(ram_gb=8, models=[], claude_cli=True)
     provider, reason = recommend(found)
     assert provider == "claude_cli"
-    assert "claude CLI" in reason
+    assert "claude cli" in reason.lower()
 
 
 def test_codex_cli_outranks_claude_cli():
@@ -83,11 +83,11 @@ def test_codex_cli_outranks_claude_cli():
     assert provider == "codex_cli"
 
 
-def test_anthropic_key_chosen_over_openai():
+def test_openai_key_chosen_over_anthropic():
     found = make_found(ram_gb=8, models=[], anthropic_api=True, openai_api=True)
     provider, reason = recommend(found)
-    assert provider == "anthropic"
-    assert "Anthropic API key" in reason
+    assert provider == "openai"
+    assert "OpenAI API key" in reason
 
 
 def test_openai_key_chosen_when_only_openai():
@@ -106,8 +106,8 @@ def test_cli_outranks_api_keys():
     assert provider == "codex_cli"
 
 
-def test_local_tier_outranks_everything_else():
-    # strong local setup present alongside CLIs and API keys -> local still wins (free/unlimited)
+def test_default_brain_outranks_local_but_mentions_local_viability():
+    # vNext: Codex/Claude/API is default editorial quality; local remains the unlimited option.
     found = make_found(
         ram_gb=128,
         models=["qwen2.5:32b"],
@@ -117,8 +117,9 @@ def test_local_tier_outranks_everything_else():
         openai_api=True,
     )
     provider, reason = recommend(found)
-    assert provider == "ollama"
-    assert "Install Ollama" not in reason  # the local-tier reason, not the fallback
+    assert provider == "codex_cli"
+    assert "Local unlimited mode is also viable" in reason
+    assert "Install Ollama" not in reason
 
 
 def test_nothing_detected_returns_ollama_with_install_message():

@@ -62,8 +62,10 @@ def install(agent: str, copy: bool) -> list[dict[str, str]]:
     return results
 
 
-def install_editable() -> None:
+def install_editable(install_studio_sound: bool) -> None:
     subprocess.run([sys.executable, "-m", "pip", "install", "-e", str(ROOT)], check=True)
+    if install_studio_sound:
+        subprocess.run([sys.executable, "-m", "eddy.cli", "studio-sound", "install"], check=True)
 
 
 def main() -> None:
@@ -71,6 +73,11 @@ def main() -> None:
     parser.add_argument("--agent", choices=["auto", "codex", "claude"], default="auto")
     parser.add_argument("--copy", action="store_true", help="Copy the repo instead of symlinking it.")
     parser.add_argument("--install-editable", action="store_true", help="Also run `pip install -e .`.")
+    parser.add_argument(
+        "--skip-studio-sound",
+        action="store_true",
+        help="Do not provision the heavy local Studio Sound backend after editable install.",
+    )
     args = parser.parse_args()
 
     if os.environ.get("EDDY_INSTALL_DRY_RUN"):
@@ -78,7 +85,7 @@ def main() -> None:
         return
     results = install(args.agent, copy=args.copy)
     if args.install_editable:
-        install_editable()
+        install_editable(install_studio_sound=not args.skip_studio_sound)
     for item in results:
         print(f"{item['action']}: {item['target']}")
 

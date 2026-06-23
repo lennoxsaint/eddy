@@ -8,7 +8,7 @@ As a solo YouTube creator, every raw recording I make is full of retakes, false 
 
 ## Solution
 
-Eddy is a local-first CLI app: drop raw footage in (`camera.mp4` + `screen.mp4` + optional `mic.wav`, or a single composite recording), and a local model loops — transcript → cut plan → simulation → proxy render → QA → judge — until the edit is actually done, then produces the complete launch kit with zero human input until final review:
+Eddy is a source-safe CLI app: drop raw footage in (`camera.mp4` + `screen.mp4` + optional `mic.wav`, or a single composite recording), and an editorial brain loops — transcript → cut plan → simulation → proxy render → QA → judge — until the edit is actually done, then produces the complete launch kit with zero human input until final review:
 
 - edited long video (publish-ready)
 - shorts with blue karaoke captions in the approved stacked layout
@@ -16,7 +16,13 @@ Eddy is a local-first CLI app: drop raw footage in (`camera.mp4` + `screen.mp4` 
 - 10 grounded title candidates
 - chapters + YouTube description
 
-The editorial brain is a local Ollama model by default (free unlimited editing — the core promise). Hardware-aware onboarding (`eddy doctor`) detects the machine and recommends one of five working provider tiers: Ollama local, Anthropic API, OpenAI API, codex CLI (ChatGPT subscription), claude CLI (Claude subscription). Every decision, model call, render command, and QA verdict is written to receipts. Sources are never mutated. Nothing is ever published automatically.
+The editorial brain defaults to Codex/Claude/API quality when available. Hardware-aware onboarding (`eddy doctor`) detects the machine and recommends the best working tier while surfacing whether local unlimited editing is viable: codex CLI (ChatGPT/Codex subscription), claude CLI (Claude subscription), OpenAI API, Anthropic API, or Ollama local. Every decision, model call, render command, and QA verdict is written to receipts. Sources are never mutated. Nothing is ever published automatically.
+
+Audio is not a cosmetic post-pass. Eddy provisions a heavy local Studio Sound backend via
+`eddy studio-sound install`: DeepFilterNet is the required default, then Eddy layers mouth-click
+repair, EQ, compression/limiting, loudness normalization, and A/B proof on top. If the heavy backend
+is missing, default runs fail the audio quality gate rather than shipping an ffmpeg-only
+approximation. Resemble Enhance remains an optional experimental backend, not the default promise.
 
 ## User Stories
 
@@ -35,7 +41,7 @@ The editorial brain is a local Ollama model by default (free unlimited editing �
 13. As a creator, I want 10 title candidates grounded in transcript quotes, so that titles are claims the video actually supports.
 14. As a creator, I want chapters derived deterministically from the beat map with model-written labels only, so that chapter timestamps are never hallucinated.
 15. As a creator, I want a YouTube description drafted with chapters embedded, so that the upload form is a paste job.
-16. As a privacy-conscious user, I want transcription and editorial reasoning to run fully locally by default, so that my raw footage never leaves my machine.
+16. As a privacy-conscious user, I want transcription and editorial reasoning to run fully locally when I choose local/offline mode, so that no transcript leaves my machine.
 17. As a cost-conscious user, I want unlimited editing at zero marginal cost on my own hardware, so that volume is rewarded, not billed.
 18. As a new user on a weak machine, I want `eddy doctor` to detect my hardware and recommend the best brain tier, so that onboarding gives me a working setup instead of a failed local model.
 19. As a ChatGPT subscriber, I want Eddy to use my existing subscription via the codex CLI, so that cloud-quality editing costs me nothing extra.
@@ -60,12 +66,14 @@ The editorial brain is a local Ollama model by default (free unlimited editing �
 - **Tiered QA pyramid, cheap to expensive:** tier 0 transcript simulation (duration band, mid-word cuts, protected moments, dead air); tier 1 boundary audio probes (clipped-word and pop detection); tier 2 480p proxy + contact sheet (stream-clean, A/V drift, black/freeze detection); tier 3 one full-res final render on the best attempt only.
 - **Text-only judge, honestly designed.** The judge never claims to watch video. Evidence packet: cut transcript with beats, per-boundary splice cards (last words kept → cut summary → next words kept), stats block, "what was lost" summaries. Rubric: hook integrity ×2, boundary continuity ×3, pacing ×2, completeness/no-orphans ×2, ending+CTA ×1. Defect-list-first output via JSON schema, temperature 0.2, code-side consistency checks (score/defect mismatch → resample once → take min and flag `judge_unstable`). If unstable at q4 quant, judge demotes to advisory; deterministic gates always required independently.
 - **Done gate:** all deterministic gates pass AND judge >= 8/10. The loop keeps revising until the gate passes or records an impossible blocker (`missing_source`, `corrupt_source`, `missing_dependency`, or repeated identical failure after changing strategy). Best-attempt shipping is not allowed when `require_gate_pass` is true.
-- **Five working providers behind one protocol** (`complete(messages, schema?) → text|dict`): Ollama via OpenAI-compatible endpoint (default, qwen3.6-27b), Anthropic API (Haiku-class default), OpenAI API, codex CLI subprocess (ChatGPT subscription), claude CLI subprocess (Claude subscription). `eddy doctor` detects chip/RAM, Ollama models, credentials and CLIs, then recommends and writes the tier.
-- **Shorts render ports the proven standard** (`vendor/yt_tools/` read-only references): 1080×1920 stacked layout, square face panel in the top half, karaoke caption zone in the gap, screen panel in the bottom half, navy background, blue current-word highlight, spoken/future word dimming; audio-safe handles 0.24s start / 0.32s internal / 0.52s final; sentence-final QA ledger per short. Degraded single-composite layout is allowed only when no separate screen track exists.
+- **Five working providers behind one protocol** (`complete(messages, schema?) → text|dict`): codex CLI subprocess (default when available), claude CLI subprocess, OpenAI API, Anthropic API, and Ollama via OpenAI-compatible endpoint for local unlimited/private editing. `eddy doctor` detects chip/RAM, Ollama models, credentials and CLIs, then recommends and writes the tier without pretending weak hardware can run heavy local models.
+- **Shorts render ports the proven standard** (`vendor/yt_tools/` read-only references): 1080×1920 stacked layout, square face panel in the top half, blue karaoke caption zone in the gap, screen panel in the bottom half, black background, current-word highlight, spoken/future word dimming; audio-safe handles 0.24s start / 0.32s internal / 0.52s final; sentence-final QA ledger per short. Degraded single-composite layout is allowed only when no separate screen track exists, and fails if separate screen footage is declared.
 - **Chapters are deterministic** (beat map mapped to output timeline); the model writes only the 2–5 word labels. Title candidates must carry the transcript quote that grounds them.
 - **Thumbnails are the only paid path:** sharpest face frames (Laplacian ranking) at high-energy moments → Gemini image API + OpenAI image API, N candidates each, cost logged per call, skip-with-receipt when keys are absent.
 - **Run state is files:** per-run directory with manifest (source sha256 + config snapshot), transcript artifacts, per-iteration artifacts (decisions, EDL, sim report, proxy, QA, judge, directive), `state.json` for resume, append-only `receipts.jsonl`, and a `final/launch-kit/` output.
-- **Hard gates enforced in code:** sources opened read-only and hash-verified before/after every run; every ffmpeg output path asserted inside the run directory; no publish/upload integration exists in v1; public distribution requires scrub checks and MIT docs to pass first.
+- **Hard gates enforced in code:** sources opened read-only and hash-verified before/after every run; every ffmpeg output path asserted inside the run directory; no default blur/redaction; PIP/camera blink detection; source-lock Shorts validation; no publish/upload integration exists in v1; public distribution requires scrub checks and MIT docs to pass first.
+- **Studio Sound quality gate:** local voice enhancement must use a receipt-proven heavy backend by default. ffmpeg-only EQ/loudnorm is allowed only as an explicitly lowered policy and is never described as Studio Sound quality.
+- **Motion overlays use HyperFrames `frame.md`.** Premium overlays require a project-local lowercase `frame.md`, copied HyperFrames references, lint/inspect/render receipts, collision proof, and visual-taste QA before compositing.
 - **Config:** `eddy.toml` (tomlkit round-trip; doctor updates only hardware-derived sections), provider/loop/render/shorts/thumbnails/gates sections; ship-ready defaults resolve to `~/.config/eddy/` with project-local override.
 
 ## Testing Decisions

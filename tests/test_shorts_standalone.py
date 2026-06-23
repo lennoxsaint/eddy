@@ -58,3 +58,20 @@ def test_render_shorts_rejects_audio_only_source(tmp_path, monkeypatch):
     )
     with pytest.raises(SourceError, match="no video stream"):
         shorts_mod.render_shorts(run_dir)
+
+
+def test_render_shorts_rejects_declared_but_missing_screen_source(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    camera = tmp_path / "camera.mp4"
+    camera.write_bytes(b"not-real-video")
+    missing_screen = tmp_path / "screen.mp4"
+    monkeypatch.setattr(
+        shorts_mod,
+        "manifest",
+        lambda rd: {"sources": {"camera": str(camera), "screen": str(missing_screen)}},
+    )
+    monkeypatch.setattr(shorts_mod, "latest_iteration_dir", lambda rd: run_dir / "iterations" / "01")
+
+    with pytest.raises(SourceError, match="screen source was declared but is missing"):
+        shorts_mod.render_shorts(run_dir)

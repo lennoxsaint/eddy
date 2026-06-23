@@ -66,3 +66,15 @@ def test_silence_gate_catches_real_dead_air(monkeypatch):
 def test_visual_blink_luma_signature():
     assert deterministic._blink_flag_from_luma(90.0, 0.5, 88.0) is True
     assert deterministic._blink_flag_from_luma(90.0, 87.0, 88.0) is False
+
+
+def test_no_unauthorized_redaction_gate_fails_on_blur_metadata():
+    r = deterministic.no_unauthorized_redaction_gate({"redaction": {"status": "applied"}})
+    assert r["pass"] is False
+    assert r["hits"][0]["key"] == "redaction"
+
+
+def test_no_unauthorized_redaction_gate_can_be_explicitly_allowed():
+    r = deterministic.no_unauthorized_redaction_gate({"blurred_regions": [{"x": 1}]}, allow_redaction=True)
+    assert r["pass"] is True
+    assert r["allowed"] is True

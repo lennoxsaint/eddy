@@ -27,3 +27,11 @@ def test_root_skill_exists_for_agent_install():
     text = skill.read_text()
     assert "name: eddy" in text
     assert "eddy run" in text
+
+
+def test_install_script_provisions_studio_sound_by_default():
+    script = ROOT / "scripts" / "install_agent_skill.py"
+    text = script.read_text()
+    assert "--skip-studio-sound" in text
+    assert "studio-sound" in text
+    assert "install_studio_sound=not args.skip_studio_sound" in text

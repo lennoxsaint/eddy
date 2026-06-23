@@ -158,13 +158,20 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
     cfg = load_config()
     receipts = Receipts(run_dir)
     m = manifest(run_dir)
+
+    camera = Path(m["sources"]["camera"])
+    screen_declared = bool(m["sources"].get("screen"))
+    screen = Path(m["sources"].get("screen", "")) if screen_declared else None
+    if screen_declared and (screen is None or not screen.exists()):
+        raise SourceError(
+            f"screen source was declared but is missing: {screen}. Shorts with separate screen/camera "
+            "must render from both sources, not a flattened long-form export."
+        )
+    dual = screen is not None and screen.exists()
+
     iter_dir = Path(iteration_dir) if iteration_dir else latest_iteration_dir(run_dir)
     decisions = load_decisions(iter_dir / "edit-decisions.json")
     all_words = words_flat(run_dir)
-
-    camera = Path(m["sources"]["camera"])
-    screen = Path(m["sources"].get("screen", "")) if m["sources"].get("screen") else None
-    dual = screen is not None and screen.exists()
 
     # Shorts compose a vertical *video* layout — fail loud at the top if the camera has no video
     # stream (audio-only/corrupt source) instead of crashing mid-render on a None["width"] deref.
@@ -203,8 +210,8 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         if dual:
             face_mask = asset_dir / "face-mask.png"
             screen_mask = asset_dir / "screen-mask.png"
-            _rounded_mask(face_mask, (L.FACE_SIZE, L.FACE_SIZE), L.RADIUS)
-            _rounded_mask(screen_mask, (L.SCREEN_W, L.SCREEN_H), L.RADIUS)
+            _rounded_mask(face_mask, (L.FACE_SIZE, L.FACE_SIZE), L.FACE_RADIUS)
+            _rounded_mask(screen_mask, (L.SCREEN_W, L.SCREEN_H), L.SCREEN_RADIUS)
         else:
             vw = src_video["width"] or 1920
             vh = src_video["height"] or 1080
@@ -249,11 +256,14 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         final = out_root / f"{slug}.mp4"
         burn_captions(base, final, events, cursor, asset_dir, run_dir, caption_y=None if dual else caption_y)
 
-        # Studio Sound on the assembled short (full-track, non-fatal)
+        # Studio Sound on the assembled short. Fail loud if the heavy backend is missing; Shorts
+        # with plain EQ/loudnorm are not Eddy-quality exports.
         if cfg.audio.studio_sound:
             from eddy.render.audio import studio_sound
 
-            studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+            audio_result = studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+            if not audio_result.get("quality_gate_pass", False):
+                raise RuntimeError(audio_result.get("error") or f"Studio Sound quality gate failed for {slug}")
 
         final_summary = stream_summary(final)
         silence_qa = silent_motion_gate(final, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, 0)
@@ -279,10 +289,24 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             "loudness_qa": loudness_qa,
             "boundary_qa": {"min_pre_handle_s": round(min_pre, 3), "min_post_handle_s": round(min_post, 3)},
             "layout": "dual" if dual else "single_composite",
+            "source_provenance": {
+                "camera": str(camera),
+                "screen": str(screen) if screen else None,
+                "requires_dual": screen_declared,
+                "used_dual": dual,
+            },
+            "style_lock": {
+                "canvas": f"{L.W}x{L.H}",
+                "camera_square": {"x": L.FACE_X, "y": L.FACE_Y, "size": L.FACE_SIZE, "radius": L.FACE_RADIUS},
+                "caption_y": L.CAPTION_Y,
+                "screen_panel": {"x": L.SCREEN_X, "y": L.SCREEN_Y, "w": L.SCREEN_W, "h": L.SCREEN_H, "radius": L.SCREEN_RADIUS},
+                "highlight": L.HIGHLIGHT_BLUE,
+            },
             "qa_pass": (
                 fv is not None
                 and fv["width"] == L.W
                 and fv["height"] == L.H
+                and (not screen_declared or dual)
                 and len(events) > 0
                 and final_summary["audio"] is not None
                 and ends_on_complete_sentence(words)

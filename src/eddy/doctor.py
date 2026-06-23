@@ -112,11 +112,30 @@ def detect() -> dict:
     return {"hardware": hw, "ollama_models": ollama_models, "credentials": creds}
 
 
+def _local_viability_note(models: list[str], ram: int, chip: str) -> str:
+    if models and ram >= LOCAL_TIER_MIN_RAM_GB:
+        return f" Local unlimited mode is also viable on {chip} with {ram}GB RAM."
+    if models and ram >= LOCAL_TIER_SMALL_RAM_GB:
+        return f" Local unlimited mode is available with a smaller model on {ram}GB RAM, but quality may be lower."
+    if 0 < ram < LOCAL_TIER_SMALL_RAM_GB:
+        return f" Local heavy models are likely tight on {ram}GB RAM."
+    return ""
+
+
 def recommend(found: dict) -> tuple[str, str]:
     """Return (provider_name, reason)."""
     hw, models, creds = found["hardware"], found["ollama_models"], found["credentials"]
     ram = hw.get("ram_gb") or 0  # None (unmeasured) -> 0 so we don't claim the local tier we can't confirm
     chip = hw.get("chip", "this machine")
+    local_note = _local_viability_note(models, ram, chip)
+    if creds["codex_cli"]:
+        return "codex_cli", "Codex CLI is installed — defaulting to your ChatGPT/Codex brain for highest editorial quality." + local_note
+    if creds["claude_cli"]:
+        return "claude_cli", "Claude CLI is installed — defaulting to your Claude brain for highest editorial quality." + local_note
+    if creds["openai_api"]:
+        return "openai", "OpenAI API key found — defaulting to API editorial quality." + local_note
+    if creds["anthropic_api"]:
+        return "anthropic", "Anthropic API key found — defaulting to API editorial quality." + local_note
     if models and ram >= LOCAL_TIER_MIN_RAM_GB:
         return "ollama", f"{chip} with {ram}GB RAM runs a strong local model (27B) well — free unlimited editing."
     if models and ram >= LOCAL_TIER_SMALL_RAM_GB:
@@ -125,14 +144,6 @@ def recommend(found: dict) -> tuple[str, str]:
             f"{chip} with {ram}GB RAM can run a smaller local model (~7-8B; lower quality than 27B) — "
             "still free + private. 32GB+ unlocks the best local quality."
         )
-    if creds["codex_cli"]:
-        return "codex_cli", "No strong local setup, but the codex CLI is installed — your ChatGPT subscription powers editing at no extra cost."
-    if creds["claude_cli"]:
-        return "claude_cli", "No strong local setup, but the claude CLI is installed — your Claude subscription powers editing at no extra cost."
-    if creds["anthropic_api"]:
-        return "anthropic", "Anthropic API key found — cheapest capable Claude model will be used."
-    if creds["openai_api"]:
-        return "openai", "OpenAI API key found."
     light = f" (your {ram}GB RAM is light for a strong local model — a cloud brain may be smoother)" if 0 < ram < LOCAL_TIER_SMALL_RAM_GB else ""
     return "ollama", (
         "Nothing detected. Install Ollama (ollama.com) and run `ollama pull qwen3.6-27b` "
@@ -172,6 +183,22 @@ def preflight() -> list[dict]:
 
     enc = resolve_video_encoder() if ffmpeg else None
     checks.append({"check": "video encoder", "ok": enc is not None, "detail": enc or "unavailable"})
+
+    try:
+        from eddy.studio_sound_env import status as studio_status
+
+        ss = studio_status()
+        checks.append({
+            "check": "studio sound",
+            "ok": bool(ss.get("quality_ready")),
+            "detail": (
+                f"DeepFilterNet ready: {ss.get('deep_filter')}"
+                if ss.get("quality_ready")
+                else "missing DeepFilterNet/Torch backend — run `eddy studio-sound install`"
+            ),
+        })
+    except Exception as e:
+        checks.append({"check": "studio sound", "ok": False, "detail": f"check failed: {str(e)[:100]}"})
 
     try:
         from pathlib import Path

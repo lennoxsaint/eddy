@@ -87,26 +87,42 @@ def _blink_flag_from_luma(before: float, middle: float, after: float) -> bool:
     return bool(near_blank and neighbours_not_blank and sharp_return)
 
 
-def _frame_luma(path: Path) -> float:
+def _frame_luma(path: Path, roi: tuple[int, int, int, int] | None = None) -> float:
     if PILImage is None:
         raise RuntimeError("Pillow unavailable")
-    img = PILImage.open(path).convert("L").resize((32, 18))
+    img = PILImage.open(path).convert("L")
+    if roi is not None:
+        x, y, w, h = roi
+        img = img.crop((x, y, x + w, y + h))
+    img = img.resize((32, 18))
     hist = img.histogram()
     total = sum(hist) or 1
     return sum(i * c for i, c in enumerate(hist)) / total
 
 
-def visual_blink_gate(video: Path, edl: Edl, run_dir: Path, sample_window_s: float = 0.04) -> dict:
-    """Sample frames around every output splice and fail if a black/white flash appears at the cut."""
-    if len(edl.ranges) <= 1:
-        return {"gate": "visual_blink", "pass": True, "splices_checked": 0, "flashes": []}
-    from eddy.media.frames import extract_frame
-
+def _splices_from_edl(edl: Edl) -> list[float]:
     splices = []
     cursor = 0.0
     for r in edl.ranges[:-1]:
         cursor += (r.end - r.start) / (r.speed or 1.0)
         splices.append(cursor)
+    return splices
+
+
+def visual_blink_gate(
+    video: Path,
+    edl: Edl,
+    run_dir: Path,
+    sample_window_s: float = 0.04,
+    roi: tuple[int, int, int, int] | None = None,
+    gate_name: str = "visual_blink",
+) -> dict:
+    """Sample frames around every output splice and fail if a black/white flash appears at the cut."""
+    if len(edl.ranges) <= 1:
+        return {"gate": gate_name, "pass": True, "splices_checked": 0, "flashes": []}
+    from eddy.media.frames import extract_frame
+
+    splices = _splices_from_edl(edl)
     out_dir = Path(run_dir) / "qa" / "blink-frames"
     out_dir.mkdir(parents=True, exist_ok=True)
     flashes = []
@@ -116,12 +132,45 @@ def visual_blink_gate(video: Path, edl: Edl, run_dir: Path, sample_window_s: flo
             for tag, at in (("before", t - sample_window_s), ("middle", t), ("after", t + sample_window_s)):
                 p = out_dir / f"splice-{i:04d}-{tag}.jpg"
                 extract_frame(video, at, p, run_dir, height=180)
-                frames.append(_frame_luma(p))
+                frames.append(_frame_luma(p, roi=roi))
         except Exception as e:
-            return {"gate": "visual_blink", "pass": False, "error": str(e)[:300], "splice": i}
+            return {"gate": gate_name, "pass": False, "error": str(e)[:300], "splice": i}
         if _blink_flag_from_luma(*frames):
             flashes.append({"splice": i, "out_s": round(t, 3), "luma": [round(v, 1) for v in frames]})
-    return {"gate": "visual_blink", "pass": not flashes, "splices_checked": len(splices), "flashes": flashes[:20]}
+    return {"gate": gate_name, "pass": not flashes, "splices_checked": len(splices), "flashes": flashes[:20], "roi": roi}
+
+
+def pip_blink_gate(
+    video: Path,
+    edl: Edl,
+    run_dir: Path,
+    camera_roi: tuple[int, int, int, int],
+    sample_window_s: float = 0.04,
+) -> dict:
+    """Same blink detector, but scoped to the picture-in-picture/camera layer."""
+    return visual_blink_gate(
+        video,
+        edl,
+        run_dir,
+        sample_window_s=sample_window_s,
+        roi=camera_roi,
+        gate_name="pip_blink",
+    )
+
+
+def no_unauthorized_redaction_gate(metadata: dict | None, allow_redaction: bool = False) -> dict:
+    """Fail when render metadata reports blur/redaction unless explicitly allowed."""
+    if allow_redaction:
+        return {"gate": "no_unauthorized_redaction", "pass": True, "allowed": True}
+    md = metadata or {}
+    redaction_keys = ("redaction", "redactions", "blurred_regions", "privacy_blur", "redacted")
+    hits = []
+    for key in redaction_keys:
+        val = md.get(key)
+        if val in (None, False, [], {}, "none", "not_applied"):
+            continue
+        hits.append({"key": key, "value": val})
+    return {"gate": "no_unauthorized_redaction", "pass": not hits, "hits": hits[:10]}
 
 
 def silence_gate(video: Path, run_dir: Path, max_dead_air_s: float) -> dict:
@@ -191,6 +240,8 @@ def run_deterministic(
     protected_count: int = 0,
     check_loudness: bool = False,
     check_visual_blink: bool = False,
+    camera_roi: tuple[int, int, int, int] | None = None,
+    render_metadata: dict | None = None,
 ) -> dict:
     gates = [
         probe_clean(video),
@@ -205,6 +256,9 @@ def run_deterministic(
         gates.append(loudness_gate(video, cfg.audio.target_lufs))
     if check_visual_blink:
         gates.append(visual_blink_gate(video, edl, run_dir))
+    if camera_roi is not None:
+        gates.append(pip_blink_gate(video, edl, run_dir, camera_roi))
+    gates.append(no_unauthorized_redaction_gate(render_metadata, allow_redaction=cfg.gates.allow_redaction))
     if sim_report is not None:
         gates.append({"gate": "sim_pass", "pass": sim_report.get("pass", False)})
     return {"gates": gates, "pass": all(g["pass"] for g in gates)}

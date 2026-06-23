@@ -628,12 +628,16 @@ def autonomous_run(
     render_edl(edl, final, run_dir, cfg.render, receipts=receipts, proxy=False)
     (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
 
-    # Studio Sound: full-track audio enhancement on the rendered output (non-fatal)
+    # Studio Sound: full-track audio enhancement on the rendered output. This used to be non-fatal,
+    # which allowed ffmpeg-only polish to masquerade as Studio Sound quality. vNext blocks when the
+    # configured heavy speech backend is missing.
     if cfg.audio.studio_sound:
         state.set_phase("studio_sound")
         from eddy.render.audio import studio_sound
 
-        studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+        audio_result = studio_sound(final, run_dir, cfg.audio, receipts=receipts)
+        if not audio_result.get("quality_gate_pass", False):
+            raise RuntimeError(audio_result.get("error") or "Studio Sound quality gate failed")
 
     final_qa = run_deterministic(
         final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
