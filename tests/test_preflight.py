@@ -26,14 +26,56 @@ def test_preflight_passes_on_this_machine(ffmpeg_required):
 
 
 @pytest.mark.needs_ffmpeg
-def test_dry_run_ok_on_good_clip(tiny_camera):
+def test_dry_run_ok_on_good_clip(tiny_camera, monkeypatch):
+    # This test is about source decodability. The real environment preflight is covered above;
+    # CI intentionally does not install the heavy Studio Sound backend.
+    monkeypatch.setattr(
+        "eddy.doctor.preflight",
+        lambda: [
+            {"check": "ffmpeg", "ok": True, "detail": "v8"},
+            {"check": "ffprobe", "ok": True, "detail": "found"},
+            {"check": "video encoder", "ok": True, "detail": "libx264"},
+            {"check": "studio sound", "ok": True, "detail": "test stub"},
+            {"check": "free disk", "ok": True, "detail": "test stub"},
+        ],
+    )
     r = runner.invoke(app, ["run", str(tiny_camera), "--dry-run"])
     assert r.exit_code == 0
     assert "ready to run" in r.output
 
 
 @pytest.mark.needs_ffmpeg
-def test_dry_run_fails_on_corrupt_source(corrupt_video):
+def test_dry_run_fails_on_corrupt_source(corrupt_video, monkeypatch):
+    monkeypatch.setattr(
+        "eddy.doctor.preflight",
+        lambda: [
+            {"check": "ffmpeg", "ok": True, "detail": "v8"},
+            {"check": "ffprobe", "ok": True, "detail": "found"},
+            {"check": "video encoder", "ok": True, "detail": "libx264"},
+            {"check": "studio sound", "ok": True, "detail": "test stub"},
+            {"check": "free disk", "ok": True, "detail": "test stub"},
+        ],
+    )
     r = runner.invoke(app, ["run", str(corrupt_video), "--dry-run"])
     assert r.exit_code == 1
+    assert "problems found" in r.output
+
+
+@pytest.mark.needs_ffmpeg
+def test_dry_run_fails_when_studio_sound_preflight_fails(tiny_camera, monkeypatch):
+    monkeypatch.setattr(
+        "eddy.doctor.preflight",
+        lambda: [
+            {"check": "ffmpeg", "ok": True, "detail": "v8"},
+            {"check": "ffprobe", "ok": True, "detail": "found"},
+            {"check": "video encoder", "ok": True, "detail": "libx264"},
+            {"check": "studio sound", "ok": False, "detail": "missing backend"},
+            {"check": "free disk", "ok": True, "detail": "test stub"},
+        ],
+    )
+
+    r = runner.invoke(app, ["run", str(tiny_camera), "--dry-run"])
+
+    assert r.exit_code == 1
+    assert "studio sound" in r.output
     assert "problems found" in r.output
