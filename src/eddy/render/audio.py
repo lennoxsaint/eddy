@@ -398,13 +398,31 @@ def _candidate_score(candidate: dict, before_clicks: int, cfg: AudioConfig) -> f
     return round(click_component + (echo_score * 0.35) + lufs_penalty + overprocess_penalty, 5)
 
 
+def _loudness_gate_pass(candidate: dict, cfg: AudioConfig, tolerance: float = 2.0) -> bool:
+    """Candidate-level loudness gate.
+
+    Studio Sound can choose a do-not-harm reference candidate, but it still has to be usable in a
+    rendered video. A source-preserving pass at -23 LUFS is not a passing Studio Sound result for
+    YouTube Shorts, even if click/echo gates pass.
+    """
+    try:
+        lufs = float(candidate.get("lufs_after"))
+    except (TypeError, ValueError):
+        return False
+    return abs(lufs - float(cfg.target_lufs)) <= tolerance
+
+
 def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: AudioConfig) -> dict:
     scored = []
     for candidate in candidates:
         c = dict(candidate)
         c["selection_score"] = _candidate_score(c, before_clicks, cfg)
+        c["loudness_gate_pass"] = _loudness_gate_pass(c, cfg)
         scored.append(c)
-    passing = [c for c in scored if c.get("click_gate_pass") and c.get("echo_gate_pass")]
+    passing = [
+        c for c in scored
+        if c.get("click_gate_pass") and c.get("echo_gate_pass") and c.get("loudness_gate_pass")
+    ]
     reference = next((c for c in passing if c.get("profile") == "source_reference"), None)
     if reference:
         ref_echo = float(reference.get("echo_artifact_score") or 0.0)
@@ -688,7 +706,8 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
         after_clicks = int(selected.get("click_events_after") or 0)
         click_gate_pass = bool(selected.get("click_gate_pass"))
         echo_gate_pass = bool(selected.get("echo_gate_pass"))
-        quality_gate_pass = click_gate_pass and echo_gate_pass
+        selected_loudness_gate_pass = _loudness_gate_pass(selected, cfg)
+        quality_gate_pass = click_gate_pass and echo_gate_pass and selected_loudness_gate_pass
 
         samples = {}
         if cfg.write_ab_samples:
@@ -728,6 +747,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
                 click_events_after=after_clicks,
                 click_gate_pass=click_gate_pass,
                 echo_gate_pass=echo_gate_pass,
+                loudness_gate_pass=selected_loudness_gate_pass,
                 echo_artifact_score=selected.get("echo_artifact_score"),
                 mouth_click_cleanup=cfg.mouth_click_cleanup,
                 filter_chain=selected.get("filter_chain"),
@@ -749,6 +769,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             "click_events_after": after_clicks,
             "click_gate_pass": click_gate_pass,
             "echo_gate_pass": echo_gate_pass,
+            "loudness_gate_pass": selected_loudness_gate_pass,
             "echo_artifact_score": selected.get("echo_artifact_score"),
             "ab_samples": samples,
             "mouth_click_cleanup": cfg.mouth_click_cleanup,

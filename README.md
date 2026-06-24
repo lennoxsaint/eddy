@@ -111,7 +111,8 @@ reads the result. There's also a one-shot Claude Code plugin (`/eddy-run`, `/edd
 
 ## Non-Negotiable Output Gates
 
-- No blur/redaction unless you explicitly opt in.
+- No blur/redaction unless you explicitly opt in. If you opt in for privacy redaction, Eddy requires
+  a fully opaque solid cover/card; blur and semi-transparent covers are treated as failed redaction.
 - No visible PIP/camera blinking around cuts.
 - No A/V drift at sampled checkpoints.
 - Studio Sound must use a heavy speech-enhancement backend by default; ffmpeg-only EQ/loudness

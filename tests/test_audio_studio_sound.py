@@ -212,6 +212,35 @@ def test_source_reference_wins_without_material_cleanup_improvement():
     assert selected["profile"] == "source_reference"
 
 
+def test_source_reference_cannot_win_when_it_misses_loudness_target():
+    cfg = AudioConfig(target_lufs=-14.0, echo_artifact_max_score=0.42)
+    candidates = [
+        {
+            "profile": "source_reference",
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.20,
+            "echo_artifact_score": 0.20,
+            "echo_gate_pass": True,
+            "lufs_after": -23.7,
+        },
+        {
+            "profile": "warm_click_tame",
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.20,
+            "echo_artifact_score": 0.21,
+            "echo_gate_pass": True,
+            "lufs_after": -14.5,
+        },
+    ]
+
+    selected = audio._select_best_candidate(candidates, before_clicks=0, cfg=cfg)
+
+    assert selected["profile"] == "warm_click_tame"
+    assert selected["loudness_gate_pass"] is True
+
+
 def test_processed_candidate_can_beat_source_reference_with_big_click_reduction():
     cfg = AudioConfig(echo_artifact_max_score=0.42)
     candidates = [

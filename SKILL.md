@@ -84,7 +84,9 @@ before rendering/compositing motion graphics.
   heavy enhancement adds room smear; processed audio must not be more echoey than the source. The
   `source_reference` candidate is allowed to win when processing does not produce a material,
   listenable improvement.
-- Redaction/blur is opt-in only. Default is fail if blur/redaction appears.
+- Redaction/blur is opt-in only. Default is fail if blur/redaction appears. When the user explicitly
+  asks for privacy redaction, use a fully opaque solid cover/card (`opacity: 1.0` / `alpha: 1.0`).
+  Blur or semi-transparent covers are not secure redaction and must fail QA.
 - Shorts are optional by quality, not by laziness: output fewer than five if fewer than five clips are genuinely strong.
 - Final Shorts require the baked 1,000-record hook playbook at `docs/references/short-form-hook-playbook.jsonl`.
   Normal user runs must use it offline. If it is missing or below threshold, block Shorts with

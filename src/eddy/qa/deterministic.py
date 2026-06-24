@@ -158,10 +158,55 @@ def pip_blink_gate(
     )
 
 
+def _redaction_entries(value) -> list[dict]:
+    if value in (None, False, [], {}, "none", "not_applied"):
+        return []
+    if isinstance(value, list):
+        return [entry for item in value for entry in _redaction_entries(item)]
+    if isinstance(value, dict):
+        if "regions" in value:
+            entries = _redaction_entries(value.get("regions"))
+            return entries or [value]
+        return [value]
+    return [{"value": value}]
+
+
+def _redaction_opacity_failures(metadata: dict) -> list[dict]:
+    """Allowed privacy covers still fail if they are recoverable through transparency/blur."""
+    redaction_keys = ("redaction", "redactions", "blurred_regions", "privacy_blur", "redacted")
+    failures = []
+    for key in redaction_keys:
+        for entry in _redaction_entries(metadata.get(key)):
+            method = str(entry.get("method") or entry.get("type") or "").lower()
+            if "blur" in method:
+                failures.append({"key": key, "reason": "blur_is_not_secure_redaction", "entry": entry})
+                continue
+            opacity = entry.get("opacity", entry.get("alpha", entry.get("fill_opacity")))
+            if opacity is None and entry.get("solid") is True:
+                continue
+            if opacity is None and entry.get("method") in ("solid_cover", "opaque_cover"):
+                continue
+            if opacity is None:
+                failures.append({"key": key, "reason": "missing_opacity_proof", "entry": entry})
+                continue
+            try:
+                if float(opacity) < 1.0:
+                    failures.append({"key": key, "reason": "redaction_cover_not_fully_opaque", "entry": entry})
+            except (TypeError, ValueError):
+                failures.append({"key": key, "reason": "invalid_opacity_proof", "entry": entry})
+    return failures
+
+
 def no_unauthorized_redaction_gate(metadata: dict | None, allow_redaction: bool = False) -> dict:
-    """Fail when render metadata reports blur/redaction unless explicitly allowed."""
+    """Fail on redaction unless allowed; allowed redaction must still be a solid cover."""
     if allow_redaction:
-        return {"gate": "no_unauthorized_redaction", "pass": True, "allowed": True}
+        failures = _redaction_opacity_failures(metadata or {})
+        return {
+            "gate": "no_unauthorized_redaction",
+            "pass": not failures,
+            "allowed": True,
+            "opacity_failures": failures[:10],
+        }
     md = metadata or {}
     redaction_keys = ("redaction", "redactions", "blurred_regions", "privacy_blur", "redacted")
     hits = []

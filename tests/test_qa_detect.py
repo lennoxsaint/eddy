@@ -75,6 +75,27 @@ def test_no_unauthorized_redaction_gate_fails_on_blur_metadata():
 
 
 def test_no_unauthorized_redaction_gate_can_be_explicitly_allowed():
-    r = deterministic.no_unauthorized_redaction_gate({"blurred_regions": [{"x": 1}]}, allow_redaction=True)
+    r = deterministic.no_unauthorized_redaction_gate(
+        {"redactions": [{"x": 1, "method": "solid_cover", "opacity": 1.0}]},
+        allow_redaction=True,
+    )
     assert r["pass"] is True
     assert r["allowed"] is True
+
+
+def test_allowed_redaction_still_fails_when_cover_is_transparent():
+    r = deterministic.no_unauthorized_redaction_gate(
+        {"redactions": [{"x": 1, "method": "solid_cover", "opacity": 0.94}]},
+        allow_redaction=True,
+    )
+    assert r["pass"] is False
+    assert r["opacity_failures"][0]["reason"] == "redaction_cover_not_fully_opaque"
+
+
+def test_allowed_redaction_rejects_blur_as_security():
+    r = deterministic.no_unauthorized_redaction_gate(
+        {"redactions": [{"x": 1, "method": "gaussian_blur", "opacity": 1.0}]},
+        allow_redaction=True,
+    )
+    assert r["pass"] is False
+    assert r["opacity_failures"][0]["reason"] == "blur_is_not_secure_redaction"
