@@ -32,3 +32,14 @@
 - qwen3.6-27b structured-output reliability at q4 — validated by `eddy doctor --ping`; judge demotes to advisory if unstable.
 - faster-whisper large-v3 wall-clock on 54-min audio — consider distil-large-v3 if >45min.
 - "Codex app server" proper integration (vs `codex exec` subprocess) — revisit when plugin surface lands (phase 2).
+
+## One-sentence install surface (2026-06-25)
+
+- `eddy edit` is the public promise command: prepare sources, select a template, route the brain,
+  verify hook/motion/audio prerequisites, and either render through the existing autonomous pipeline
+  or emit exact blockers with `one-sentence-state.json` and a redacted `support-bundle.zip`.
+- `eddy_edit_start` is the MCP equivalent for Codex/Claude. `eddy_run_start` stays available for
+  lower-level/manual control.
+- The baked hook playbook is duplicated into `src/eddy/references/` and included as package data so
+  GitHub-source installs can run Shorts selection offline even when the installed wheel no longer has
+  the repo `docs/` tree beside it.

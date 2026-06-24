@@ -13,7 +13,7 @@ bundles the `eddy-mcp` server with slash commands and a skill.
 ## Prerequisites
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@main"
 ```
 
 ## Install
@@ -36,5 +36,6 @@ instead, which writes a project `.mcp.json`.
 /eddy-status
 ```
 
-Eddy produces local files only — it never publishes or uploads. Destructive tools require
-`confirm=true`. Publishing this plugin to a marketplace is a separate, owner-gated step.
+`/eddy-run` should call the `eddy_edit_start` MCP tool first. Eddy produces local files only — it
+never publishes or uploads. Destructive tools require `confirm=true`. Publishing this plugin to a
+marketplace is a separate, owner-gated step.

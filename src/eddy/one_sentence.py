@@ -1,0 +1,239 @@
+"""One-sentence Eddy orchestration: footage in, finished edit or exact blockers out."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from .atomicio import atomic_write_text
+from .bootstrap import repair_plan
+from .bundle import build_bundle
+from .config import load_config
+from .doctor import detect, preflight
+from .hooks.playbook import playbook_status, resolve_playbook_path
+from .loop.receipts import Receipts
+from .loop.controller import autonomous_run
+from .formats import resolve_format
+from .routing import choose_route
+from .loop.state import RunState
+from .runs import assert_sources_decodable, discover_sources, manifest as load_manifest, open_run, verify_sources_unmutated
+from .templates import select_template, template_inventory
+
+
+def _motion_cache_ready() -> bool:
+    cache = Path(".eddy/hyperframes-cache/hyperframes-pin.json")
+    return cache.exists()
+
+
+def _write_state(run_dir: Path, state: dict[str, Any]) -> None:
+    atomic_write_text(run_dir / "one-sentence-state.json", json.dumps(state, indent=2, sort_keys=True) + "\n")
+
+
+def _blocker(code: str, message: str, fix: str, evidence: Any | None = None) -> dict[str, Any]:
+    item: dict[str, Any] = {"code": code, "message": message, "fix": fix}
+    if evidence is not None:
+        item["evidence"] = evidence
+    return item
+
+
+def prepare_edit(
+    source: Path | str,
+    *,
+    slug: str | None = None,
+    focus: str | None = None,
+    template_id: str | None = None,
+    repair: bool = False,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Prepare a one-sentence edit and return ready/blocker state."""
+
+    source_path = Path(source).expanduser()
+    cfg = load_config()
+    run_dir = open_run(source_path, slug=slug, focus=focus)
+    manifest = load_manifest(run_dir)
+    receipt_log = Receipts(run_dir)
+    state = RunState(run_dir)
+    state.set_phase("one_sentence_preflight")
+    receipt_log.log("one_sentence_started", source=str(source_path), dry_run=dry_run, repair=repair)
+
+    blockers: list[dict[str, Any]] = []
+    checks = preflight()
+    failed_checks = [check for check in checks if not check.get("ok", False)]
+    if failed_checks:
+        blockers.append(
+            _blocker(
+                "preflight_failed",
+                "This machine is missing one or more capabilities Eddy needs before editing.",
+                "Run `eddy doctor --no-write`, then follow the repair actions shown by `eddy bootstrap --dry-run`.",
+                failed_checks,
+            )
+        )
+
+    if repair:
+        receipt_log.log("one_sentence_repair_requested", dry_run=dry_run)
+
+    try:
+        sources = discover_sources(source_path)
+        assert_sources_decodable({key: str(path) for key, path in sources.items()})
+    except Exception as exc:  # noqa: BLE001 - user-facing exact blocker
+        blockers.append(
+            _blocker(
+                "source_discovery_failed",
+                "Eddy could not discover or decode the raw footage cleanly.",
+                "Check the file/folder path and provide non-corrupt camera/screen media.",
+                str(exc),
+            )
+        )
+        sources = {}
+
+    try:
+        template = select_template(sources, requested=template_id, focus=focus)
+    except Exception as exc:  # noqa: BLE001 - user-facing exact blocker
+        blockers.append(
+            _blocker(
+                "template_selection_failed",
+                "Eddy could not match the footage to a safe edit template.",
+                "Use a folder containing clearly named camera/screen files, or pass `--template`.",
+                str(exc),
+            )
+        )
+        template = None
+
+    found = detect()
+    route = choose_route(found)
+    if not route.can_execute:
+        blockers.append(
+            _blocker(
+                route.blockers[0] if route.blockers else "route_unavailable",
+                route.reason,
+                "Use Codex/Claude/API credentials, install a supported local model runtime, or configure an implemented Eddy cloud runner.",
+                route.to_dict(),
+            )
+        )
+
+    if template and "shorts" in template.outputs and cfg.shorts.require_hook_playbook:
+        playbook = playbook_status(
+            resolve_playbook_path(cfg.shorts.hook_playbook_path),
+            min_records=cfg.shorts.hook_playbook_min_records,
+        )
+        if not playbook["ready"]:
+            blockers.append(
+                _blocker(
+                    "hook_playbook_not_ready",
+                    "Shorts generation is blocked because the baked hook playbook is not ready.",
+                    "Run the hook-corpus build with Supadata inputs, commit the validated JSONL, then retry.",
+                    playbook,
+                )
+            )
+
+    if template and "motion_graphics" in template.outputs and not _motion_cache_ready():
+        blockers.append(
+            _blocker(
+                "hyperframes_cache_missing",
+                "Motion graphics are blocked because the pinned HyperFrames cache is missing.",
+                "Run `eddy motion update-hyperframes --hyperframes-root <path-to-hyperframes>` and retry.",
+            )
+        )
+
+    status = "blocked" if blockers else "ready"
+    state.set_phase(status)
+    support_bundle = None
+    summary: dict[str, Any] = {
+        "status": status,
+        "dry_run": dry_run,
+        "run_dir": str(run_dir),
+        "manifest": manifest,
+        "sources": {key: str(path) for key, path in sources.items()},
+        "template": template.to_dict() if template else None,
+        "available_templates": template_inventory(),
+        "route": route.to_dict(),
+        "preflight": checks,
+        "repair_plan": repair_plan(checks),
+        "blockers": blockers,
+        "support_bundle": None,
+        "next_action": (
+            "Fix the blockers in order, then rerun `eddy edit <footage-folder>`."
+            if blockers
+            else "Run `eddy edit <footage-folder>` without --dry-run to render."
+        ),
+    }
+
+    if blockers:
+        _write_state(run_dir, summary)
+        support_bundle = build_bundle(run_dir, run_dir / "support-bundle.zip")
+        summary["support_bundle"] = str(support_bundle)
+        _write_state(run_dir, summary)
+        receipt_log.log("one_sentence_blocked", blockers=blockers, support_bundle=str(support_bundle))
+    else:
+        _write_state(run_dir, summary)
+        receipt_log.log("one_sentence_ready", template=template.id if template else None, route=route.tier)
+
+    verify_sources_unmutated(run_dir)
+    return summary
+
+
+def edit(
+    source: Path | str,
+    *,
+    slug: str | None = None,
+    focus: str | None = None,
+    template_id: str | None = None,
+    format_name: str = "youtube",
+    language: str = "en",
+    repair: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Run the one-sentence edit flow."""
+
+    prepared = prepare_edit(
+        source,
+        slug=slug,
+        focus=focus,
+        template_id=template_id,
+        repair=repair,
+        dry_run=dry_run,
+    )
+    if prepared["status"] == "blocked" or dry_run:
+        return prepared
+
+    ceiling = resolve_format(format_name)["ceiling_minutes"]
+    run_dir = autonomous_run(
+        Path(source).expanduser(),
+        slug=slug,
+        skip_shorts=False,
+        skip_package=False,
+        language=language,
+        ceiling_minutes=ceiling,
+        focus=focus,
+    )
+    final_qa_path = run_dir / "final" / "qa-final.json"
+    final_qa = json.loads(final_qa_path.read_text()) if final_qa_path.exists() else {"pass": False}
+    status = "completed" if final_qa.get("pass") else "blocked"
+    state = RunState(run_dir)
+    state.set_phase(status)
+    result = {
+        **prepared,
+        "status": status,
+        "dry_run": False,
+        "run_dir": str(run_dir),
+        "final_qa": final_qa,
+        "outputs": {
+            "long_form": str(run_dir / "final" / "long" / "video.mp4"),
+            "shorts_dir": str(run_dir / "final" / "shorts"),
+            "package_dir": str(run_dir / "final" / "package"),
+        },
+        "next_action": (
+            "Review the final outputs and promote/share only after human approval."
+            if status == "completed"
+            else "Open the support bundle and final QA report, repair the failing gate, then rerun."
+        ),
+    }
+    if status != "completed":
+        bundle = build_bundle(run_dir, run_dir / "support-bundle.zip")
+        result["support_bundle"] = str(bundle)
+        Receipts(run_dir).log("one_sentence_final_blocked", final_qa=final_qa, support_bundle=str(bundle))
+    else:
+        Receipts(run_dir).log("one_sentence_completed", final_qa=final_qa)
+    _write_state(run_dir, result)
+    return result

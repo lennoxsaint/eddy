@@ -102,6 +102,24 @@ def test_job_wrappers_delegate(monkeypatch, tmp_path):
     assert tools.eddy_job_status("myslug")["state"] == "running"
 
 
+def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path):
+    captured: dict = {}
+
+    def spawn(argv, log_path, env):
+        captured["argv"] = argv
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("")
+        return _FakeProc()
+
+    monkeypatch.setattr(tools, "_jobs", JobManager(runs_dir=tmp_path, spawn=spawn))
+    out = tools.eddy_edit_start("/footage", slug="myslug", focus="make a tutorial", dry_run=True)
+    assert out["job_id"] == "myslug"
+    assert out["kind"] == "edit"
+    assert "edit" in captured["argv"]
+    assert "--dry-run" in captured["argv"]
+    assert "--focus" in captured["argv"]
+
+
 def test_eddy_doctor_returns_detect_and_preflight():
     out = tools.eddy_doctor()
     assert "detect" in out and "preflight" in out

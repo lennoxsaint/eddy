@@ -7,7 +7,9 @@ import pytest
 from eddy.hooks.playbook import (
     build_from_youtube_metadata,
     dedupe_records,
+    package_playbook_path,
     playbook_status,
+    resolve_playbook_path,
     score_candidate_hook,
     require_hook_playbook,
     validate_hook_record,
@@ -119,3 +121,11 @@ def test_baked_hook_playbook_is_runtime_ready():
     assert status["valid_count"] >= 1000
     assert status["invalid_count"] == 0
     assert "yt-dlp-youtube-metadata" in status["provenance_sources"]
+
+
+def test_packaged_hook_playbook_is_available_after_install():
+    packaged = package_playbook_path()
+    assert packaged.exists()
+    assert resolve_playbook_path("missing/references/short-form-hook-playbook.jsonl") == packaged
+    status = playbook_status(packaged, min_records=1000)
+    assert status["ready"] is True

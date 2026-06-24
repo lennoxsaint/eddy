@@ -29,6 +29,7 @@ def test_root_skill_exists_for_agent_install():
     skill = ROOT / "SKILL.md"
     text = skill.read_text()
     assert "name: eddy" in text
+    assert "eddy edit" in text
     assert "eddy run" in text
 
 
@@ -50,4 +51,4 @@ def test_public_install_docs_use_github_source_not_occupied_pypi_name():
         text = doc.read_text()
         assert "pipx install 'eddy[mcp]'" not in text
         assert "pip install 'eddy[mcp]'" not in text
-        assert "git+https://github.com/lennoxsaint/eddy.git@v1.8.1" in text
+        assert "git+https://github.com/lennoxsaint/eddy.git@main" in text

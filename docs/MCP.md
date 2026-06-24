@@ -7,7 +7,7 @@ and read the launch kit — as a tool, with no copy-paste.
 Install the server (it's an optional extra so the base install stays slim):
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@main"
 ```
 
 That puts `eddy-mcp` on your PATH. It speaks MCP over **stdio** — clients launch it; you never run it
@@ -15,9 +15,9 @@ by hand.
 
 ## How it works (the job model)
 
-A full edit takes 5–15 minutes, so long operations are **asynchronous jobs**:
+The promise-level edit takes 5–15 minutes, so long operations are **asynchronous jobs**:
 
-1. `eddy_run_start(source, …)` → returns a `job_id` immediately (the run slug).
+1. `eddy_edit_start(source, …)` → returns a `job_id` immediately (the run slug).
 2. `eddy_job_status(job_id)` → `running | completed | failed | interrupted` + the current `phase`.
 3. `eddy_artifacts(run)` → titles, description, chapters, shorts ledger, final video path.
 
@@ -73,7 +73,7 @@ args = []
 For Claude Code there's a one-shot plugin at [`integrations/claude-code/`](../integrations/claude-code)
 that bundles the MCP server with slash commands and a skill:
 
-- `/eddy-run <footage>` — start a full edit and report the launch kit
+- `/eddy-run <footage>` — start the one-sentence edit flow and report the launch kit or exact blockers
 - `/eddy-shorts <footage>` — mine vertical shorts only
 - `/eddy-status [run]` — recent runs + in-flight jobs
 - an **eddy** skill that teaches the agent the start→poll→read job model
@@ -86,10 +86,10 @@ owner-gated step.
 
 | Read (instant) | Jobs (start → poll → read) | Destructive (confirm=true) |
 |---|---|---|
-| `eddy_doctor` | `eddy_run_start` | `eddy_clean` |
+| `eddy_doctor` | `eddy_edit_start` | `eddy_clean` |
 | `eddy_runs` | `eddy_shorts_start` | `eddy_purge` |
 | `eddy_run_inspect` | `eddy_transcribe_start` | |
-| `eddy_profiles` | `eddy_render_start` | |
+| `eddy_profiles` | `eddy_run_start` / `eddy_render_start` | |
 | `eddy_qa` | `eddy_batch_start` | |
 | `eddy_pick` | `eddy_job_status` | |
 | `eddy_artifacts` | `eddy_job_cancel` / `eddy_jobs` | |

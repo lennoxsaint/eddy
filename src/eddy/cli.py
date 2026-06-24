@@ -96,6 +96,37 @@ def doctor(
     run_doctor(ping=ping, all_providers=all_providers, write=write)
 
 
+@app.command()
+def bootstrap(
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Show the exact repair plan needed before Eddy can edit reliably."""
+    import json
+
+    from eddy.bootstrap import repair_plan
+    from eddy.doctor import preflight
+
+    checks = preflight()
+    plan = repair_plan(checks)
+    out = {"preflight": checks, "repair_plan": plan}
+    if json_out:
+        typer.echo(json.dumps(out, indent=2))
+        raise typer.Exit(0 if plan["status"] == "ready" else 1)
+    for check in checks:
+        mark = "ok  " if check["ok"] else "FAIL"
+        typer.echo(f"{check['check']:13} {mark} {check['detail']}")
+    if plan["status"] == "ready":
+        typer.echo("\nbootstrap: ready")
+        return
+    typer.echo("\nbootstrap: repair needed")
+    for action in plan["actions"]:
+        typer.echo(f"  - {action['id']}: {action['title']}")
+        if action.get("command"):
+            typer.echo(f"    command: {action['command']}")
+        typer.echo(f"    why: {action['reason']}")
+    raise typer.Exit(1)
+
+
 @app.command("update-check")
 def update_check(
     remote: str = typer.Option("origin", "--remote", help="Git remote to compare against."),
@@ -369,6 +400,62 @@ def mcp_install(
     ui.ok(f"{res['action']} {res['path']} — mcpServers.eddy → {command}")
     if res.get("backup"):
         ui.note(f"backup: {res['backup']}")
+
+
+@app.command()
+def edit(
+    source: Path = typer.Argument(..., help="Raw footage folder or single video file."),
+    slug: Optional[str] = typer.Option(None, help="Run slug; defaults to date + source name."),
+    focus: Optional[str] = typer.Option(None, "--focus", help="One-sentence brief for what to make."),
+    template: Optional[str] = typer.Option(None, "--template", help="Force an Eddy template id."),
+    language: str = typer.Option("en", "--language", help="Transcription language."),
+    format: str = typer.Option("youtube", "--format", help="Content format profile."),
+    repair: bool = typer.Option(False, "--repair", help="Record repair intent and include repair actions in blockers."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Prepare and validate only; do not transcribe/render."),
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """One-sentence flow: footage in, finished edit out, or an exact blocker + support bundle."""
+    import json
+
+    from eddy.one_sentence import edit as run_edit
+
+    try:
+        result = run_edit(
+            source,
+            slug=slug,
+            focus=focus,
+            template_id=template,
+            format_name=format,
+            language=language,
+            repair=repair,
+            dry_run=dry_run,
+        )
+    except Exception as e:
+        from eddy.errors import friendly_error, write_crash_log
+
+        headline, next_step = friendly_error(e)
+        log = write_crash_log(e)
+        typer.echo(f"\n✗ {headline}\n  → {next_step}\n  crash log: {log}", err=True)
+        raise typer.Exit(1) from e
+    if json_out:
+        typer.echo(json.dumps(result, indent=2))
+        raise typer.Exit(0 if result["status"] in {"ready", "completed"} else 1)
+    if result["status"] == "completed":
+        typer.echo(f"✓ edit complete: {result['run_dir']}")
+        typer.echo(f"  long form: {result['outputs']['long_form']}")
+        typer.echo(f"  shorts:    {result['outputs']['shorts_dir']}")
+        return
+    if result["status"] == "ready":
+        typer.echo(f"✓ ready: {result['run_dir']}")
+        typer.echo("  next: run the same command without --dry-run")
+        return
+    typer.echo(f"✗ blocked: {result['run_dir']}", err=True)
+    for blocker in result["blockers"]:
+        typer.echo(f"  - {blocker['code']}: {blocker['message']}", err=True)
+        typer.echo(f"    fix: {blocker['fix']}", err=True)
+    if result.get("support_bundle"):
+        typer.echo(f"  support bundle: {result['support_bundle']}", err=True)
+    raise typer.Exit(1)
 
 
 @app.command()

@@ -504,3 +504,31 @@ machine paths.
 **Expected proof before sharing.** `ruff check src tests`, `mypy src/eddy`, full `pytest --cov`,
 `scripts/public_scrub_check.py`, a clean GitHub-source install smoke, both GitHub Actions workflows
 green, and a fresh `v1.8.1` tag only after those gates pass.
+
+## 2026-06-25 — One-sentence install promise becomes `eddy edit`
+
+**Trigger.** Lennox's Codex Club sharing bar is not "install a repo and learn an internal CLI." It is:
+give an agent the Eddy GitHub URL, attach raw footage, say "edit this," and receive either a finished
+local YouTube edit/Shorts package or exact blockers with proof. The repo already had most building
+blocks, but the public agent path still taught `eddy run`, the MCP server exposed only lower-level
+job starters, and the baked Shorts hook corpus lived in repo docs rather than package data.
+
+**Decisions.**
+- Add `eddy edit` as the promise-level wrapper. It opens a source-locked run, discovers media, runs
+  preflight, selects a template, routes the editorial brain, verifies the hook corpus and motion
+  prerequisites, then either delegates to the existing autonomous pipeline or writes
+  `one-sentence-state.json` plus `support-bundle.zip`.
+- Keep `eddy run` as the lower-level escape hatch for profiles, topical extract mode, and manual
+  skip flags.
+- Expose the same promise path to agents through MCP as `eddy_edit_start`; Claude Code plugin docs and
+  commands now start there.
+- Make capability routing deterministic over `doctor.detect()` output. Environment probing happens in
+  `detect()`, not hidden inside the router, so tests and support bundles do not inherit the maintainer's
+  shell credentials by accident.
+- Ship the 1,000-record hook playbook as package data under `eddy/references/` as well as the repo
+  documentation copy under `docs/references/`.
+- Add `eddy bootstrap` as a plain-English repair plan for preflight blockers.
+
+**Proof target before broad sharing.** Focused tests cover template selection, routing, exact-blocker
+support bundles, MCP `eddy_edit_start`, and root skill install wording; full repo gates still need to
+run before this is considered share-ready.

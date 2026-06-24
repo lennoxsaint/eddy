@@ -44,18 +44,21 @@ blocker first.
 2. Run a dry preflight:
 
 ```bash
-eddy run /path/to/footage-or-folder --dry-run
+eddy edit /path/to/footage-or-folder --dry-run
 ```
 
 3. Run the full edit:
 
 ```bash
-eddy run /path/to/footage-or-folder
+eddy edit /path/to/footage-or-folder
 ```
+
+Use `eddy run` only when the user explicitly wants lower-level pipeline controls such as topical
+extract mode, a named profile, or manual skip flags.
 
 4. Poll/read the run folder under `~/.eddy/runs/<slug>/`.
 5. Return exact paths to:
-   - `final/video.mp4`
+   - `final/long/video.mp4` or the promoted long-form video path Eddy reports
    - `final/transcript.md` when present
    - `final/qa-final.json`
    - `final/shorts/*.mp4` when Eddy found Shorts-worthy moments
@@ -88,9 +91,10 @@ before rendering/compositing motion graphics.
   asks for privacy redaction, use a fully opaque solid cover/card (`opacity: 1.0` / `alpha: 1.0`).
   Blur or semi-transparent covers are not secure redaction and must fail QA.
 - Shorts are optional by quality, not by laziness: output fewer than five if fewer than five clips are genuinely strong.
-- Final Shorts require the baked 1,000-record hook playbook at `docs/references/short-form-hook-playbook.jsonl`.
-  Normal user runs must use it offline. If it is missing or below threshold, block Shorts with
-  `short_form_hook_playbook_below_1000_valid_hooks`.
+- Final Shorts require Eddy's baked 1,000-record hook playbook. The repo copy lives at
+  `docs/references/short-form-hook-playbook.jsonl`; installed packages also carry it under
+  `eddy/references/`. Normal user runs must use it offline. If it is missing or below threshold,
+  block Shorts with `short_form_hook_playbook_below_1000_valid_hooks`.
 - Long-form and Shorts cuts should be blinkless: tight audio and camera cuts are good, but visual
   flashes around screen or talking-head splices fail QA. For Shorts, do not assemble visible camera
   cuts with concat-copy segment MP4s; use frame-accurate source trim/atrim and a re-encoded

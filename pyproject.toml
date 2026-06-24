@@ -52,7 +52,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.setuptools.package-data]
-eddy = ["prompts/*.md", "tui/*.tcss"]
+eddy = ["prompts/*.md", "tui/*.tcss", "references/*.jsonl", "references/*.json"]
 
 [tool.ruff]
 line-length = 120

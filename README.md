@@ -34,7 +34,8 @@ eddy doctor                        # detects hardware, recommends a brain, write
 eddy studio-sound doctor           # verifies the heavy local voice-enhancement backend
 eddy update-check                  # notify-only update check; never pulls or rewrites files
 eddy motion update-hyperframes     # pin/index the local HyperFrames registry cache
-eddy run path/to/footage/          # camera.mp4 [+ screen.mp4 + mic.wav], or one composite .mp4
+eddy edit path/to/footage/         # the one-sentence path: finished edit or exact blockers
+eddy run path/to/footage/          # lower-level full pipeline control
 eddy run talk.mp4 --focus "only keep the part where I explain X"   # topical extract
 ```
 
@@ -58,7 +59,8 @@ Give the repo link to Codex or Claude and say:
 > Install this Eddy skill, then edit the attached raw footage into a finished YouTube video.
 
 The root `SKILL.md` and `scripts/install_agent_skill.py` are designed for that flow. Once installed,
-the agent should run `eddy run` against the attached footage, then report the local output paths.
+the agent should run `eddy edit` against the attached footage. Eddy either produces local review
+outputs or writes an exact blocker, a repair plan, and a redacted support bundle in the run folder.
 
 Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
 (configurable via `paths.runs_dir`). Reclaim scratch afterwards with `eddy clean <run>`.
@@ -66,12 +68,13 @@ Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slu
 
 Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy shorts`, `eddy package`.
 
-Shorts have an editorial gate backed by the baked offline metadata-derived corpus at
-`docs/references/short-form-hook-playbook.jsonl`. Normal edits do not need Supadata or network
-access. Maintainers can refresh the corpus with `eddy hooks build-supadata` from supplied public
-URLs. When only public YouTube metadata is available, `eddy hooks build-youtube-metadata` builds a
-weaker title-derived playbook and labels every record with that provenance instead of pretending it
-contains transcript-proven hooks.
+Shorts have an editorial gate backed by a baked offline metadata-derived corpus. The repo copy lives
+at `docs/references/short-form-hook-playbook.jsonl` and the installable package also ships the same
+corpus under `eddy/references/`, so normal edits do not need Supadata or network access. Maintainers
+can refresh the corpus with `eddy hooks build-supadata` from supplied public URLs. When only public
+YouTube metadata is available, `eddy hooks build-youtube-metadata` builds a weaker title-derived
+playbook and labels every record with that provenance instead of pretending it contains
+transcript-proven hooks.
 
 Premium motion graphics use `eddy motion init-contract <project-dir>` to write a project-local
 `frame.md`, `storyboard.md`, `storyboard.html`, and selected copied HyperFrames references. The
@@ -92,12 +95,13 @@ banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_A
 Eddy ships an MCP server so an agent can start edits, watch them, and read the launch kit as tools:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@main"
 eddy mcp install --client claude-desktop # or claude-code | codex (idempotent, backs up, merges)
 ```
 
-A full edit is a job: `eddy_run_start` returns a `job_id`, `eddy_job_status` polls it, `eddy_artifacts`
-reads the result. There's also a one-shot Claude Code plugin (`/eddy-run`, `/eddy-shorts`,
+A promise-level edit is a job: `eddy_edit_start` returns a `job_id`, `eddy_job_status` polls it, and
+`eddy_artifacts` reads the result after completion. Lower-level agents can still use
+`eddy_run_start`. There's also a one-shot Claude Code plugin (`/eddy-run`, `/eddy-shorts`,
 `/eddy-status` + a skill) at [`integrations/claude-code/`](integrations/claude-code). Full details in
 [docs/MCP.md](docs/MCP.md).
 

@@ -16,7 +16,9 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 _INSTRUCTIONS = (
-    "Drive Eddy, a local-first agentic video editor. Start a long edit with eddy_run_start (it "
+    "Drive Eddy, a local-first agentic video editor. For the simple user promise — raw footage in, "
+    "finished edit or exact blockers out — start with eddy_edit_start. For lower-level control, use "
+    "eddy_run_start (it "
     "returns a job_id immediately); poll eddy_job_status(job_id) until state is 'completed', then "
     "read results with eddy_artifacts(run). Reads (eddy_runs, eddy_run_inspect, eddy_doctor, "
     "eddy_profiles, eddy_qa, eddy_pick, eddy_artifacts) return quickly (eddy_doctor may briefly probe "
@@ -35,6 +37,7 @@ TOOLS: list[Callable[..., Any]] = [
     tools.eddy_pick,
     tools.eddy_artifacts,
     # jobs
+    tools.eddy_edit_start,
     tools.eddy_run_start,
     tools.eddy_shorts_start,
     tools.eddy_transcribe_start,

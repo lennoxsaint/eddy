@@ -32,6 +32,28 @@ REQUIRED_FIELDS = {
 }
 
 
+def package_playbook_path(filename: str = "short-form-hook-playbook.jsonl") -> Path:
+    return Path(__file__).resolve().parents[1] / "references" / filename
+
+
+def resolve_playbook_path(path: Path | str) -> Path:
+    """Resolve a hook playbook path, falling back to Eddy's packaged baked corpus.
+
+    GitHub-source installs may not leave the repository `docs/` directory beside the installed
+    package. The public playbook is therefore also included as package data under `eddy/references/`.
+    """
+
+    candidate = Path(path).expanduser()
+    if candidate.is_absolute() and candidate.exists():
+        return candidate
+    if not candidate.is_absolute() and candidate.exists():
+        return candidate
+    packaged = package_playbook_path(candidate.name)
+    if packaged.exists():
+        return packaged
+    return candidate
+
+
 def _stable_id(source_url: str, opening: str) -> str:
     return hashlib.sha256(f"{source_url}\n{opening}".encode("utf-8")).hexdigest()[:16]
 
@@ -101,6 +123,7 @@ def dedupe_records(records: Iterable[dict]) -> list[dict]:
 
 
 def playbook_status(path: Path, min_records: int = 1000) -> dict:
+    path = resolve_playbook_path(path)
     records = dedupe_records(load_playbook(path))
     valid: list[dict] = []
     invalid: list[dict] = []
@@ -129,7 +152,7 @@ def playbook_status(path: Path, min_records: int = 1000) -> dict:
 
 
 def require_hook_playbook(path: Path, min_records: int = 1000) -> dict:
-    status = playbook_status(path, min_records=min_records)
+    status = playbook_status(resolve_playbook_path(path), min_records=min_records)
     if not status["ready"]:
         raise RuntimeError(
             f"{status['blocker']}: {status['valid_count']}/{status['required_count']} valid hooks at {status['path']}"

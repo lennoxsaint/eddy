@@ -11,11 +11,11 @@ Eddy turns raw footage into a complete launch kit, entirely on the user's machin
 
 A full edit takes 5–15 minutes, so the long tools are asynchronous. Never block on them:
 
-1. **Start** — `eddy_run_start(source, target_minutes?, local_only?, format?, language?, profile?)` returns `{ job_id, run_dir }` immediately. The `job_id` is the run's slug.
+1. **Start** — use `eddy_edit_start(source, focus?, template?, format?, language?, repair?, dry_run?)` for the default promise-level flow. It returns `{ job_id, run_dir }` immediately. The `job_id` is the run's slug. Use `eddy_run_start` only when the user asks for lower-level run controls.
 2. **Poll** — `eddy_job_status(job_id)` returns `running | completed | failed | interrupted` plus the current `phase` (transcribe, iteration_N, final_render, shorts, package, done). Poll every ~30s and keep the user informed; on `failed` the payload includes a `log_tail`.
 3. **Read** — `eddy_artifacts(run)` returns the candidate titles, description, chapters, shorts ledger, and the final video path. `eddy_run_inspect(run)` returns raw run state + a `final/` inventory.
 
-The same start→poll→read pattern applies to `eddy_shorts_start` (vertical clips only, no long edit), `eddy_transcribe_start`, `eddy_render_start`, and `eddy_batch_start` (a directory of sources).
+The same start→poll→read pattern applies to `eddy_run_start` (lower-level full run), `eddy_shorts_start` (vertical clips only, no long edit), `eddy_transcribe_start`, `eddy_render_start`, and `eddy_batch_start` (a directory of sources).
 
 ## Instant reads (no job)
 

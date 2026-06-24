@@ -6,10 +6,12 @@ How to triage an Eddy problem — yours or a stranger's — without their footag
 
 1. **Version + environment**: `eddy --version`, then `eddy doctor` — reports ffmpeg, an available
    encoder, free disk, hardware tier, and the resolved editorial brain.
-2. **Reproduce the gate, not the render**: `eddy run <source> --dry-run` checks the environment and
-   that the footage decodes, without transcribing or rendering. Most "it failed" reports are an
-   ingest/environment problem this surfaces in seconds.
-3. **Get the redacted diagnostic bundle**: `eddy bundle <run-dir>` writes a zip with the receipts,
+2. **Reproduce the promise gate, not the render**: `eddy edit <source> --dry-run` checks the
+   environment, source discovery, template match, routing, hook corpus, and motion prerequisites
+   without transcribing or rendering. Most "it failed" reports are an ingest/environment/capability
+   problem this surfaces in seconds.
+3. **Get the redacted diagnostic bundle**: blocked `eddy edit` runs write `support-bundle.zip`
+   automatically. For any other run, `eddy bundle <run-dir>` writes a zip with the receipts,
    crash log, and environment fingerprint — transcript text redacted and absolute paths scrubbed.
    This is safe to share and is enough to triage most failures. No footage, transcript, or face
    frames are included.
@@ -18,6 +20,9 @@ How to triage an Eddy problem — yours or a stranger's — without their footag
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| `preflight_failed` | missing ffmpeg/encoder/Studio Sound/free disk | run `eddy bootstrap --json`, follow the listed repair actions, retry `eddy edit --dry-run` |
+| `no_editorial_brain_available` | no Codex/Claude/API brain and no supported local model runtime | install/use Codex or Claude CLI, set a provider key, or install a supported local model runtime |
+| `hyperframes_cache_missing` | premium motion cache has not been pinned locally | run `eddy motion update-hyperframes --hyperframes-root <path>` |
 | `not a video/audio file` | unsupported container, or an audio file passed to `eddy run` | check `eddy doctor`; for audio use `eddy transcribe` (see audio-first ingest) |
 | `… has no decodable video stream` | corrupt/truncated source, or audio-only | re-export the source; audio-only → `eddy transcribe` |
 | `EgressBlocked` during a run | `--local-only`/`EDDY_OFFLINE` is set and something tried to reach the network | expected under offline mode — drop `--local-only` on a connected machine, or pre-stage models (`docs/AIRGAP.md`) |
@@ -37,6 +42,6 @@ How to triage an Eddy problem — yours or a stranger's — without their footag
 
 ## Escalation
 
-If `eddy doctor` is green and `eddy bundle` doesn't reveal the cause, capture:
+If `eddy doctor` is green and `support-bundle.zip` / `eddy bundle` doesn't reveal the cause, capture:
 `eddy --version`, the `doctor` output, the bundle zip, and the exact command + first failing
 receipt line. See `docs/KNOWN-LIMITS.md` before filing — the issue may be a documented limit.

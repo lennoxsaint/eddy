@@ -25,7 +25,15 @@ def test_every_tool_registers():
 
 def test_core_tools_present():
     names = {t.name for t in _tools()}
-    for expected in ("eddy_run_start", "eddy_job_status", "eddy_artifacts", "eddy_clean", "eddy_purge", "eddy_doctor"):
+    for expected in (
+        "eddy_edit_start",
+        "eddy_run_start",
+        "eddy_job_status",
+        "eddy_artifacts",
+        "eddy_clean",
+        "eddy_purge",
+        "eddy_doctor",
+    ):
         assert expected in names
 
 
@@ -39,6 +47,12 @@ def test_run_start_schema_exposes_key_params():
     rs = next(t for t in _tools() if t.name == "eddy_run_start")
     props = rs.inputSchema.get("properties", {})
     assert "source" in props and "local_only" in props and "target_minutes" in props
+
+
+def test_edit_start_schema_exposes_promise_params():
+    rs = next(t for t in _tools() if t.name == "eddy_edit_start")
+    props = rs.inputSchema.get("properties", {})
+    assert "source" in props and "focus" in props and "dry_run" in props
 
 
 def test_destructive_tools_expose_confirm():

@@ -141,6 +141,34 @@ class JobManager:
                 args.append("--no-extract")
         return self._launch(slug, "run", args, self.runs_dir / slug)
 
+    def start_edit(
+        self,
+        source: str,
+        *,
+        slug: str | None = None,
+        focus: str | None = None,
+        template: str | None = None,
+        language: str | None = None,
+        fmt: str | None = None,
+        repair: bool = False,
+        dry_run: bool = False,
+    ) -> Job:
+        slug = self._free_slug(slug or default_slug(Path(source)))
+        args = ["edit", str(source), "--slug", slug]
+        if focus:
+            args += ["--focus", focus]
+        if template:
+            args += ["--template", template]
+        if language:
+            args += ["--language", language]
+        if fmt:
+            args += ["--format", fmt]
+        if repair:
+            args.append("--repair")
+        if dry_run:
+            args.append("--dry-run")
+        return self._launch(slug, "edit", args, self.runs_dir / slug)
+
     def start_shorts(self, source: str, *, slug: str | None = None, language: str | None = None) -> Job:
         slug = self._free_slug(slug or default_slug(Path(source)))
         args = ["shorts", str(source), "--slug", slug]

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Eddy Short-Form Hook Playbook Record",
+  "type": "object",
+  "required": [
+    "hook_id",
+    "source_url",
+    "source_type",
+    "platform",
+    "opening_3s_text",
+    "first_3_second_rationale",
+    "hook_pattern",
+    "pattern_tags",
+    "payoff_type",
+    "proven_score",
+    "score_signals",
+    "provenance"
+  ],
+  "properties": {
+    "hook_id": { "type": "string", "minLength": 8 },
+    "source_url": { "type": "string", "format": "uri" },
+    "platform": { "type": "string" },
+    "source_id": { "type": "string" },
+    "source_type": { "type": "string", "minLength": 3 },
+    "title": { "type": "string" },
+    "author": { "type": "string" },
+    "stats": { "type": "object" },
+    "opening_3s_text": { "type": "string", "minLength": 12 },
+    "first_3_second_rationale": { "type": "string", "minLength": 12 },
+    "hook_pattern": { "type": "string", "minLength": 3 },
+    "pattern_tags": { "type": "array", "items": { "type": "string" } },
+    "payoff_type": { "type": "string", "minLength": 3 },
+    "transcript_excerpt": { "type": "string" },
+    "transcript_span": {},
+    "proven_score": { "type": "number", "minimum": 0.65, "maximum": 1.0 },
+    "score_signals": { "type": "object" },
+    "provenance": { "type": "object" }
+  },
+  "additionalProperties": true
+}

@@ -51,7 +51,13 @@ project.
 Recommended public install command for a green tagged release:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@<tag>"
+```
+
+Before a fresh tag exists, smoke-test the live branch with:
+
+```bash
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@main"
 ```
 
 ## Update check

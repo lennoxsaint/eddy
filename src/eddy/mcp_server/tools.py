@@ -167,6 +167,30 @@ def eddy_run_start(
     return {"job_id": job.id, "kind": job.kind, "run_dir": str(job.run_dir), "pid": getattr(job.proc, "pid", None)}
 
 
+def eddy_edit_start(
+    source: str,
+    slug: str | None = None,
+    focus: str | None = None,
+    template: str | None = None,
+    language: str | None = None,
+    format: str | None = None,
+    repair: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Start Eddy's one-sentence edit flow as a job: finished edit, or exact blockers + support bundle."""
+    job = jobs().start_edit(
+        source,
+        slug=slug,
+        focus=focus,
+        template=template,
+        language=language,
+        fmt=format,
+        repair=repair,
+        dry_run=dry_run,
+    )
+    return {"job_id": job.id, "kind": job.kind, "run_dir": str(job.run_dir), "pid": getattr(job.proc, "pid", None)}
+
+
 def eddy_shorts_start(source: str, slug: str | None = None, language: str | None = None) -> dict:
     """Mine vertical shorts from raw footage (no full edit loop) as a job."""
     job = jobs().start_shorts(source, slug=slug, language=language)

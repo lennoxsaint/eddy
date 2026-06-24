@@ -26,7 +26,7 @@ from eddy.render.long import latest_iteration_dir
 from eddy.runs import SourceError, manifest
 from eddy.transcribe.whisper import words_flat
 from eddy.qa.deterministic import loudness_gate, silent_motion_gate
-from eddy.hooks.playbook import load_playbook, require_hook_playbook, score_candidate_hook
+from eddy.hooks.playbook import load_playbook, require_hook_playbook, resolve_playbook_path, score_candidate_hook
 
 MARKER_PATTERNS = (
     ("hook", "for", "short"),
@@ -246,9 +246,10 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         )
     playbook_records: list[dict] = []
     if cfg.shorts.require_hook_playbook:
-        status = require_hook_playbook(Path(cfg.shorts.hook_playbook_path), cfg.shorts.hook_playbook_min_records)
+        playbook_path = resolve_playbook_path(Path(cfg.shorts.hook_playbook_path))
+        status = require_hook_playbook(playbook_path, cfg.shorts.hook_playbook_min_records)
         receipts.log("short_hook_playbook_gate", **status)
-        playbook_records = load_playbook(Path(cfg.shorts.hook_playbook_path))
+        playbook_records = load_playbook(playbook_path)
 
     out_root = run_dir / "final" / "shorts"
     out_root.mkdir(parents=True, exist_ok=True)
