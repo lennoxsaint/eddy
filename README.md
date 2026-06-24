@@ -33,16 +33,22 @@ python3 scripts/install_agent_skill.py --agent auto --install-editable
 eddy doctor                        # detects hardware, recommends a brain, writes config
 eddy studio-sound doctor           # verifies the heavy local voice-enhancement backend
 eddy update-check                  # notify-only update check; never pulls or rewrites files
+eddy motion update-hyperframes     # pin/index the local HyperFrames registry cache
 eddy run path/to/footage/          # camera.mp4 [+ screen.mp4 + mic.wav], or one composite .mp4
 eddy run talk.mp4 --focus "only keep the part where I explain X"   # topical extract
 ```
 
 `--install-editable` provisions Eddy's Studio Sound stack by default. The required backend is
-DeepFilterNet in the active Eddy environment, followed by mouth-click repair, speech EQ,
-compression/limiting, and loudness normalization. If setup fails, Eddy does **not** downgrade
-silently: full runs fail the audio quality gate until `eddy studio-sound install` succeeds, or until
-you explicitly change the audio policy in config. Resemble Enhance can be installed as an optional
-experimental backend with `eddy studio-sound install --include-resemble`.
+DeepFilterNet in Eddy's managed compatible Studio Sound env, followed by candidate-based mouth-click repair, warm
+source-first EQ, compression/limiting, and loudness normalization. Eddy renders multiple Studio
+Sound profiles (`warm_room_tame`, `warm_deep_tame`, `warm_click_tame`, `warm_model_10`,
+`natural_voice`, and `click_rescue`) and chooses the least echoey/overprocessed candidate that still passes the click
+gate. Heavy model output is available, but it is not allowed to win if it makes the room sound worse
+than the source. If setup fails, Eddy does **not** downgrade silently: full runs fail the audio
+quality gate until `eddy studio-sound install` succeeds, or until you explicitly change the audio
+policy in config. Resemble Enhance can be installed as an optional experimental backend with
+`eddy studio-sound install --include-resemble`. If the agent's Python is too new for Torch/DeepFilterNet,
+Eddy uses Python 3.9-3.11 via `EDDY_STUDIO_SOUND_PYTHON` or the first compatible interpreter on PATH.
 
 ## Quickstart for Codex or Claude
 
@@ -58,6 +64,15 @@ Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slu
 (Pre-0.6 runs lived under `~/Eddy/runs`; move them if you want them under the new default.)
 
 Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy shorts`, `eddy package`.
+
+Shorts have an editorial gate backed by the baked offline corpus at
+`docs/references/short-form-hook-playbook.jsonl`. Normal edits do not need Supadata or network
+access. Maintainers can refresh the corpus with `eddy hooks build-supadata` from supplied public
+URLs, or `eddy hooks build-youtube-metadata` when only public YouTube metadata is available.
+
+Premium motion graphics use `eddy motion init-contract <project-dir>` to write a project-local
+`frame.md`, `storyboard.md`, `storyboard.html`, and selected copied HyperFrames references. The
+static storyboard must pass before animation/compositing.
 
 Bare `eddy` on a real terminal opens the **full-screen TUI** — Eddy the (chibi) eagle up top, your
 runs list, a live run monitor, and a bottom input bar. Type a command (`run <footage>`, `doctor`,
@@ -99,10 +114,13 @@ reads the result. There's also a one-shot Claude Code plugin (`/eddy-run`, `/edd
 - No visible PIP/camera blinking around cuts.
 - No A/V drift at sampled checkpoints.
 - Studio Sound must use a heavy speech-enhancement backend by default; ffmpeg-only EQ/loudness
-  polish is a failed quality gate, not a shippable fallback.
+  polish is a failed quality gate, not a shippable fallback. Heavy cleanup must also pass the
+  anti-echo candidate gate; "mouth clicks gone but voice sounds hollow" is not accepted as final.
 - No unapproved dead air, retake leftovers, or abrupt audio dropouts.
 - Shorts must use separate camera/screen sources when they exist: square camera top, blue karaoke
   captions in the middle, uncropped proof/screen panel bottom.
+- Final Shorts require the baked 1,000-hook playbook; missing corpus is a blocker, not a reason to
+  output weak clips.
 - Premium motion overlays must carry a project-local `frame.md`, copied HyperFrames references,
   lint/inspect/render receipts, collision proof, and visual-taste QA before compositing.
 

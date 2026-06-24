@@ -1,0 +1,15 @@
+{
+  "path": "docs/references/short-form-hook-playbook.jsonl",
+  "exists": true,
+  "raw_count": 1000,
+  "deduped_count": 1000,
+  "valid_count": 1000,
+  "invalid_count": 0,
+  "required_count": 1000,
+  "ready": true,
+  "blocker": null,
+  "provenance_sources": [
+    "yt-dlp-youtube-metadata"
+  ],
+  "invalid_sample": []
+}

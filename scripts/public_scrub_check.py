@@ -29,6 +29,7 @@ LOCAL_PATH_PATTERNS = {
 }
 
 ALLOWLIST_LOCAL_PATH_FILES = {
+    "scripts/public_scrub_check.py",
     "docs/research-notes.md",
     "docs/decision-log.md",
 }

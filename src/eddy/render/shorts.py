@@ -26,6 +26,7 @@ from eddy.render.long import latest_iteration_dir
 from eddy.runs import SourceError, manifest
 from eddy.transcribe.whisper import words_flat
 from eddy.qa.deterministic import loudness_gate, silent_motion_gate
+from eddy.hooks.playbook import load_playbook, require_hook_playbook, score_candidate_hook
 
 MARKER_PATTERNS = (
     ("hook", "for", "short"),
@@ -147,10 +148,20 @@ def _render_segment_dual(
     return out
 
 
-def select_short_candidates(candidates: list, count: int) -> list:
-    """Pick which short candidates to render: earliest-first, capped at 2x the target count (a small
-    over-pull so a few can fail QA and still hit the target). Extracted so it's testable at scale."""
-    return sorted(candidates, key=lambda c: c.start_s)[: count * 2]
+def select_short_candidates(candidates: list, count: int, playbook_records: list[dict] | None = None) -> list:
+    """Pick Shorts by hook strength first, then timeline order.
+
+    The model proposes candidates, but Eddy's baked playbook is the taste filter: empty/weak hooks
+    are rejected instead of being rendered just because they appeared early in the video.
+    """
+    scored = []
+    for c in candidates:
+        proof = score_candidate_hook(getattr(c, "hook", ""), playbook_records or [])
+        if playbook_records and not proof["pass"]:
+            continue
+        scored.append((proof["hook_score"], -float(c.start_s), c))
+    scored.sort(reverse=True)
+    return [c for _score, _neg_start, c in scored[: count * 2]]
 
 
 def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict]:
@@ -158,7 +169,6 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
     cfg = load_config()
     receipts = Receipts(run_dir)
     m = manifest(run_dir)
-
     camera = Path(m["sources"]["camera"])
     screen_declared = bool(m["sources"].get("screen"))
     screen = Path(m["sources"].get("screen", "")) if screen_declared else None
@@ -181,11 +191,16 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             f"no video stream in {camera.name} — shorts need a video track to build the vertical "
             "layout (audio-only sources can't be made into shorts; try `eddy transcribe` instead)"
         )
+    playbook_records: list[dict] = []
+    if cfg.shorts.require_hook_playbook:
+        status = require_hook_playbook(Path(cfg.shorts.hook_playbook_path), cfg.shorts.hook_playbook_min_records)
+        receipts.log("short_hook_playbook_gate", **status)
+        playbook_records = load_playbook(Path(cfg.shorts.hook_playbook_path))
 
     out_root = run_dir / "final" / "shorts"
     out_root.mkdir(parents=True, exist_ok=True)
 
-    candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count)
+    candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count, playbook_records)
     ledger: list[dict] = []
     rendered = 0
 
@@ -272,7 +287,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         for s, e in segs:
             seg_words = [w for w in words if s <= w["start"] and w["end"] <= e + 0.05]
             if seg_words:
-                boundary_pairs.append((s - seg_words[0]["start"], e - seg_words[-1]["end"]))
+                boundary_pairs.append((seg_words[0]["start"] - s, e - seg_words[-1]["end"]))
         min_pre = min((pre for pre, _post in boundary_pairs), default=0.0)
         min_post = min((post for _pre, post in boundary_pairs), default=0.0)
         fv = final_summary["video"]  # None only if our own render produced no video stream — QA-fail it

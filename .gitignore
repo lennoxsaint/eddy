@@ -5,6 +5,7 @@ build/
 __pycache__/
 *.pyc
 .pytest_cache/
+.eddy/
 *.egg-info/
 .coverage
 .DS_Store

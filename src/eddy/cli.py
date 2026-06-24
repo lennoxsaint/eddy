@@ -158,6 +158,22 @@ studio_sound_app = typer.Typer(
 )
 app.add_typer(studio_sound_app)
 
+motion_app = typer.Typer(
+    name="motion",
+    help="HyperFrames-backed motion contracts: pin/cache registry assets and create frame/storyboard proofs.",
+    no_args_is_help=True,
+)
+app.add_typer(motion_app)
+
+hooks_app = typer.Typer(
+    name="hooks",
+    help="Build and validate Eddy's offline short-form hook playbook.",
+    no_args_is_help=True,
+)
+app.add_typer(hooks_app)
+
+DEFAULT_HYPERFRAMES_ROOT = Path.home() / "Developer" / "hyperframes"
+
 
 @studio_sound_app.command("doctor")
 def studio_sound_doctor(json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON.")) -> None:
@@ -196,6 +212,129 @@ def studio_sound_install(
         typer.echo(f"studio sound FAIL at {res.get('stage')}: {res.get('error')}", err=True)
         typer.echo(f"next: {res.get('next_action', 'fix the dependency error and rerun')}", err=True)
     if not res.get("ok"):
+        raise typer.Exit(1)
+
+
+@motion_app.command("update-hyperframes")
+def motion_update_hyperframes(
+    hyperframes_root: Path = typer.Option(
+        DEFAULT_HYPERFRAMES_ROOT,
+        "--hyperframes-root",
+        help="Local HyperFrames checkout to pin and index.",
+    ),
+    cache_dir: Path = typer.Option(Path(".eddy/hyperframes-cache"), "--cache-dir", help="Where to write the pin/index."),
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Pin/index the local HyperFrames checkout. Notify-only; never git-pulls."""
+    import json
+
+    from eddy.motion.frame_spec import write_hyperframes_cache
+
+    if not hyperframes_root.exists():
+        typer.echo(f"HyperFrames checkout not found: {hyperframes_root}", err=True)
+        raise typer.Exit(1)
+    res = write_hyperframes_cache(hyperframes_root, cache_dir)
+    if json_out:
+        typer.echo(json.dumps(res, indent=2))
+        return
+    typer.echo(f"indexed {res['asset_count']} HyperFrames assets at {res['commit'][:12]} -> {cache_dir}")
+
+
+@motion_app.command("init-contract")
+def motion_init_contract(
+    project_dir: Path = typer.Argument(..., help="Content/project folder that needs motion artifacts."),
+    hyperframes_root: Path = typer.Option(
+        DEFAULT_HYPERFRAMES_ROOT,
+        "--hyperframes-root",
+        help="Local HyperFrames checkout to copy selected references from.",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Create frame.md, storyboard.md/html, and a copied HyperFrames asset manifest for a run."""
+    import json
+
+    from eddy.motion.frame_spec import build_threadify_motion_contract
+
+    if not hyperframes_root.exists():
+        typer.echo(f"HyperFrames checkout not found: {hyperframes_root}", err=True)
+        raise typer.Exit(1)
+    res = build_threadify_motion_contract(project_dir, hyperframes_root)
+    if json_out:
+        typer.echo(json.dumps(res, indent=2))
+        return
+    typer.echo(f"frame: {res['frame_spec']}")
+    typer.echo(f"storyboard: {res['storyboard']}")
+    typer.echo(f"storyboard html: {res['storyboard_html']}")
+    typer.echo(f"copied manifest: {res['copied_assets_manifest']}")
+
+
+@hooks_app.command("status")
+def hooks_status(
+    playbook: Path = typer.Option(Path("docs/references/short-form-hook-playbook.jsonl"), "--playbook"),
+    min_records: int = typer.Option(1000, "--min-records"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Validate the baked offline short-form hook playbook."""
+    import json
+
+    from eddy.hooks.playbook import playbook_status
+
+    res = playbook_status(playbook, min_records=min_records)
+    if json_out:
+        typer.echo(json.dumps(res, indent=2))
+        return
+    if res["ready"]:
+        typer.echo(f"hook playbook ready: {res['valid_count']}/{res['required_count']} valid hooks")
+    else:
+        typer.echo(f"{res['blocker']}: {res['valid_count']}/{res['required_count']} valid hooks at {playbook}", err=True)
+        raise typer.Exit(1)
+
+
+@hooks_app.command("build-supadata")
+def hooks_build_supadata(
+    urls_file: Path = typer.Argument(..., help="Text file with one public short-form URL per line."),
+    out: Path = typer.Option(Path("docs/references/short-form-hook-playbook.jsonl"), "--out"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Build the hook corpus once from supplied public URLs via Supadata."""
+    import json
+
+    from eddy.hooks.playbook import build_from_supadata
+
+    urls = [line.strip() for line in urls_file.read_text().splitlines() if line.strip() and not line.startswith("#")]
+    res = build_from_supadata(urls, out)
+    if json_out:
+        typer.echo(json.dumps(res, indent=2))
+        return
+    typer.echo(f"wrote {res['valid_count']} valid hooks -> {out}")
+    if not res["ready"]:
+        typer.echo(f"{res['blocker']}: collect more proven public URLs and rerun", err=True)
+        raise typer.Exit(1)
+
+
+@hooks_app.command("build-youtube-metadata")
+def hooks_build_youtube_metadata(
+    out: Path = typer.Option(Path("docs/references/short-form-hook-playbook.jsonl"), "--out"),
+    queries_file: Optional[Path] = typer.Option(None, "--queries-file", help="Optional newline-delimited ytsearch queries."),
+    target_records: int = typer.Option(1000, "--target-records"),
+    per_query: int = typer.Option(80, "--per-query"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Build the offline corpus from public YouTube metadata without downloading media/transcripts."""
+    import json
+
+    from eddy.hooks.playbook import build_from_youtube_metadata
+
+    queries = None
+    if queries_file:
+        queries = [line.strip() for line in queries_file.read_text().splitlines() if line.strip() and not line.startswith("#")]
+    res = build_from_youtube_metadata(out, queries=queries, target_records=target_records, per_query=per_query)
+    if json_out:
+        typer.echo(json.dumps(res, indent=2))
+        return
+    typer.echo(f"wrote {res['valid_count']} valid metadata hooks -> {out}")
+    if not res["ready"]:
+        typer.echo(f"{res['blocker']}: add more public queries or use Supadata URLs", err=True)
         raise typer.Exit(1)
 
 

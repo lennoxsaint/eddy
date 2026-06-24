@@ -11,6 +11,7 @@ models are used only when their backend/wrapper is installed and receipt-proven.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import functools
 import wave
 import json
@@ -25,7 +26,125 @@ from pathlib import Path
 
 from eddy.config import AudioConfig
 from eddy.media.ffmpeg import FFMPEG, run_ffmpeg
-from eddy.studio_sound_env import DEFAULT_ENV, find_resemble_enhance
+from eddy.studio_sound_env import DEFAULT_ENV, find_deep_filter, find_resemble_enhance
+
+
+@dataclass(frozen=True)
+class StudioSoundProfile:
+    name: str
+    dry_mix: float
+    click_passes: int
+    deesser_passes: int
+    denoise: bool
+    presence_gain_db: float
+    compressor_ratio: float
+    source_mode: str
+    warm_low_shelf_db: float
+    box_cut_db: float
+    room_cut_db: float
+    notes: str
+
+
+STUDIO_SOUND_PROFILES: dict[str, StudioSoundProfile] = {
+    "warm_room_tame": StudioSoundProfile(
+        name="warm_room_tame",
+        dry_mix=0.52,
+        click_passes=1,
+        deesser_passes=0,
+        denoise=False,
+        presence_gain_db=0.4,
+        compressor_ratio=1.8,
+        source_mode="raw",
+        warm_low_shelf_db=2.2,
+        box_cut_db=-2.0,
+        room_cut_db=-1.8,
+        notes="Source-first candidate: warmer/deeper voice, modest room cuts, very light click repair.",
+    ),
+    "warm_deep_tame": StudioSoundProfile(
+        name="warm_deep_tame",
+        dry_mix=0.50,
+        click_passes=1,
+        deesser_passes=0,
+        denoise=False,
+        presence_gain_db=0.2,
+        compressor_ratio=1.8,
+        source_mode="raw",
+        warm_low_shelf_db=3.0,
+        box_cut_db=-2.3,
+        room_cut_db=-2.1,
+        notes="Source-first candidate: deeper/closer voice with stronger low-body support and room cuts.",
+    ),
+    "warm_click_tame": StudioSoundProfile(
+        name="warm_click_tame",
+        dry_mix=0.42,
+        click_passes=2,
+        deesser_passes=0,
+        denoise=False,
+        presence_gain_db=0.7,
+        compressor_ratio=2.0,
+        source_mode="raw",
+        warm_low_shelf_db=2.0,
+        box_cut_db=-2.0,
+        room_cut_db=-2.2,
+        notes="Source-first candidate with stronger click repair while keeping the room natural.",
+    ),
+    "warm_model_10": StudioSoundProfile(
+        name="warm_model_10",
+        dry_mix=0.90,
+        click_passes=1,
+        deesser_passes=0,
+        denoise=False,
+        presence_gain_db=0.4,
+        compressor_ratio=1.8,
+        source_mode="heavy",
+        warm_low_shelf_db=1.8,
+        box_cut_db=-1.6,
+        room_cut_db=-1.6,
+        notes="Mostly source audio with a tiny model-enhanced layer underneath; fails if it adds echo.",
+    ),
+    "natural_voice": StudioSoundProfile(
+        name="natural_voice",
+        dry_mix=0.28,
+        click_passes=1,
+        deesser_passes=0,
+        denoise=False,
+        presence_gain_db=1.2,
+        compressor_ratio=2.0,
+        source_mode="heavy",
+        warm_low_shelf_db=0.0,
+        box_cut_db=0.0,
+        room_cut_db=0.0,
+        notes="Least processed candidate: keeps room/voice texture, repairs obvious clicks.",
+    ),
+    "click_rescue": StudioSoundProfile(
+        name="click_rescue",
+        dry_mix=0.18,
+        click_passes=2,
+        deesser_passes=1,
+        denoise=False,
+        presence_gain_db=1.8,
+        compressor_ratio=2.4,
+        source_mode="heavy",
+        warm_low_shelf_db=0.0,
+        box_cut_db=0.0,
+        room_cut_db=0.0,
+        notes="Middle candidate: stronger mouth-click cleanup without FFT denoise.",
+    ),
+    "broadcast_clean": StudioSoundProfile(
+        name="broadcast_clean",
+        dry_mix=0.10,
+        click_passes=2,
+        deesser_passes=2,
+        denoise=True,
+        presence_gain_db=2.5,
+        compressor_ratio=3.0,
+        source_mode="heavy",
+        warm_low_shelf_db=0.0,
+        box_cut_db=0.0,
+        room_cut_db=0.0,
+        notes="Most processed candidate: reserved for noisy/echo-heavy source audio.",
+    ),
+}
 
 
 @functools.lru_cache(maxsize=1)
@@ -34,7 +153,7 @@ def _available_audio_filters() -> frozenset[str]:
         proc = subprocess.run([FFMPEG, "-hide_banner", "-filters"], capture_output=True, text=True, timeout=15)
     except Exception:
         return frozenset()
-    names = set(re.findall(r"^\s*[TSC.]{3}\s+([a-z0-9_]+)\s+", proc.stdout, re.MULTILINE))
+    names = set(re.findall(r"^\s*[A-Z. ]{2,8}\s+([a-z0-9_]+)\s+", proc.stdout, re.MULTILINE))
     return frozenset(names)
 
 
@@ -42,13 +161,15 @@ def _speech_eq(cfg: AudioConfig) -> str:
     filters = _available_audio_filters()
     chain = [f"highpass=f={cfg.highpass_hz}"]
     if "afftdn" in filters:
-        chain.append("afftdn=nf=-25")
+        chain.append("afftdn=nf=-30")
     if cfg.mouth_click_cleanup:
         # These filters are optional across ffmpeg builds. Use them when present, skip silently when
         # absent so the studio-sound pass remains portable.
         if "adeclick" in filters:
             chain.append("adeclick")
+            chain.append("adeclick")
         if "deesser" in filters:
+            chain.append("deesser")
             chain.append("deesser")
     chain.append(f"equalizer=f={cfg.presence_hz}:t=q:w=2:g={cfg.presence_gain_db}")
     if "acompressor" in filters:
@@ -57,6 +178,197 @@ def _speech_eq(cfg: AudioConfig) -> str:
         )
     chain.append("alimiter=limit=0.95")
     return ",".join(chain)
+
+
+def _studio_sound_profile_names(cfg: AudioConfig) -> list[str]:
+    profile = cfg.studio_sound_profile.strip().lower()
+    aliases = {
+        "strong_studio_sound": "broadcast_clean",
+        "strong": "broadcast_clean",
+        "balanced": "click_rescue",
+        "natural": "natural_voice",
+        "warm": "warm_room_tame",
+        "deep": "warm_deep_tame",
+        "room_tame": "warm_room_tame",
+        "warm_click": "warm_click_tame",
+    }
+    if profile == "auto":
+        names = [aliases.get(p.strip().lower(), p.strip().lower()) for p in cfg.studio_sound_candidate_profiles]
+    else:
+        names = [aliases.get(profile, profile)]
+    valid = [name for name in names if name in STUDIO_SOUND_PROFILES]
+    return valid or ["click_rescue"]
+
+
+def _profile_polish_chain(profile: StudioSoundProfile, cfg: AudioConfig) -> str:
+    filters = _available_audio_filters()
+    chain = [f"highpass=f={max(45, min(cfg.highpass_hz, 65)) if profile.name.startswith('warm_') else cfg.highpass_hz}"]
+    if profile.denoise and "afftdn" in filters:
+        chain.append("afftdn=nf=-30")
+    if cfg.mouth_click_cleanup and "adeclick" in filters:
+        chain.extend(["adeclick"] * profile.click_passes)
+    if cfg.mouth_click_cleanup and "deesser" in filters:
+        chain.extend(["deesser"] * profile.deesser_passes)
+    if profile.warm_low_shelf_db:
+        chain.append(f"bass=g={profile.warm_low_shelf_db}:f=145:w=0.55")
+    if profile.box_cut_db:
+        chain.append(f"equalizer=f=900:t=q:w=1.3:g={profile.box_cut_db}")
+    if profile.room_cut_db:
+        chain.append(f"equalizer=f=3200:t=q:w=1.4:g={profile.room_cut_db}")
+    chain.append(f"equalizer=f={cfg.presence_hz}:t=q:w=2:g={profile.presence_gain_db}")
+    if "acompressor" in filters:
+        chain.append(
+            f"acompressor=threshold={cfg.compressor_threshold_db}dB:ratio={profile.compressor_ratio}:attack=8:release=80"
+        )
+    chain.append("alimiter=limit=0.95")
+    return ",".join(chain)
+
+
+def _echo_artifact_score(wav_path: Path, max_seconds: float = 600.0) -> float:
+    """Approximate hollow/echo risk from post-speech tail energy.
+
+    This is deliberately conservative: it does not pretend to be a perceptual audio judge. It gives
+    Eddy a repeatable receipt that catches the failure Lennox flagged: an aggressive cleanup pass can
+    reduce clicks while leaving a smeared room tail after syllables. Human listen still wins, but this
+    stops obviously overcooked candidates from being selected automatically.
+    """
+    if not wav_path.exists():
+        return 1.0
+    try:
+        with wave.open(str(wav_path), "rb") as wf:
+            channels = max(1, wf.getnchannels())
+            width = wf.getsampwidth()
+            rate = wf.getframerate() or 48000
+            frames_to_read = min(wf.getnframes(), int(max_seconds * rate))
+            raw = wf.readframes(frames_to_read)
+    except Exception:
+        return 1.0
+    if width not in (2, 4) or not raw:
+        return 1.0
+    import math
+    import struct
+
+    fmt = "<" + ("h" if width == 2 else "i") * (len(raw) // width)
+    try:
+        vals = struct.unpack(fmt, raw)
+    except struct.error:
+        return 1.0
+    max_amp = float((2 ** (8 * width - 1)) - 1)
+    mono = []
+    for i in range(0, len(vals), channels):
+        mono.append(sum(abs(v) for v in vals[i:i + channels]) / channels / max_amp)
+    window = max(1, int(rate * 0.05))
+    rms = []
+    for i in range(0, len(mono), window):
+        chunk = mono[i:i + window]
+        if chunk:
+            rms.append(math.sqrt(sum(v * v for v in chunk) / len(chunk)))
+    if len(rms) < 8:
+        return 0.0
+    ordered = sorted(rms)
+    floor = ordered[max(0, int(len(ordered) * 0.2) - 1)]
+    loud = ordered[max(0, int(len(ordered) * 0.85) - 1)]
+    threshold = max(floor * 4.0, loud * 0.22, 0.002)
+    direct = 0.0
+    tail = 0.0
+    for i in range(1, len(rms) - 5):
+        if rms[i] < threshold:
+            continue
+        if rms[i + 1] > rms[i] * 0.78:
+            continue
+        direct += rms[i]
+        tail += sum(max(0.0, rms[j] - floor) for j in range(i + 1, i + 6))
+    if direct <= 0:
+        return 0.0
+    return round(min(1.0, tail / (direct * 5.0)), 4)
+
+
+def _render_profile_candidate(
+    raw: Path,
+    enhanced: Path,
+    profile: StudioSoundProfile,
+    cfg: AudioConfig,
+    work: Path,
+    run_dir: Path,
+    receipts=None,
+) -> dict:
+    out = work / f"candidate-{profile.name}.wav"
+    dry = max(0.0, min(0.65, profile.dry_mix))
+    if profile.source_mode == "raw":
+        dry = max(dry, 0.35)
+    wet = 1.0 - dry
+    wet_input = raw if profile.source_mode == "raw" else enhanced
+    chain = _profile_polish_chain(profile, cfg)
+    ln = f"loudnorm=I={cfg.target_lufs}:TP={cfg.true_peak_db}:LRA={cfg.lra}"
+    filter_complex = (
+        f"[1:a]{chain}[wet0];"
+        f"[0:a]volume={dry:.3f}[dry];"
+        f"[wet0]volume={wet:.3f}[wet];"
+        f"[dry][wet]amix=inputs=2:normalize=0,{ln}[a]"
+    )
+    run_ffmpeg(
+        ["-i", str(raw), "-i", str(wet_input), "-filter_complex", filter_complex, "-map", "[a]", "-ar", "48000", str(out)],
+        run_dir=run_dir,
+        receipts=receipts,
+    )
+    before_clicks = _click_event_count(raw, cfg.click_threshold)
+    clicks = _click_event_count(out, cfg.click_threshold)
+    click_gate_pass = clicks <= before_clicks or clicks <= max(8, int(before_clicks * 0.35))
+    reference_echo_score = _echo_artifact_score(raw)
+    echo_score = _echo_artifact_score(out)
+    echo_gate_pass = (not cfg.require_echo_artifact_gate) or (
+        echo_score <= cfg.echo_artifact_max_score and echo_score <= reference_echo_score + 0.015
+    )
+    return {
+        "profile": profile.name,
+        "path": str(out),
+        "filter_chain": chain,
+        "wet_dry_mix": {"dry": dry, "wet": wet},
+        "source_mode": profile.source_mode,
+        "notes": profile.notes,
+        "lufs_after": measure_lufs(out),
+        "reference_echo_artifact_score": reference_echo_score,
+        "click_events_after": clicks,
+        "click_gate_pass": click_gate_pass,
+        "echo_artifact_score": echo_score,
+        "echo_gate_pass": echo_gate_pass,
+    }
+
+
+def _candidate_score(candidate: dict, before_clicks: int, cfg: AudioConfig) -> float:
+    clicks = float(candidate.get("click_events_after") or 0)
+    click_ratio = clicks / max(1.0, float(before_clicks))
+    echo_score = float(candidate.get("echo_artifact_score") or 0.0)
+    lufs = candidate.get("lufs_after")
+    lufs_penalty = abs(float(lufs) - cfg.target_lufs) / 10.0 if lufs is not None else 0.5
+    overprocess_penalty = {
+        "warm_room_tame": 0.00,
+        "warm_deep_tame": 0.01,
+        "warm_click_tame": 0.02,
+        "warm_model_10": 0.05,
+        "natural_voice": 0.00,
+        "click_rescue": 0.04,
+        "broadcast_clean": 0.12,
+    }.get(str(candidate.get("profile")), 0.08)
+    if candidate.get("click_gate_pass"):
+        # Once the click gate passes, do not keep chasing a numerically smaller click count at the
+        # cost of a more processed voice. This is the exact dogfood failure: clicks gone, but the
+        # audio starts sounding hollow/echoey. A failing click gate still receives the full penalty.
+        click_component = min(click_ratio, 1.0) * 0.08
+    else:
+        click_component = click_ratio * 0.50
+    return round(click_component + (echo_score * 0.35) + lufs_penalty + overprocess_penalty, 5)
+
+
+def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: AudioConfig) -> dict:
+    scored = []
+    for candidate in candidates:
+        c = dict(candidate)
+        c["selection_score"] = _candidate_score(c, before_clicks, cfg)
+        scored.append(c)
+    passing = [c for c in scored if c.get("click_gate_pass") and c.get("echo_gate_pass")]
+    pool = passing or scored
+    return min(pool, key=lambda c: c["selection_score"])
 
 
 def _audio_sample_args(path: Path, start: float, dur: float, out: Path) -> list[str]:
@@ -121,10 +433,13 @@ def _spectral_repair_chain(cfg: AudioConfig) -> str:
     chain = []
     if "adeclick" in filters and cfg.mouth_click_cleanup:
         chain.append("adeclick")
+        chain.append("adeclick")
     if "aclick" in filters and cfg.mouth_click_cleanup:
         chain.append("aclick")
     if "adeclip" in filters:
         chain.append("adeclip")
+    if "deesser" in filters and cfg.mouth_click_cleanup:
+        chain.append("deesser")
     # Smooth tiny room-tone discontinuities at cut joins without adding fake room tone.
     if "afade" in filters:
         chain.append("afade=t=in:st=0:d=0.015")
@@ -151,7 +466,8 @@ def measure_lufs(media: Path) -> float | None:
 
 def _deep_filter(in_wav: Path, out_wav: Path, cfg: AudioConfig, run_dir: Path, receipts=None) -> bool:
     """Run DeepFilterNet if its CLI is installed. Returns True if it produced output."""
-    binary = _which_binary(cfg.deep_filter_binary)
+    env_dir = Path(cfg.studio_sound_env).expanduser() if cfg.studio_sound_env else DEFAULT_ENV
+    binary = find_deep_filter(env_dir) or _which_binary(cfg.deep_filter_binary)
     if not binary:
         return False
     # deepFilter writes <stem>_DeepFilterNet3.wav into the output dir. Some macOS/Torch combinations
@@ -242,7 +558,7 @@ def _enhancer_status(cfg: AudioConfig) -> list[dict]:
         if key in {"resemble-enhance", "resemble_enhance", "resemble"}:
             status.append({"backend": name, "available": find_resemble_enhance(env_dir) is not None})
         elif key in {"deepfilternet", "deepfilter", "deep-filter"}:
-            status.append({"backend": name, "available": _which_binary(cfg.deep_filter_binary) is not None})
+            status.append({"backend": name, "available": (find_deep_filter(env_dir) or _which_binary(cfg.deep_filter_binary)) is not None})
         else:
             status.append({"backend": name, "available": _which_binary(name) is not None})
     return status
@@ -308,32 +624,16 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
                 receipts.log("studio_sound", **result)
             return result
 
-        # pass 1: measure loudnorm stats after the speech-EQ chain
-        import subprocess
-
-        eq = _speech_eq(cfg)
-        repair = _spectral_repair_chain(cfg)
-        polish_chain = ",".join([c for c in (repair, eq) if c])
-        ln = f"loudnorm=I={cfg.target_lufs}:TP={cfg.true_peak_db}:LRA={cfg.lra}"
-        p1 = subprocess.run(
-            [FFMPEG, "-hide_banner", "-i", str(src), "-af", f"{polish_chain},{ln}:print_format=json", "-f", "null", "-"],
-            capture_output=True, text=True, timeout=1800,
-        )
-        m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", p1.stderr, re.DOTALL)
-        meas = json.loads(m.group(0)) if m else {}
-
-        # pass 2: apply EQ + measured (linear) loudnorm -> clean wav
-        clean = work / "clean.wav"
-        ln2 = ln
-        if meas:
-            ln2 = (
-                f"loudnorm=I={cfg.target_lufs}:TP={cfg.true_peak_db}:LRA={cfg.lra}"
-                f":measured_I={meas['input_i']}:measured_TP={meas['input_tp']}"
-                f":measured_LRA={meas['input_lra']}:measured_thresh={meas['input_thresh']}"
-                f":offset={meas.get('target_offset', 0)}:linear=true"
-            )
-        run_ffmpeg(["-i", str(src), "-af", f"{polish_chain},{ln2}", "-ar", "48000", str(clean)], run_dir=run_dir, receipts=receipts)
-        after_clicks = _click_event_count(clean, cfg.click_threshold)
+        candidates = [
+            _render_profile_candidate(raw, src, STUDIO_SOUND_PROFILES[name], cfg, work, run_dir, receipts=receipts)
+            for name in _studio_sound_profile_names(cfg)
+        ]
+        selected = _select_best_candidate(candidates, before_clicks, cfg)
+        clean = Path(selected["path"])
+        after_clicks = int(selected.get("click_events_after") or 0)
+        click_gate_pass = bool(selected.get("click_gate_pass"))
+        echo_gate_pass = bool(selected.get("echo_gate_pass"))
+        quality_gate_pass = click_gate_pass and echo_gate_pass
 
         samples = {}
         if cfg.write_ab_samples:
@@ -362,30 +662,44 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             receipts.log(
                 "studio_sound",
                 applied=True,
-                quality_gate_pass=True,
+                quality_gate_pass=quality_gate_pass,
                 mode="local_studio_mic",
+                profile=selected["profile"],
                 lufs_before=before,
                 lufs_after=after,
                 enhancement_backend=backend,
                 backend_attempts=backend_attempts,
                 click_events_before=before_clicks,
                 click_events_after=after_clicks,
+                click_gate_pass=click_gate_pass,
+                echo_gate_pass=echo_gate_pass,
+                echo_artifact_score=selected.get("echo_artifact_score"),
                 mouth_click_cleanup=cfg.mouth_click_cleanup,
-                filter_chain=polish_chain,
+                filter_chain=selected.get("filter_chain"),
+                wet_dry_mix=selected.get("wet_dry_mix"),
+                studio_sound_candidates=candidates,
                 ab_samples=samples,
+                public_reference="Descript-style voice enhancement, denoise/echo reduction, room-tone smoothing at edits",
             )
         return {
             "applied": True,
-            "quality_gate_pass": True,
+            "quality_gate_pass": quality_gate_pass,
             "mode": "local_studio_mic",
+            "profile": selected["profile"],
             "enhancement_backend": backend,
             "backend_attempts": backend_attempts,
             "lufs_before": before,
             "lufs_after": after,
             "click_events_before": before_clicks,
             "click_events_after": after_clicks,
+            "click_gate_pass": click_gate_pass,
+            "echo_gate_pass": echo_gate_pass,
+            "echo_artifact_score": selected.get("echo_artifact_score"),
             "ab_samples": samples,
             "mouth_click_cleanup": cfg.mouth_click_cleanup,
+            "filter_chain": selected.get("filter_chain"),
+            "wet_dry_mix": selected.get("wet_dry_mix"),
+            "studio_sound_candidates": candidates,
         }
     except Exception as e:
         if receipts is not None:

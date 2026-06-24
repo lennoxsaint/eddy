@@ -23,7 +23,7 @@ def test_face_panel_fits_horizontally_and_is_centered():
     # centered: left margin equals right margin
     right_margin = L.W - (L.FACE_X + L.FACE_SIZE)
     assert L.FACE_X == right_margin
-    assert (L.FACE_X, L.FACE_Y, L.FACE_SIZE) == (75, 30, 930)
+    assert (L.FACE_X, L.FACE_Y, L.FACE_SIZE) == (0, 0, 1080)
 
 
 def test_screen_panel_fits_and_is_centered():
@@ -31,7 +31,7 @@ def test_screen_panel_fits_and_is_centered():
     assert L.SCREEN_X + L.SCREEN_W <= L.W
     right_margin = L.W - (L.SCREEN_X + L.SCREEN_W)
     assert L.SCREEN_X == right_margin
-    assert (L.SCREEN_X, L.SCREEN_Y, L.SCREEN_W, L.SCREEN_H) == (40, 1300, 1000, 562)
+    assert (L.SCREEN_X, L.SCREEN_Y, L.SCREEN_W, L.SCREEN_H) == (0, 1230, 1080, 608)
 
 
 def test_degraded_panel_fits_and_is_centered():
@@ -52,6 +52,7 @@ def test_caption_zone_sits_between_face_and_screen():
     assert L.CAPTION_Y >= L.FACE_Y + L.FACE_SIZE
     # ...and ends before the screen panel starts (no overlap)
     assert caption_bottom <= L.SCREEN_Y
+    assert L.CAPTION_H <= 160
 
 
 def test_all_vertical_zones_fit_within_canvas_height():

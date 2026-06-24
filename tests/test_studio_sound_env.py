@@ -5,9 +5,10 @@ from eddy import studio_sound_env as env
 
 def test_studio_sound_status_is_notify_only(monkeypatch, tmp_path):
     monkeypatch.setattr(env, "find_backend_python", lambda: "/usr/bin/python3.11")
-    monkeypatch.setattr(env, "find_deep_filter", lambda: None)
+    monkeypatch.setattr(env, "find_deep_filter", lambda _env_dir=env.DEFAULT_ENV: None)
     monkeypatch.setattr(env, "find_resemble_enhance", lambda _env_dir=env.DEFAULT_ENV: None)
     monkeypatch.setattr(env, "_module_available", lambda _name: False)
+    monkeypatch.setattr(env, "_module_available_in_env", lambda _env_dir, _name: False)
 
     res = env.status(tmp_path / "studio")
 
@@ -27,9 +28,10 @@ def test_find_resemble_enhance_prefers_local_env(tmp_path):
 
 def test_status_requires_deepfilter_not_git_lfs(monkeypatch, tmp_path):
     monkeypatch.setattr(env, "find_backend_python", lambda: "/usr/bin/python3.11")
-    monkeypatch.setattr(env, "find_deep_filter", lambda: "/tmp/deepFilter")
+    monkeypatch.setattr(env, "find_deep_filter", lambda _env_dir=env.DEFAULT_ENV: "/tmp/deepFilter")
     monkeypatch.setattr(env, "find_resemble_enhance", lambda _env_dir=env.DEFAULT_ENV: "/tmp/resemble-enhance")
     monkeypatch.setattr(env, "_module_available", lambda name: name in {"torch", "torchaudio", "soundfile"})
+    monkeypatch.setattr(env, "_module_available_in_env", lambda _env_dir, name: name in {"torch", "torchaudio", "soundfile"})
     monkeypatch.setattr(env.shutil, "which", lambda _name: None)
 
     res = env.status(tmp_path / "studio")
@@ -56,10 +58,12 @@ def test_install_studio_sound_installs_default_backend(monkeypatch):
 
     calls = []
     monkeypatch.setattr(env.shutil, "which", lambda name: "/usr/bin/cargo" if name == "cargo" else None)
+    monkeypatch.setattr(env, "find_backend_python", lambda: "/usr/bin/python3.11")
+    monkeypatch.setattr(env, "env_python", lambda _env_dir=env.DEFAULT_ENV: Path("/tmp/studio/bin/python"))
     monkeypatch.setattr(env.subprocess, "run", lambda cmd, **_kwargs: calls.append(cmd) or Proc())
     monkeypatch.setattr(env, "status", lambda env_dir=env.DEFAULT_ENV: {"quality_ready": True, "deep_filter": "/tmp/deepFilter"})
 
     res = env.install_studio_sound()
 
     assert res["ok"] is True
-    assert any("deepfilternet" in item for item in calls[0])
+    assert any("deepfilternet" in item for cmd in calls for item in cmd)

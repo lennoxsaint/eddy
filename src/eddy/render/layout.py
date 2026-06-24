@@ -10,17 +10,19 @@ W, H = 1080, 1920
 BG = "0x0b0b0b"
 
 # dual-source (camera + screen) stacked layout
-FACE_SIZE = 930
-FACE_X = 75
-FACE_Y = 30
-CAPTION_Y = 962
-CAPTION_H = 250
-SCREEN_W = 1000
-SCREEN_H = 562
-SCREEN_X = 40
-SCREEN_Y = 1300
-RADIUS = 34
-FACE_RADIUS = 34
+# Yassy style-lock: camera reaches the top/side edges, one-line karaoke strip sits between,
+# and the screen/proof panel reaches the side edges with only a tiny breathing gap.
+FACE_SIZE = 1080
+FACE_X = 0
+FACE_Y = 0
+CAPTION_Y = 1080
+CAPTION_H = 150
+SCREEN_W = 1080
+SCREEN_H = 608
+SCREEN_X = 0
+SCREEN_Y = 1230
+RADIUS = 30
+FACE_RADIUS = 30
 SCREEN_RADIUS = 28
 
 # degraded single-composite layout (primary path for composite recordings):
@@ -37,11 +39,11 @@ GLUED_WORD_GAP = 0.08
 MIN_BOUNDARY_HANDLE = 0.10
 
 # karaoke captions
-CAPTION_FONT_S = 55
-CAPTION_FONT_XS = 48
-CUE_MAX_WORDS = 6
+CAPTION_FONT_S = 58
+CAPTION_FONT_XS = 50
+CUE_MAX_WORDS = 5
 CUE_MAX_S = 2.0
-CUE_MAX_PX = 930
+CUE_MAX_PX = 1010
 HIGHLIGHT_BLUE = (74, 163, 255, 235)
 WORD_SPOKEN = (245, 250, 255, 255)
 WORD_FUTURE = (132, 145, 160, 125)

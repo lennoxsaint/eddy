@@ -16,6 +16,7 @@ import math
 from pathlib import Path
 
 from eddy.config import GatesConfig, RenderConfig
+from eddy.edit.numeric_safety import needs_numeric_boundary_guard
 from eddy.edit.schema import EditDecisions, Edl, EdlRange
 
 GAP_TIGHTEN_THRESHOLD_S = 0.68  # from approved shorts standard
@@ -177,7 +178,16 @@ def compile_edl(
 
     ranges: list[EdlRange] = []
     for s, e in keeps:
-        snapped = _snap_to_words(s, e, words, pad_before, pad_after, duration_s)
+        snapped = _snap_to_words(
+            s,
+            e,
+            words,
+            pad_before,
+            pad_after,
+            duration_s,
+            render_cfg.numeric_pad_before_ms / 1000,
+            render_cfg.numeric_pad_after_ms / 1000,
+        )
         if snapped is None:
             continue  # no words inside: silence debris between cuts
         ns, ne, sh, eh = snapped
@@ -220,7 +230,16 @@ def compile_edl(
     if "start_s" in co and "end_s" in co and float(co["end_s"]) > float(co["start_s"]):
         cs = max(0.0, float(co["start_s"]))
         ce = min(float(co["end_s"]), cs + 15.0, duration_s)
-        snapped = _snap_to_words(cs, ce, words, pad_before, pad_after, duration_s)
+        snapped = _snap_to_words(
+            cs,
+            ce,
+            words,
+            pad_before,
+            pad_after,
+            duration_s,
+            render_cfg.numeric_pad_before_ms / 1000,
+            render_cfg.numeric_pad_after_ms / 1000,
+        )
         if snapped is not None:
             ns, ne, sh, eh = snapped
             if ne - ns >= 1.0:
@@ -298,6 +317,8 @@ def _snap_to_words(
     pad_before: float,
     pad_after: float,
     duration_s: float,
+    numeric_pad_before: float = 0.0,
+    numeric_pad_after: float = 0.0,
 ) -> tuple[float, float, float, float] | None:
     """Snap [s,e] so it starts pad_before ahead of the first word fully inside and
     ends pad_after past the last word fully inside. Pads never reach a neighbor word.
@@ -310,6 +331,9 @@ def _snap_to_words(
     idx_last = words.index(last)
     prev_end = words[idx_first - 1]["end"] if idx_first > 0 else 0.0
     next_start = words[idx_last + 1]["start"] if idx_last + 1 < len(words) else duration_s
+    if needs_numeric_boundary_guard(words, idx_first, idx_last):
+        pad_before = max(pad_before, numeric_pad_before)
+        pad_after = max(pad_after, numeric_pad_after)
 
     start = max(first["start"] - pad_before, prev_end, 0.0)
     end = min(last["end"] + pad_after, next_start, duration_s)

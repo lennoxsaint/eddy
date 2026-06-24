@@ -112,7 +112,7 @@ def render_caption_png(path: Path, cue: list[dict], current_idx: int) -> None:
     img = Image.new("RGBA", (L.W, L.CAPTION_H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     x = math.floor((L.W - total) / 2)
-    y = 76 if font.size >= L.CAPTION_FONT_S else 82
+    y = max(18, math.floor((L.CAPTION_H - font.size) / 2) - 2)
     for idx, word in enumerate(words):
         w_px = widths[idx]
         if idx == current_idx:

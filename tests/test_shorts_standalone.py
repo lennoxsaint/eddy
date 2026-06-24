@@ -7,6 +7,7 @@ import pytest
 import eddy.edit.cutplan as cutplan_mod
 import eddy.loop.controller as ctrl
 import eddy.render.shorts as shorts_mod
+from eddy.edit.schema import ShortsCandidate
 from eddy.runs import SourceError
 
 
@@ -75,3 +76,33 @@ def test_render_shorts_rejects_declared_but_missing_screen_source(tmp_path, monk
 
     with pytest.raises(SourceError, match="screen source was declared but is missing"):
         shorts_mod.render_shorts(run_dir)
+
+
+def test_select_short_candidates_filters_weak_hooks_with_playbook():
+    records = [
+        {
+            "opening_3s_text": "Stop making this creator mistake",
+            "hook_pattern": "mistake warning",
+        }
+    ]
+    candidates = [
+        ShortsCandidate(start_s=10, end_s=40, hook="and then I went over here"),
+        ShortsCandidate(start_s=20, end_s=50, hook="Stop making this creator mistake"),
+    ]
+
+    selected = shorts_mod.select_short_candidates(candidates, count=5, playbook_records=records)
+
+    assert [c.hook for c in selected] == ["Stop making this creator mistake"]
+
+
+def test_sub_segments_keep_positive_boundary_handles():
+    words = [
+        {"start": 1.0, "end": 1.3, "word": "Stop"},
+        {"start": 1.4, "end": 1.7, "word": "this"},
+        {"start": 1.8, "end": 2.1, "word": "now."},
+    ]
+
+    start, end = shorts_mod.sub_segments(words)[0]
+
+    assert words[0]["start"] - start > 0
+    assert end - words[-1]["end"] > 0

@@ -131,6 +131,10 @@ class RenderConfig(BaseModel):
     final_crf: int = 18
     cut_pad_before_ms: int = 120
     cut_pad_after_ms: int = 160
+    # Numbers and metrics are high-cost mistakes: "104 clicks" must never become "100 clicks".
+    # These wider handles apply only when an edit boundary touches a number/metric phrase.
+    numeric_pad_before_ms: int = 220
+    numeric_pad_after_ms: int = 320
     boundary_fade_ms: int = 30
     long_camera_size: int = 260
     long_camera_radius: int = 100
@@ -141,30 +145,49 @@ class ShortsConfig(BaseModel):
     count: int = 5
     min_s: float = 20.0
     max_s: float = 59.0
+    require_hook_playbook: bool = True
+    hook_playbook_min_records: int = 1000
+    hook_playbook_path: str = "docs/references/short-form-hook-playbook.jsonl"
 
 
 class AudioConfig(BaseModel):
     """Local 'studio sound' — speech enhancement, denoise/dereverb, click repair, loudness."""
     studio_sound: bool = True
     require_heavy_backend: bool = True
+    # `auto` renders multiple candidates and chooses the least overprocessed voice that still
+    # reduces clicks. This prevents the classic failure mode: clicks are gone, but the voice
+    # sounds hollow/echoey because every cleanup filter was stacked at max intensity.
+    studio_sound_profile: str = "auto"
+    studio_sound_candidate_profiles: list[str] = Field(
+        default_factory=lambda: [
+            "warm_room_tame",
+            "warm_deep_tame",
+            "warm_click_tame",
+            "warm_model_10",
+            "natural_voice",
+            "click_rescue",
+        ]
+    )
     studio_sound_env: str = "~/.cache/eddy/studio-sound/resemble-enhance-py311"
     heavy_model_device: str = "auto"  # auto | cuda | mps | cpu
     deep_filter_binary: str = "deepFilter"  # DeepFilterNet CLI if present; else blocked/ffmpeg fallback
     # Ordered heavy-model backends. Eddy attempts these before ffmpeg-only polish when installed.
     heavy_model_preference: list[str] = Field(
-        default_factory=lambda: ["deepfilternet"]
+        default_factory=lambda: ["resemble-enhance", "deepfilternet"]
     )
     write_ab_samples: bool = True
-    click_threshold: float = 0.82
+    click_threshold: float = 0.68
     target_lufs: float = -14.0  # YouTube integrated loudness
     true_peak_db: float = -1.5
     lra: float = 11.0
     highpass_hz: int = 80
     presence_hz: int = 3500  # gentle speech-presence lift
-    presence_gain_db: float = 2.0
+    presence_gain_db: float = 2.5
     mouth_click_cleanup: bool = True
-    compressor_threshold_db: float = -18.0
-    compressor_ratio: float = 2.5
+    compressor_threshold_db: float = -20.0
+    compressor_ratio: float = 3.0
+    echo_artifact_max_score: float = 0.42
+    require_echo_artifact_gate: bool = True
 
 
 class ThumbnailsConfig(BaseModel):
