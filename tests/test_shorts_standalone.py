@@ -106,3 +106,62 @@ def test_sub_segments_keep_positive_boundary_handles():
 
     assert words[0]["start"] - start > 0
     assert end - words[-1]["end"] > 0
+
+
+def test_shorts_segment_join_uses_blinkless_reencode_not_concat_copy(tmp_path, monkeypatch):
+    """Visible camera cuts must not be assembled with concat-copy segment MP4s."""
+    seen: dict[str, list[str]] = {}
+
+    def fake_run_ffmpeg(args, run_dir=None, receipts=None):
+        seen["args"] = [str(a) for a in args]
+
+    monkeypatch.setattr(shorts_mod, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = shorts_mod._concat_segments_blinkless(
+        [tmp_path / "segment-000.mp4", tmp_path / "segment-001.mp4"],
+        tmp_path / "base.mp4",
+        tmp_path,
+    )
+
+    args = seen["args"]
+    graph = args[args.index("-filter_complex") + 1]
+    assert result["strategy"] == "filtergraph_reencode_concat"
+    assert result["reencoded"] is True
+    assert result["concat_demuxer_copy"] is False
+    assert "concat=n=2:v=1:a=1" in graph
+    assert "setpts=PTS-STARTPTS" in graph
+    assert "asetpts=PTS-STARTPTS" in graph
+    assert ["-c", "copy"] not in [args[i : i + 2] for i in range(len(args) - 1)]
+
+
+def test_join_boundary_times_reports_output_timeline_joins():
+    assert shorts_mod._join_boundary_times([(10.0, 12.5), (20.0, 21.0), (30.0, 33.25)]) == [2.5, 3.5]
+
+
+def test_dual_short_segments_use_filter_trim_not_fast_seek(tmp_path, monkeypatch):
+    """Fast input seeking can create black lead-in frames in the camera panel."""
+    seen: dict[str, list[str]] = {}
+
+    def fake_run_ffmpeg(args, run_dir=None, receipts=None):
+        seen["args"] = [str(a) for a in args]
+
+    monkeypatch.setattr(shorts_mod, "run_ffmpeg", fake_run_ffmpeg)
+
+    shorts_mod._render_segment_dual(
+        tmp_path / "camera.mp4",
+        tmp_path / "screen.mp4",
+        tmp_path / "out.mp4",
+        10.0,
+        12.5,
+        tmp_path / "face-mask.png",
+        tmp_path / "screen-mask.png",
+        1920,
+        1080,
+        tmp_path,
+    )
+
+    args = seen["args"]
+    graph = args[args.index("-filter_complex") + 1]
+    assert "-ss" not in args
+    assert "trim=start=10.000:end=12.500" in graph
+    assert "atrim=start=10.000:end=12.500" in graph

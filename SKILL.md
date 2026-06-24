@@ -91,7 +91,10 @@ before rendering/compositing motion graphics.
 - Final Shorts require the baked 1,000-record hook playbook at `docs/references/short-form-hook-playbook.jsonl`.
   Normal user runs must use it offline. If it is missing or below threshold, block Shorts with
   `short_form_hook_playbook_below_1000_valid_hooks`.
-- Long-form screen cuts should be blinkless: tight audio and camera cuts are good, but visual flashes around screen splices fail QA.
+- Long-form and Shorts cuts should be blinkless: tight audio and camera cuts are good, but visual
+  flashes around screen or talking-head splices fail QA. For Shorts, do not assemble visible camera
+  cuts with concat-copy segment MP4s; use frame-accurate source trim/atrim and a re-encoded
+  filtergraph timeline.
 - Motion overlays must use a project-local `frame.md` contract plus copied HyperFrames references and collision proof before compositing.
 
 ## Editing Standard

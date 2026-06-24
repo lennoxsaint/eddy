@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw
 from eddy.config import load_config
 from eddy.edit.schema import load_decisions
 from eddy.loop.receipts import Receipts
-from eddy.media.ffmpeg import concat_quote, run_ffmpeg, video_encoder_args
+from eddy.media.ffmpeg import run_ffmpeg, video_encoder_args
 from eddy.media.probe import stream_summary
 from eddy.render import layout as L
 from eddy.render.captions import burn_captions, caption_events
@@ -95,16 +95,17 @@ def _render_segment_single(
 ) -> Path:
     dur = end - start
     graph = (
-        f"[0:v]scale={L.PANEL_W}:{panel_h}:force_original_aspect_ratio=decrease,"
+        f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,"
+        f"scale={L.PANEL_W}:{panel_h}:force_original_aspect_ratio=decrease,"
         f"pad={L.PANEL_W}:{panel_h}:(ow-iw)/2:(oh-ih)/2:color={L.BG},setsar=1,format=rgba[praw];"
         "[praw][1:v]alphamerge[panel];"
         f"color=c={L.BG}:s={L.W}x{L.H}:d={dur:.3f},format=rgba[base];"
         f"[base][panel]overlay={L.PANEL_X}:{panel_y}:format=auto[v];"
-        "[0:a]asetpts=PTS-STARTPTS[a]"
+        f"[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS[a]"
     )
     run_ffmpeg(
         [
-            "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(source),
+            "-i", str(source),
             "-i", str(mask),
             "-filter_complex", graph,
             "-map", "[v]", "-map", "[a]",
@@ -124,19 +125,21 @@ def _render_segment_dual(
     crop = min(cam_w, cam_h)
     crop_x = max(0, (cam_w - crop) // 2)
     graph = (
-        f"[0:v]scale={L.SCREEN_W}:{L.SCREEN_H}:force_original_aspect_ratio=decrease,"
+        f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,"
+        f"scale={L.SCREEN_W}:{L.SCREEN_H}:force_original_aspect_ratio=decrease,"
         f"pad={L.SCREEN_W}:{L.SCREEN_H}:(ow-iw)/2:(oh-ih)/2:color={L.BG},setsar=1,format=rgba[srgba];"
-        f"[1:v]crop={crop}:{crop}:{crop_x}:0,scale={L.FACE_SIZE}:{L.FACE_SIZE},setsar=1,format=rgba[crgba];"
+        f"[1:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,"
+        f"crop={crop}:{crop}:{crop_x}:0,scale={L.FACE_SIZE}:{L.FACE_SIZE},setsar=1,format=rgba[crgba];"
         "[srgba][2:v]alphamerge[sround];[crgba][3:v]alphamerge[cround];"
         f"color=c={L.BG}:s={L.W}x{L.H}:d={dur:.3f},format=rgba[base];"
         f"[base][cround]overlay={L.FACE_X}:{L.FACE_Y}:format=auto[tmp];"
         f"[tmp][sround]overlay={L.SCREEN_X}:{L.SCREEN_Y}:format=auto[v];"
-        "[1:a]asetpts=PTS-STARTPTS[a]"
+        f"[1:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS[a]"
     )
     run_ffmpeg(
         [
-            "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(screen),
-            "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(camera),
+            "-i", str(screen),
+            "-i", str(camera),
             "-i", str(screen_mask), "-i", str(face_mask),
             "-filter_complex", graph,
             "-map", "[v]", "-map", "[a]",
@@ -146,6 +149,56 @@ def _render_segment_dual(
         run_dir=run_dir,
     )
     return out
+
+
+def _join_boundary_times(segs: list[tuple[float, float]]) -> list[float]:
+    """Return output-timeline join times for visual QA around segment boundaries."""
+    cursor = 0.0
+    boundaries: list[float] = []
+    for start, end in segs[:-1]:
+        cursor += end - start
+        boundaries.append(round(cursor, 3))
+    return boundaries
+
+
+def _concat_segments_blinkless(seg_paths: list[Path], out: Path, run_dir: Path) -> dict:
+    """Assemble rendered Shorts segments without decoder-reset flashes.
+
+    The old path used concat-demuxer + stream copy. That is fast, but on Shorts it can create a
+    visible blink in the talking-head panel at every retained-word cut because each tiny MP4 resets
+    the decoder/keyframe state. Re-encoding through one concat filter creates one continuous output
+    timeline, which is the same class of fix we use for blinkless long-form picture-in-picture.
+    """
+    if not seg_paths:
+        raise SourceError("no rendered short segments to join")
+
+    inputs: list[str] = []
+    filter_parts: list[str] = []
+    concat_labels: list[str] = []
+    for idx, path in enumerate(seg_paths):
+        inputs.extend(["-i", str(path)])
+        filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS,format=yuv420p[v{idx}]")
+        filter_parts.append(f"[{idx}:a]asetpts=PTS-STARTPTS[a{idx}]")
+        concat_labels.append(f"[v{idx}][a{idx}]")
+
+    graph = ";".join(filter_parts + ["".join(concat_labels) + f"concat=n={len(seg_paths)}:v=1:a=1[v][a]"])
+    run_ffmpeg(
+        [
+            *inputs,
+            "-filter_complex", graph,
+            "-map", "[v]", "-map", "[a]",
+            *video_encoder_args("7500k"), "-r", "25",
+            "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
+        ],
+        run_dir=run_dir,
+    )
+    return {
+        "strategy": "filtergraph_reencode_concat",
+        "reencoded": True,
+        "segment_count": len(seg_paths),
+        "join_count": max(0, len(seg_paths) - 1),
+        "concat_demuxer_copy": False,
+    }
 
 
 def select_short_candidates(candidates: list, count: int, playbook_records: list[dict] | None = None) -> list:
@@ -249,14 +302,8 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             seg_paths.append(seg_out)
 
         base = asset_dir / "base.mp4"
-        concat_file = asset_dir / "layout.ffconcat"
-        concat_file.write_text(
-            "ffconcat version 1.0\n" + "".join(f"file {concat_quote(p)}\n" for p in seg_paths)
-        )
-        run_ffmpeg(
-            ["-f", "concat", "-safe", "0", "-i", str(concat_file), "-c", "copy", "-movflags", "+faststart", str(base)],
-            run_dir=run_dir,
-        )
+        join_qa = _concat_segments_blinkless(seg_paths, base, run_dir)
+        join_qa["boundary_times_s"] = _join_boundary_times(segs)
 
         # output-timeline word times for captions
         out_words = []
@@ -298,6 +345,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             "duration_s": round(final_summary["duration_s"], 1),
             "resolution": f"{fv['width']}x{fv['height']}" if fv else "unknown",
             "segments": len(segs),
+            "join_qa": join_qa,
             "caption_events": len(events),
             "sentence_final": ends_on_complete_sentence(words),
             "silence_qa": silence_qa,
@@ -327,6 +375,8 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
                 and ends_on_complete_sentence(words)
                 and silence_qa["pass"]
                 and loudness_qa["pass"]
+                and join_qa["strategy"] == "filtergraph_reencode_concat"
+                and not join_qa["concat_demuxer_copy"]
             ),
             "status": "rendered",
         }

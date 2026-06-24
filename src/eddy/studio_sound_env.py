@@ -18,7 +18,7 @@ from pathlib import Path
 DEFAULT_ENV = Path("~/.cache/eddy/studio-sound/resemble-enhance-py311").expanduser()
 PYTHON_CANDIDATES = ("python3.11", "python3.10", "python3.9")
 PACKAGE_SPEC = "resemble-enhance"
-DEEPFILTER_PACKAGES = ("deepfilternet", "torch==2.2.2", "torchaudio==2.2.2", "soundfile")
+DEEPFILTER_PACKAGES = ("deepfilternet", "torch==2.2.2", "torchaudio==2.2.2", "soundfile", "numpy<2")
 
 
 def _bin_dir(env_dir: Path) -> Path:

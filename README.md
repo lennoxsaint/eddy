@@ -113,7 +113,9 @@ reads the result. There's also a one-shot Claude Code plugin (`/eddy-run`, `/edd
 
 - No blur/redaction unless you explicitly opt in. If you opt in for privacy redaction, Eddy requires
   a fully opaque solid cover/card; blur and semi-transparent covers are treated as failed redaction.
-- No visible PIP/camera blinking around cuts.
+- No visible PIP/camera blinking around cuts. Shorts camera cuts are covered by the same rule:
+  segment renders must use frame-accurate source trim/atrim, and visible talking-head segments must
+  be assembled through a re-encoded filtergraph timeline, not concat-copy segment stitching.
 - No A/V drift at sampled checkpoints.
 - Studio Sound must use a heavy speech-enhancement backend by default; ffmpeg-only EQ/loudness
   polish is a failed quality gate, not a shippable fallback. Heavy cleanup must also pass the

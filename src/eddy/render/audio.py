@@ -405,8 +405,11 @@ def _loudness_gate_pass(candidate: dict, cfg: AudioConfig, tolerance: float = 2.
     rendered video. A source-preserving pass at -23 LUFS is not a passing Studio Sound result for
     YouTube Shorts, even if click/echo gates pass.
     """
+    raw_lufs = candidate.get("lufs_after")
+    if raw_lufs is None:
+        return False
     try:
-        lufs = float(candidate.get("lufs_after"))
+        lufs = float(raw_lufs)
     except (TypeError, ValueError):
         return False
     return abs(lufs - float(cfg.target_lufs)) <= tolerance
