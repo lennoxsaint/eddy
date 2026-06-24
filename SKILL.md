@@ -81,7 +81,9 @@ before rendering/compositing motion graphics.
   loudness/EQ cleanup is a blocker unless the user explicitly lowers the audio policy. Do not
   promote an overprocessed/echoey voice just because clicks are reduced; use the candidate profile
   gate and keep the least processed passing profile. Prefer source-first warm-room profiles when
-  heavy enhancement adds room smear; processed audio must not be more echoey than the source.
+  heavy enhancement adds room smear; processed audio must not be more echoey than the source. The
+  `source_reference` candidate is allowed to win when processing does not produce a material,
+  listenable improvement.
 - Redaction/blur is opt-in only. Default is fail if blur/redaction appears.
 - Shorts are optional by quality, not by laziness: output fewer than five if fewer than five clips are genuinely strong.
 - Final Shorts require the baked 1,000-record hook playbook at `docs/references/short-form-hook-playbook.jsonl`.

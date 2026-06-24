@@ -160,6 +160,7 @@ class AudioConfig(BaseModel):
     studio_sound_profile: str = "auto"
     studio_sound_candidate_profiles: list[str] = Field(
         default_factory=lambda: [
+            "source_reference",
             "warm_room_tame",
             "warm_deep_tame",
             "warm_click_tame",

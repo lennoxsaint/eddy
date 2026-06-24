@@ -29,6 +29,7 @@ def test_auto_profile_names_resolve_to_known_candidates():
     cfg = AudioConfig(studio_sound_profile="auto")
 
     assert audio._studio_sound_profile_names(cfg) == [
+        "source_reference",
         "warm_room_tame",
         "warm_deep_tame",
         "warm_click_tame",
@@ -54,6 +55,13 @@ def test_warm_room_tame_profile_is_source_first_and_warm(monkeypatch):
     assert "equalizer=f=3200" in chain
     assert "afftdn" not in chain
     assert "deesser" not in chain
+
+
+def test_source_reference_profile_is_do_no_harm():
+    profile = audio.STUDIO_SOUND_PROFILES["source_reference"]
+
+    assert profile.source_mode == "reference"
+    assert audio._profile_polish_chain(profile, AudioConfig()) == "anull"
 
 
 def test_natural_profile_avoids_echo_prone_filters(monkeypatch):
@@ -174,6 +182,62 @@ def test_echo_non_regression_blocks_more_echoey_candidate():
     selected = audio._select_best_candidate(candidates, before_clicks=20, cfg=cfg)
 
     assert selected["profile"] == "warm_click_tame"
+
+
+def test_source_reference_wins_without_material_cleanup_improvement():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    candidates = [
+        {
+            "profile": "source_reference",
+            "click_events_after": 4,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.34,
+            "echo_artifact_score": 0.34,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+        {
+            "profile": "warm_deep_tame",
+            "click_events_after": 8,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.34,
+            "echo_artifact_score": 0.27,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+    ]
+
+    selected = audio._select_best_candidate(candidates, before_clicks=4, cfg=cfg)
+
+    assert selected["profile"] == "source_reference"
+
+
+def test_processed_candidate_can_beat_source_reference_with_big_click_reduction():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    candidates = [
+        {
+            "profile": "source_reference",
+            "click_events_after": 40,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.22,
+            "echo_artifact_score": 0.22,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+        {
+            "profile": "click_rescue",
+            "click_events_after": 9,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.22,
+            "echo_artifact_score": 0.225,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+    ]
+
+    selected = audio._select_best_candidate(candidates, before_clicks=40, cfg=cfg)
+
+    assert selected["profile"] == "click_rescue"
 
 
 def test_heavy_enhancer_receipts_fall_back_without_false_claim(monkeypatch, tmp_path):

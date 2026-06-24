@@ -46,6 +46,20 @@ class StudioSoundProfile:
 
 
 STUDIO_SOUND_PROFILES: dict[str, StudioSoundProfile] = {
+    "source_reference": StudioSoundProfile(
+        name="source_reference",
+        dry_mix=1.0,
+        click_passes=0,
+        deesser_passes=0,
+        denoise=False,
+        presence_gain_db=0.0,
+        compressor_ratio=1.0,
+        source_mode="reference",
+        warm_low_shelf_db=0.0,
+        box_cut_db=0.0,
+        room_cut_db=0.0,
+        notes="Do-not-harm candidate: preserve source/reference audio when cleanup makes it worse.",
+    ),
     "warm_room_tame": StudioSoundProfile(
         name="warm_room_tame",
         dry_mix=0.52,
@@ -187,6 +201,9 @@ def _studio_sound_profile_names(cfg: AudioConfig) -> list[str]:
         "strong": "broadcast_clean",
         "balanced": "click_rescue",
         "natural": "natural_voice",
+        "source": "source_reference",
+        "reference": "source_reference",
+        "preserve": "source_reference",
         "warm": "warm_room_tame",
         "deep": "warm_deep_tame",
         "room_tame": "warm_room_tame",
@@ -201,6 +218,8 @@ def _studio_sound_profile_names(cfg: AudioConfig) -> list[str]:
 
 
 def _profile_polish_chain(profile: StudioSoundProfile, cfg: AudioConfig) -> str:
+    if profile.source_mode == "reference":
+        return "anull"
     filters = _available_audio_filters()
     chain = [f"highpass=f={max(45, min(cfg.highpass_hz, 65)) if profile.name.startswith('warm_') else cfg.highpass_hz}"]
     if profile.denoise and "afftdn" in filters:
@@ -293,6 +312,24 @@ def _render_profile_candidate(
     receipts=None,
 ) -> dict:
     out = work / f"candidate-{profile.name}.wav"
+    if profile.source_mode == "reference":
+        shutil.copy2(raw, out)
+        clicks = _click_event_count(out, cfg.click_threshold)
+        echo_score = _echo_artifact_score(out)
+        return {
+            "profile": profile.name,
+            "path": str(out),
+            "filter_chain": "anull",
+            "wet_dry_mix": {"dry": 1.0, "wet": 0.0},
+            "source_mode": profile.source_mode,
+            "notes": profile.notes,
+            "lufs_after": measure_lufs(out),
+            "reference_echo_artifact_score": echo_score,
+            "click_events_after": clicks,
+            "click_gate_pass": True,
+            "echo_artifact_score": echo_score,
+            "echo_gate_pass": True,
+        }
     dry = max(0.0, min(0.65, profile.dry_mix))
     if profile.source_mode == "raw":
         dry = max(dry, 0.35)
@@ -342,6 +379,7 @@ def _candidate_score(candidate: dict, before_clicks: int, cfg: AudioConfig) -> f
     lufs = candidate.get("lufs_after")
     lufs_penalty = abs(float(lufs) - cfg.target_lufs) / 10.0 if lufs is not None else 0.5
     overprocess_penalty = {
+        "source_reference": -0.04,
         "warm_room_tame": 0.00,
         "warm_deep_tame": 0.01,
         "warm_click_tame": 0.02,
@@ -367,6 +405,23 @@ def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: Audi
         c["selection_score"] = _candidate_score(c, before_clicks, cfg)
         scored.append(c)
     passing = [c for c in scored if c.get("click_gate_pass") and c.get("echo_gate_pass")]
+    reference = next((c for c in passing if c.get("profile") == "source_reference"), None)
+    if reference:
+        ref_echo = float(reference.get("echo_artifact_score") or 0.0)
+        ref_clicks = float(reference.get("click_events_after") or before_clicks or 0)
+        materially_better = []
+        for c in passing:
+            if c.get("profile") == "source_reference":
+                continue
+            clicks = float(c.get("click_events_after") or 0)
+            echo = float(c.get("echo_artifact_score") or 0.0)
+            click_reduction = ref_clicks > 12 and clicks <= max(8.0, ref_clicks * 0.65) and echo <= ref_echo + 0.015
+            echo_reduction = echo <= ref_echo - 0.08 and clicks <= ref_clicks
+            if click_reduction or echo_reduction:
+                materially_better.append(c)
+        if not materially_better:
+            return reference
+        return min(materially_better, key=lambda c: c["selection_score"])
     pool = passing or scored
     return min(pool, key=lambda c: c["selection_score"])
 

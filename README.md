@@ -41,10 +41,11 @@ eddy run talk.mp4 --focus "only keep the part where I explain X"   # topical ext
 `--install-editable` provisions Eddy's Studio Sound stack by default. The required backend is
 DeepFilterNet in Eddy's managed compatible Studio Sound env, followed by candidate-based mouth-click repair, warm
 source-first EQ, compression/limiting, and loudness normalization. Eddy renders multiple Studio
-Sound profiles (`warm_room_tame`, `warm_deep_tame`, `warm_click_tame`, `warm_model_10`,
-`natural_voice`, and `click_rescue`) and chooses the least echoey/overprocessed candidate that still passes the click
-gate. Heavy model output is available, but it is not allowed to win if it makes the room sound worse
-than the source. If setup fails, Eddy does **not** downgrade silently: full runs fail the audio
+Sound profiles (`source_reference`, `warm_room_tame`, `warm_deep_tame`, `warm_click_tame`,
+`warm_model_10`, `natural_voice`, and `click_rescue`) and chooses the least harmful candidate.
+The source/reference audio is allowed to win. Heavy model output or EQ is not allowed to win just
+because one metric improves; it must materially reduce clicks or echo without making the voice feel
+worse than the source. If setup fails, Eddy does **not** downgrade silently: full runs fail the audio
 quality gate until `eddy studio-sound install` succeeds, or until you explicitly change the audio
 policy in config. Resemble Enhance can be installed as an optional experimental backend with
 `eddy studio-sound install --include-resemble`. If the agent's Python is too new for Torch/DeepFilterNet,
