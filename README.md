@@ -66,10 +66,12 @@ Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slu
 
 Stage-by-stage instead: `eddy transcribe`, `eddy plan`, `eddy render`, `eddy shorts`, `eddy package`.
 
-Shorts have an editorial gate backed by the baked offline corpus at
+Shorts have an editorial gate backed by the baked offline metadata-derived corpus at
 `docs/references/short-form-hook-playbook.jsonl`. Normal edits do not need Supadata or network
 access. Maintainers can refresh the corpus with `eddy hooks build-supadata` from supplied public
-URLs, or `eddy hooks build-youtube-metadata` when only public YouTube metadata is available.
+URLs. When only public YouTube metadata is available, `eddy hooks build-youtube-metadata` builds a
+weaker title-derived playbook and labels every record with that provenance instead of pretending it
+contains transcript-proven hooks.
 
 Premium motion graphics use `eddy motion init-contract <project-dir>` to write a project-local
 `frame.md`, `storyboard.md`, `storyboard.html`, and selected copied HyperFrames references. The
@@ -90,7 +92,7 @@ banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_A
 Eddy ships an MCP server so an agent can start edits, watch them, and read the launch kit as tools:
 
 ```bash
-pipx install 'eddy[mcp]'                 # adds the eddy-mcp server
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
 eddy mcp install --client claude-desktop # or claude-code | codex (idempotent, backs up, merges)
 ```
 

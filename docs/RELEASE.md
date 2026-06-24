@@ -12,8 +12,9 @@ A tag is cut ONLY when all of these are green on the release commit:
 2. `mypy src/eddy` — clean.
 3. `pytest -q --cov=eddy` — full suite green AND coverage ≥ the floor in `[tool.coverage.report]`
    (fails the build if it regresses).
-4. `EDDY_GOLDEN=1 pytest tests/test_golden.py` — the golden editorial suite green on the **pinned**
-   local model (qwen `:q4`). This is the GA reproducibility gate.
+4. `EDDY_GOLDEN=1 pytest tests/test_golden.py` — maintainer-local proof that the golden editorial
+   suite is green on the **pinned** local model (qwen `:q4`). GitHub CI does not run this slow
+   hardware/model gate; record the local command output in the release notes before sharing.
 5. The 3-OS CI matrix (`.github/workflows/ci-matrix.yml`) green when release packaging is in scope.
    Local source edits must at minimum pass the focused tests plus the public scrub check before push.
 
@@ -42,16 +43,22 @@ Distribution requires credentials Eddy cannot self-provision:
 - **Windows**: Authenticode signing of the installer/exe. Requires a code-signing certificate.
 - **PyPI / private index**: an account + API token to publish the wheel.
 
-Until those exist, the supported install paths are: `pipx install` from source, editable install
-from the public GitHub repo, or the offline wheelhouse (`docs/AIRGAP.md`).
+Until those exist, the supported install paths are GitHub-source installs, editable installs from a
+clone, or the offline wheelhouse (`docs/AIRGAP.md`). Do not document bare index installs for Eddy or
+its MCP extra until the package name is owned; the public PyPI name currently belongs to another
+project.
+
+Recommended public install command for a green tagged release:
+
+```bash
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
+```
 
 ## Update check
 
 There is no auto-updater. Users update with:
 
 ```bash
-pipx upgrade eddy            # from a configured index, once published
-# or, from source:
 git -C ~/eddy pull && pipx reinstall eddy
 ```
 

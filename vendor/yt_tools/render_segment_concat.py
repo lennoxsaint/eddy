@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import argparse
 import concurrent.futures
 import json
@@ -11,8 +12,8 @@ import subprocess
 from pathlib import Path
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
-FFMPEG = "/Users/yassybabes/.homebrew/bin/ffmpeg"
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
+FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 
 
 def run(cmd: list[str]) -> None:

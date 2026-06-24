@@ -481,3 +481,26 @@ markers), `test_run_plan.py` (video-only omits shorts+package; flags toggle opti
 render check: a default video-only run = **6 stages** (studio_sound on), not 10. Full suite **704
 passed** / 5 skipped, cov 75.29%, ruff + mypy clean. **Not verified:** no full TUI run rendered to
 completion this turn — the rendering claims rest on the unit coverage above + a static render check.
+
+## 2026-06-24 — v1.8.1: Codex Club public-readiness hardening
+
+**Trigger.** The public `main` branch was visible but not share-ready for Codex Club: both GitHub
+Actions workflows failed before tests, the MCP install docs pointed at the occupied public PyPI
+package name, and public-scrub skipped vendored reference scripts that still contained private
+machine paths.
+
+**Decisions.**
+- Keep Eddy at Python **3.11+** for creator accessibility, but constrain dev/CI NumPy below the stub
+  syntax break that requires a Python 3.12 mypy target.
+- Treat GitHub-source installs as the only public install path until Eddy owns an index package name:
+  `pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"`.
+- Keep the golden local-model suite as a maintainer-local release proof, not something GitHub CI
+  silently implies.
+- Sanitize `vendor/yt_tools/` public copies despite the usual vendor-read-only guard because the
+  approved readiness plan explicitly required removing private absolute paths before sharing.
+- Label the baked Shorts hook corpus as metadata-derived when it comes from public YouTube metadata,
+  not transcript-proven Supadata hooks.
+
+**Expected proof before sharing.** `ruff check src tests`, `mypy src/eddy`, full `pytest --cov`,
+`scripts/public_scrub_check.py`, a clean GitHub-source install smoke, both GitHub Actions workflows
+green, and a fresh `v1.8.1` tag only after those gates pass.

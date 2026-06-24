@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import argparse
 import ast
 import json
@@ -16,8 +17,8 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
-FFMPEG = "/Users/yassybabes/.homebrew/bin/ffmpeg"
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
+FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 FFPROBE = FFMPEG.replace("ffmpeg", "ffprobe")
 CAMERA = ROOT / "source/raw/camera.mp4"
 SCREEN = ROOT / "source/raw/screen.mp4"

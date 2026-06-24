@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import os
 import json
 from pathlib import Path
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
 KEEP_PATH = ROOT / "source/edit/keep_segments.long.json"
 DECISIONS_PATH = ROOT / "source/edit/edit-decisions.json"
 TRANSCRIPT_PATH = ROOT / "source/edit/transcript.faster-whisper.json"

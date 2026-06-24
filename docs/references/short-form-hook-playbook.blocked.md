@@ -14,7 +14,7 @@ Normal editing should then use the baked local JSONL file offline. Supadata is n
 runtime after the playbook is built.
 
 If Supadata is unavailable, maintainers can build a weaker but still provenance-labeled public
-metadata corpus:
+metadata-derived corpus:
 
 ```bash
 eddy hooks build-youtube-metadata \
@@ -22,4 +22,5 @@ eddy hooks build-youtube-metadata \
 ```
 
 That fallback stores public titles and metadata only. It does not download videos or commit
-transcript dumps, and every record marks `title_as_opening_surrogate=true` in provenance.
+transcript dumps, and every record marks `title_as_opening_surrogate=true` in provenance. Treat it
+as a metadata-derived taste aid, not a transcript-proven viral-hooks dataset.

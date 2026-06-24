@@ -35,3 +35,16 @@ def test_install_script_provisions_studio_sound_by_default():
     assert "--skip-studio-sound" in text
     assert "studio-sound" in text
     assert "install_studio_sound=not args.skip_studio_sound" in text
+
+
+def test_public_install_docs_use_github_source_not_occupied_pypi_name():
+    docs = [
+        ROOT / "README.md",
+        ROOT / "docs" / "MCP.md",
+        ROOT / "integrations" / "claude-code" / "README.md",
+    ]
+    for doc in docs:
+        text = doc.read_text()
+        assert "pipx install 'eddy[mcp]'" not in text
+        assert "pip install 'eddy[mcp]'" not in text
+        assert "git+https://github.com/lennoxsaint/eddy.git@v1.8.1" in text

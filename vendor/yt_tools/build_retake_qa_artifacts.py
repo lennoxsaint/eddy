@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import subprocess
@@ -10,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
-FFMPEG = "/Users/yassybabes/.homebrew/bin/ffmpeg"
-FFPROBE = "/Users/yassybabes/.homebrew/bin/ffprobe"
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
+FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
+FFPROBE = os.environ.get("FFPROBE", "ffprobe")
 
 
 def load_json(path: Path) -> Any:

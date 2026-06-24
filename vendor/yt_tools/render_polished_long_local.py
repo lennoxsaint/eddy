@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import argparse
@@ -11,9 +12,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
-FFMPEG = "/Users/yassybabes/.homebrew/bin/ffmpeg"
-FFPROBE = "/Users/yassybabes/.homebrew/bin/ffprobe"
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
+FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
+FFPROBE = os.environ.get("FFPROBE", "ffprobe")
 SCREEN = ROOT / "source/work/screen_long_cut_synced.mp4"
 CAMERA = ROOT / "source/work/camera_long_cut.mp4"
 OUT_DIR = ROOT / "source/exports"

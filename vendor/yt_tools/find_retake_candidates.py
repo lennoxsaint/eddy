@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import re
@@ -11,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
 STOPWORDS = {
     "a",
     "and",

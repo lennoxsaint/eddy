@@ -7,7 +7,7 @@ and read the launch kit — as a tool, with no copy-paste.
 Install the server (it's an optional extra so the base install stays slim):
 
 ```bash
-pipx install 'eddy[mcp]'      # or: pip install 'eddy[mcp]'
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.8.1"
 ```
 
 That puts `eddy-mcp` on your PATH. It speaks MCP over **stdio** — clients launch it; you never run it
@@ -102,7 +102,7 @@ building an offline wheelhouse (`scripts/build_wheelhouse.sh`), include the extr
 staged:
 
 ```bash
-pip download 'eddy[mcp]' --only-binary=:all: -d wheelhouse
+python -m pip download ".[mcp]" --only-binary=:all: -d wheelhouse
 ```
 
 See [`AIRGAP.md`](AIRGAP.md) for the full offline story.

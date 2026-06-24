@@ -11,5 +11,6 @@
   "provenance_sources": [
     "yt-dlp-youtube-metadata"
   ],
+  "corpus_strength": "metadata-derived title surrogate corpus; not transcript-proven",
   "invalid_sample": []
 }

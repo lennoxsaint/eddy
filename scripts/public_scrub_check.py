@@ -18,8 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 SECRET_PATTERNS = {
     "openai_key": re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    "anthropic_key": re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
     "github_token": re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
     "descript_token": re.compile(r"\bdx_(?:bearer|secret)_[A-Za-z0-9-]{20,}\b"),
+    "threadify_mcp_token": re.compile(r"\btf_mcp_[A-Za-z0-9_-]{8,}\b"),
     "private_key": re.compile(r"BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY"),
 }
 
@@ -52,7 +54,7 @@ def scan_file(path: Path) -> list[dict[str, str | int]]:
             if pat.search(line):
                 findings.append({"severity": "blocker", "type": name, "file": rel, "line": line_no})
         for name, pat in LOCAL_PATH_PATTERNS.items():
-            if pat.search(line) and rel not in ALLOWLIST_LOCAL_PATH_FILES and not rel.startswith("vendor/"):
+            if pat.search(line) and rel not in ALLOWLIST_LOCAL_PATH_FILES:
                 findings.append({"severity": "blocker", "type": name, "file": rel, "line": line_no})
     return findings
 

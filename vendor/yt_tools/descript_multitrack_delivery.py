@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
 EDIT_DIR = ROOT / "source/edit"
 EXPORT_DIR = ROOT / "source/exports"
 CAMERA = ROOT / "source/work/camera_long_cut.mp4"

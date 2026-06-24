@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 from pathlib import Path
 
 
-ROOT = Path("/Users/yassybabes/YouTube")
-FFMPEG = "/Users/yassybabes/.homebrew/bin/ffmpeg"
+ROOT = Path(os.environ.get("EDDY_YT_TOOLS_ROOT", "~/YouTube")).expanduser()
+FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 CAMERA = ROOT / "source/raw/camera.mp4"
 SCREEN = ROOT / "source/raw/screen.mp4"
 OUT_DIR = ROOT / "source/exports/shorts"
