@@ -1,3 +1,4 @@
+import ast
 import os
 import subprocess
 import sys
@@ -16,10 +17,12 @@ def test_install_script_dry_run_lists_agent_skill_targets():
         text=True,
         check=True,
     )
-    assert str(ROOT) in proc.stdout
-    assert ".codex/skills/eddy" in proc.stdout
-    assert ".claude/skills/eddy" in proc.stdout
-    assert ".agents/skills/eddy" in proc.stdout
+    payload = ast.literal_eval(proc.stdout)
+    assert Path(payload["repo"]) == ROOT
+    targets = [Path(item).as_posix() for item in payload["targets"]]
+    assert any(target.endswith("/.codex/skills/eddy") for target in targets)
+    assert any(target.endswith("/.claude/skills/eddy") for target in targets)
+    assert any(target.endswith("/.agents/skills/eddy") for target in targets)
 
 
 def test_root_skill_exists_for_agent_install():

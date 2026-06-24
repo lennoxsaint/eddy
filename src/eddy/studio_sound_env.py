@@ -25,6 +25,14 @@ def _bin_dir(env_dir: Path) -> Path:
     return env_dir / ("Scripts" if os.name == "nt" else "bin")
 
 
+def _env_script_candidates(env_dir: Path, binary_name: str) -> list[Path]:
+    names = [binary_name]
+    if os.name == "nt":
+        names.append(f"{binary_name}.exe")
+    dirs = ["Scripts", "bin"] if os.name == "nt" else ["bin", "Scripts"]
+    return [env_dir / directory / name for directory in dirs for name in names]
+
+
 def env_python(env_dir: Path = DEFAULT_ENV) -> Path:
     return _bin_dir(env_dir) / ("python.exe" if os.name == "nt" else "python")
 
@@ -34,16 +42,16 @@ def resemble_binary(env_dir: Path = DEFAULT_ENV) -> Path:
 
 
 def find_resemble_enhance(env_dir: Path = DEFAULT_ENV) -> str | None:
-    local = resemble_binary(env_dir)
-    if local.exists():
-        return str(local)
+    for local in _env_script_candidates(env_dir, "resemble-enhance"):
+        if local.exists():
+            return str(local)
     return shutil.which("resemble-enhance")
 
 
 def find_deep_filter(env_dir: Path = DEFAULT_ENV) -> str | None:
-    local_env = _bin_dir(env_dir) / ("deepFilter.exe" if os.name == "nt" else "deepFilter")
-    if local_env.exists():
-        return str(local_env)
+    for local_env in _env_script_candidates(env_dir, "deepFilter"):
+        if local_env.exists():
+            return str(local_env)
     # Do not resolve sys.executable here: venv Python is often a symlink to the Homebrew/system
     # interpreter, and resolving it would look beside the base Python instead of beside Eddy's venv.
     local = _bin_dir(Path(sys.executable).parent.parent) / ("deepFilter.exe" if os.name == "nt" else "deepFilter")
