@@ -140,7 +140,7 @@ banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_A
 Eddy ships an MCP server so an agent can start edits, watch them, and read the launch kit as tools:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.0"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.1"
 eddy mcp install --client claude-desktop # or claude-code | codex (idempotent, backs up, merges)
 ```
 

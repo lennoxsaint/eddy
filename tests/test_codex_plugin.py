@@ -12,7 +12,7 @@ def test_plugin_manifest_and_mcp_are_valid():
     mcp = json.loads((ROOT / "plugins" / "eddy" / ".mcp.json").read_text())
 
     assert plugin["name"] == "eddy"
-    assert plugin["version"] == "1.10.0"
+    assert plugin["version"] == "1.10.1"
     assert plugin["skills"] == "./skills/"
     assert plugin["mcpServers"] == "./.mcp.json"
     assert plugin["interface"]["displayName"] == "Eddy"
@@ -32,7 +32,7 @@ def test_repo_marketplace_uses_git_subdir_stable_tag():
         "source": "git-subdir",
         "url": "https://github.com/lennoxsaint/eddy.git",
         "path": "./plugins/eddy",
-        "ref": "v1.10.0",
+        "ref": "v1.10.1",
     }
     assert entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
     assert entry["category"] == "Creativity"
@@ -47,7 +47,7 @@ def test_install_codex_plugin_dry_run_preview(tmp_path):
             "--dry-run",
             "--json",
             "--ref",
-            "v1.10.0",
+            "v1.10.1",
             "--marketplace-path",
             str(marketplace_path),
         ],
@@ -58,7 +58,7 @@ def test_install_codex_plugin_dry_run_preview(tmp_path):
     payload = json.loads(proc.stdout)
     assert payload["status"] == "preview"
     assert payload["dry_run"] is True
-    assert payload["ref"] == "v1.10.0"
+    assert payload["ref"] == "v1.10.1"
     assert payload["entry"]["source"]["source"] == "git-subdir"
     assert payload["entry"]["source"]["path"] == "./plugins/eddy"
     assert payload["next_prompt"] == "@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)"

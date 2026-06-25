@@ -51,7 +51,7 @@ It points at the plugin subdirectory:
     "source": "git-subdir",
     "url": "https://github.com/lennoxsaint/eddy.git",
     "path": "./plugins/eddy",
-    "ref": "v1.10.0"
+    "ref": "v1.10.1"
   },
   "policy": {
     "installation": "AVAILABLE",

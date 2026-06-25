@@ -571,11 +571,15 @@ hands Codex the GitHub repo link and says "install this."
 honest promise is a local finished edit/Shorts kit or exact blockers with repair steps, not guaranteed
 perfection on every unsupported machine.
 
-## 2026-06-25 — v1.10.0: Codex plugin-first install and stable-tag updates
+## 2026-06-25 — v1.10.1: Codex plugin-first install and stable-tag updates
 
 **Trigger.** Lennox wants any Codex user to paste one public prompt:
 `@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)`, then mention
 `@Eddy` with raw footage attached and get the full Eddy workflow without learning the repo internals.
+
+**Release note.** `v1.10.0` shipped the plugin path but exposed a Windows matrix receipt-format
+failure in `ui.json_output(default=str)` because `Path` objects stringified with backslashes.
+`v1.10.1` is the first shareable plugin tag for this slice.
 
 **Decisions.**
 - Ship a real Codex plugin at `plugins/eddy/` with `.codex-plugin/plugin.json`, an Eddy skill,

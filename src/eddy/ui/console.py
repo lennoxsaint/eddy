@@ -21,6 +21,7 @@ import os
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from pathlib import PurePath
 
 from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
@@ -71,6 +72,24 @@ def harden_stdout() -> None:
             pass  # detached/non-text stream — leave it; callers degrade, they don't crash here
 
 
+def _json_default(default: Callable[[object], object] | None = None) -> Callable[[object], object]:
+    """Stable JSON fallback for receipts.
+
+    Python stringifies ``Path`` objects with platform-native separators, so a Windows CI run turns
+    ``Path("/tmp/x")`` into ``\\tmp\\x``. Eddy receipts are meant to be diffable and portable, so
+    path-like objects are normalized to POSIX form before any caller-provided fallback runs.
+    """
+
+    def convert(value: object) -> object:
+        if isinstance(value, PurePath):
+            return value.as_posix()
+        if default is not None:
+            return default(value)
+        raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
+
+    return convert
+
+
 def json_output(data: object, *, indent: int = 1, default: Callable[[object], object] | None = None) -> None:
     """Emit a machine-readable JSON ledger to stdout (qa gate, shorts ledger, studio-sound status).
 
@@ -81,7 +100,7 @@ def json_output(data: object, *, indent: int = 1, default: Callable[[object], ob
     import json
 
     harden_stdout()
-    print(json.dumps(data, indent=indent, default=default))
+    print(json.dumps(data, indent=indent, default=_json_default(default)))
 
 
 def console() -> Console:
