@@ -59,6 +59,12 @@ def test_install_codex_is_toml(tmp_path):
     assert doc["mcp_servers"]["eddy"]["command"] == "eddy-mcp"
 
 
+def test_render_codex_preview_escapes_windows_paths():
+    command = r"C:\Users\runneradmin\.eddy\bin\eddy-mcp"
+    doc = tomlkit.parse(inst.render_preview("codex", command))
+    assert doc["mcp_servers"]["eddy"]["command"] == command
+
+
 def test_unknown_client_raises():
     import pytest
 

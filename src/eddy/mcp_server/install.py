@@ -65,7 +65,7 @@ def render_preview(client: str, command: str) -> str:
     previews must never print the whole target file.
     """
     if client == "codex":
-        return f'[mcp_servers.eddy]\ncommand = "{command}"\nargs = []\n'
+        return f"[mcp_servers.eddy]\ncommand = {json.dumps(command)}\nargs = []\n"
     return render_json(None, command)
 
 

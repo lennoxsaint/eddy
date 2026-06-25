@@ -132,7 +132,7 @@ def _install_mcp(*, command: str, dry_run: bool) -> dict[str, Any]:
             "command": command,
             "dry_run": True,
             "action": "preview",
-            "content_preview": f'[mcp_servers.eddy]\ncommand = "{command}"\nargs = []\n',
+            "content_preview": f"[mcp_servers.eddy]\ncommand = {json.dumps(command)}\nargs = []\n",
             "warning": "tomlkit is not installed yet; this is a simple preview before pip install.",
         }
 

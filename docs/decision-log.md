@@ -546,3 +546,27 @@ job starters, and the baked Shorts hook corpus lived in repo docs rather than pa
 **Proof target before broad sharing.** Focused tests cover template selection, routing, exact-blocker
 support bundles, MCP `eddy_edit_start`, and root skill install wording; full repo gates still need to
 run before this is considered share-ready.
+
+## 2026-06-25 — v1.9.1: Codex Club beta install path is skill plus MCP
+
+**Trigger.** Lennox asked whether Eddy should be a Codex plugin, MCP server, or skill when a member
+hands Codex the GitHub repo link and says "install this."
+
+**Decision.**
+- For the 100-user Codex Club beta, use **skill plus MCP**:
+  - the skill teaches Codex Eddy's editorial contract, quality gates, no-publish boundary, source
+    immutability, and exact-blocker behavior;
+  - the MCP server gives Codex durable tools to start the long-running edit, poll status, and read
+    artifacts.
+- A Codex plugin remains the cleaner future marketplace-style package because plugins can bundle
+  skills and MCP configuration together, but it is not the GitHub-link path today.
+- The installable repo owns a one-command bootstrap, `python3 scripts/install_codex.py`, which
+  installs the Codex skill, installs Eddy from the checkout with `[mcp]`, provisions Studio Sound,
+  writes a stable MCP wrapper, and registers Codex config without dumping unrelated user config.
+- `v1.9.0` is superseded by `v1.9.1` because the first tag exposed Unix-shaped test assumptions on
+  Windows CI. Tags remain immutable; the replacement tag carries the cross-platform fix.
+
+**Public wording.** "Give Codex this repo link and say: Install
+`https://github.com/lennoxsaint/eddy` into Codex, then use Eddy to edit my attached footage." The
+honest promise is a local finished edit/Shorts kit or exact blockers with repair steps, not guaranteed
+perfection on every unsupported machine.

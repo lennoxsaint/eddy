@@ -69,7 +69,7 @@ and records exact blockers. It is acceptable for a supervised 100-user beta only
 Recommended public install command for a green tagged release:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@<tag>"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.9.1"
 ```
 
 Before a fresh tag exists, smoke-test the live branch with:

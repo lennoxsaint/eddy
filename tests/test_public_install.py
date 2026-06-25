@@ -1,5 +1,6 @@
 import ast
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -51,4 +52,4 @@ def test_public_install_docs_use_github_source_not_occupied_pypi_name():
         text = doc.read_text()
         assert "pipx install 'eddy[mcp]'" not in text
         assert "pip install 'eddy[mcp]'" not in text
-        assert "git+https://github.com/lennoxsaint/eddy.git@main" in text
+        assert re.search(r"git\+https://github\.com/lennoxsaint/eddy\.git@(main|v\d+\.\d+\.\d+)", text)

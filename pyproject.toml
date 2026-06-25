@@ -1,6 +1,6 @@
 [project]
 name = "eddy"
-version = "1.9.0"
+version = "1.9.1"
 description = "Local-first agentic video editor: drop raw footage in, get a complete YouTube launch kit out."
 readme = "README.md"
 requires-python = ">=3.11"
