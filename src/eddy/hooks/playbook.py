@@ -199,7 +199,7 @@ def build_from_supadata(urls: list[str], out_path: Path, api_key: str | None = N
     Eddy validates and bakes the resulting playbook for offline use.
     """
 
-    import requests
+    import httpx
 
     key = api_key or os.getenv("SUPADATA_API_KEY")
     if not key:
@@ -207,17 +207,17 @@ def build_from_supadata(urls: list[str], out_path: Path, api_key: str | None = N
     base = "https://api.supadata.ai/v1"
     headers = {"x-api-key": key}
     records: list[dict] = []
-    for url in urls:
-        params = {"url": url}
-        metadata = requests.get(f"{base}/metadata", params=params, headers=headers, timeout=60).json()
-        transcript = requests.get(f"{base}/transcript", params=params, headers=headers, timeout=120).json()
-        extract = requests.post(
-            f"{base}/extract",
-            json={"url": url, "schema": {"hook_pattern": "string", "payoff_type": "string", "proven_score": "number"}},
-            headers=headers,
-            timeout=120,
-        ).json()
-        records.append(build_record_from_supadata(url, metadata, transcript, extract))
+    with httpx.Client(headers=headers) as client:
+        for url in urls:
+            params = {"url": url}
+            metadata = client.get(f"{base}/metadata", params=params, timeout=60).json()
+            transcript = client.get(f"{base}/transcript", params=params, timeout=120).json()
+            extract = client.post(
+                f"{base}/extract",
+                json={"url": url, "schema": {"hook_pattern": "string", "payoff_type": "string", "proven_score": "number"}},
+                timeout=120,
+            ).json()
+            records.append(build_record_from_supadata(url, metadata, transcript, extract))
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in dedupe_records(records)) + "\n")

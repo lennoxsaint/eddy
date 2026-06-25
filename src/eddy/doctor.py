@@ -12,6 +12,7 @@ import subprocess
 import httpx
 import typer
 
+from eddy import log
 from eddy.config import load_config, update_config_sections
 
 PING_SCHEMA = {
@@ -76,16 +77,16 @@ def _detect_hardware() -> dict:
             ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms))  # type: ignore[attr-defined]
             info["ram_gb"] = round(ms.ullTotalPhys / 2**30)
             info["chip"] = platform.processor() or "unknown"
-    except Exception:
-        pass  # leave chip='unknown', ram_gb=None — honest "couldn't measure"
+    except Exception as exc:
+        log.debug("hardware probe failed: %s", exc)  # leave chip='unknown', ram_gb=None — honest "couldn't measure"
     # psutil, if installed, is a clean cross-platform RAM source when the above couldn't measure
     if info["ram_gb"] is None:
         try:
             import psutil
 
             info["ram_gb"] = round(psutil.virtual_memory().total / 2**30)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("psutil RAM probe failed: %s", exc)
     return info
 
 

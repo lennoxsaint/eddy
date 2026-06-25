@@ -386,5 +386,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         receipts.log("short_rendered", **{k: entry[k] for k in ("slug", "duration_s", "qa_pass", "layout")})
 
     (out_root / "shorts-ledger.json").write_text(json.dumps(ledger, indent=1))
-    print(json.dumps([{k: e.get(k) for k in ("slug", "status", "duration_s", "qa_pass")} for e in ledger], indent=1))
+    from eddy.ui import console as ui
+
+    ui.json_output([{k: e.get(k) for k in ("slug", "status", "duration_s", "qa_pass")} for e in ledger])
     return ledger

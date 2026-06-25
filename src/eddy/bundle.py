@@ -14,6 +14,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from eddy import log
 from eddy.privacy import redact_paths
 
 # keys whose string values carry transcript-derived content (PII)
@@ -42,8 +43,8 @@ def _redact_json_to(src: Path, dst: Path) -> None:
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(json.dumps(_redact(json.loads(src.read_text())), indent=1))
-    except Exception:
-        pass  # skip unreadable/non-JSON
+    except Exception as exc:
+        log.debug("bundle: skipping unreadable/non-JSON %s: %s", src, exc)  # skip unreadable/non-JSON
 
 
 def build_bundle(run_dir: Path, out_path: Path | None = None) -> Path:
@@ -69,7 +70,8 @@ def build_bundle(run_dir: Path, out_path: Path | None = None) -> Path:
             for ln in (run_dir / "receipts.jsonl").read_text().splitlines():
                 try:
                     lines.append(json.dumps(_redact(json.loads(ln))))
-                except Exception:
+                except Exception as exc:
+                    log.debug("bundle: skipping unparseable receipts line: %s", exc)
                     continue
             (stage / "receipts.jsonl").write_text("\n".join(lines) + "\n")
         for j in run_dir.glob("iterations/**/*.json"):

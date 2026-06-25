@@ -32,7 +32,10 @@ def _recent_runs() -> list[dict] | None:
         cfg = load_config()
         runs = list_runs(Path(str(cfg.paths.runs_dir)).expanduser())
         return list(reversed(runs))[:2] if runs else None
-    except Exception:
+    except Exception as exc:
+        from eddy import log
+
+        log.debug("wake-screen run list unavailable: %s", exc)
         return None
 
 

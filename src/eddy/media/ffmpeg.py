@@ -10,6 +10,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from eddy import log
+
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
 
@@ -38,7 +40,8 @@ def _encoder_works(enc: str) -> bool:
             capture_output=True, text=True, timeout=30,
         )
         return proc.returncode == 0
-    except Exception:
+    except Exception as exc:
+        log.debug("encoder probe %s failed: %s", enc, exc)
         return False
 
 
@@ -48,7 +51,8 @@ def _available_encoders() -> frozenset[str]:
         out = subprocess.run([FFMPEG, "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=15)
         # encoder names are lowercase [a-z0-9_]; this also excludes the legend lines (" V..... = Video")
         listed = set(re.findall(r"^\s*[A-Z.]{6}\s+([a-z0-9_]+)", out.stdout, re.MULTILINE))
-    except Exception:
+    except Exception as exc:
+        log.debug("encoder enumeration failed: %s", exc)
         return frozenset()
     # Drop any HW encoder that lists but can't actually run, so resolve_video_encoder never picks a
     # dead one (e.g. nvenc without CUDA). libx264 (software) is always trusted as the universal floor.

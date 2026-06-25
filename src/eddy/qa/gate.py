@@ -46,5 +46,7 @@ def qa_run(run_dir: Path, iteration: int | None = None) -> dict:
         (iter_dir / "judge.json").write_text(json.dumps(judge, indent=1))
         result["judge"] = {"weighted": judge["weighted"], "defects": len(judge["defects"])}
 
-    print(json.dumps({k: (v if k != "deterministic" else v["pass"]) for k, v in result.items()}, indent=1, default=str))
+    from eddy.ui import console as ui
+
+    ui.json_output({k: (v if k != "deterministic" else v["pass"]) for k, v in result.items()}, default=str)
     return result

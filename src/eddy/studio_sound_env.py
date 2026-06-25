@@ -240,10 +240,10 @@ def install_resemble_enhance(env_dir: Path = DEFAULT_ENV, force: bool = False) -
 
 
 def main() -> None:
-    import json
+    from eddy.ui import console as ui
 
     result = install_studio_sound()
-    print(json.dumps(result, indent=2))
+    ui.json_output(result, indent=2)
     if not result.get("ok"):
         raise SystemExit(1)
 

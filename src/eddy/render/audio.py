@@ -24,6 +24,7 @@ import sys
 import time
 from pathlib import Path
 
+from eddy import log
 from eddy.config import AudioConfig
 from eddy.media.ffmpeg import FFMPEG, run_ffmpeg
 from eddy.studio_sound_env import DEFAULT_ENV, find_deep_filter, find_resemble_enhance
@@ -163,9 +164,12 @@ STUDIO_SOUND_PROFILES: dict[str, StudioSoundProfile] = {
 
 @functools.lru_cache(maxsize=1)
 def _available_audio_filters() -> frozenset[str]:
+    # Read-only capability probe: no output path to guard and it must degrade to an empty set rather
+    # than raise, so it deliberately bypasses run_ffmpeg (which adds -y and raises on failure).
     try:
         proc = subprocess.run([FFMPEG, "-hide_banner", "-filters"], capture_output=True, text=True, timeout=15)
-    except Exception:
+    except Exception as exc:
+        log.debug("audio filter enumeration failed: %s", exc)
         return frozenset()
     names = set(re.findall(r"^\s*[A-Z. ]{2,8}\s+([a-z0-9_]+)\s+", proc.stdout, re.MULTILINE))
     return frozenset(names)
@@ -526,6 +530,8 @@ def measure_lufs(media: Path) -> float | None:
     """Integrated loudness (LUFS) via loudnorm measurement pass. None on failure."""
     import subprocess
 
+    # Measurement-only pass: output is `-f null -` (discarded), and a failed measure must return None
+    # rather than abort the edit — so it bypasses run_ffmpeg's output-path gate and raise-on-failure.
     proc = subprocess.run(
         [FFMPEG, "-hide_banner", "-i", str(media),
          "-af", "loudnorm=print_format=json", "-f", "null", "-"],

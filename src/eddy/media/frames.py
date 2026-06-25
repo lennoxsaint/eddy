@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageFilter
 
+from eddy import log
 from eddy.edit.schema import Edl
 from eddy.media.ffmpeg import run_ffmpeg
 
@@ -39,8 +40,8 @@ def boundary_contact_sheet(video: Path, edl: Edl, out: Path, run_dir: Path, offs
             try:
                 extract_frame(video, at, f, run_dir)
                 tiles.append(f)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("contact-sheet frame at %.2fs failed: %s", at, exc)
 
     if not tiles:
         raise RuntimeError("no frames extracted for contact sheet")
@@ -75,7 +76,8 @@ def face_reference_frames(
         try:
             extract_frame(video, t, probe_path, run_dir, height=270)
             scored.append((laplacian_sharpness(Image.open(probe_path)), t))
-        except Exception:
+        except Exception as exc:
+            log.debug("face-reference frame at %.2fs failed: %s", t, exc)
             continue
         finally:
             probe_path.unlink(missing_ok=True)

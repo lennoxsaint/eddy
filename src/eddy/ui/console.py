@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 
 from rich.console import Console, Group, RenderableType
@@ -69,6 +69,19 @@ def harden_stdout() -> None:
             reconfigure(encoding="utf-8", errors="replace")
         except (ValueError, OSError):
             pass  # detached/non-text stream — leave it; callers degrade, they don't crash here
+
+
+def json_output(data: object, *, indent: int = 1, default: Callable[[object], object] | None = None) -> None:
+    """Emit a machine-readable JSON ledger to stdout (qa gate, shorts ledger, studio-sound status).
+
+    Deliberately bypasses the Rich console — no theme, no soft-wrap, no styling — so the line stays
+    byte-for-byte parseable by whatever consumes it. But it first runs ``harden_stdout()`` so the
+    UTF-8 safety net is in place even when the command never touched a human-facing surface, matching
+    the guarantee ``console()`` gives the styled paths."""
+    import json
+
+    harden_stdout()
+    print(json.dumps(data, indent=indent, default=default))
 
 
 def console() -> Console:
