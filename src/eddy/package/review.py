@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from eddy import log
+
 
 def _ts(seconds: float) -> str:
     seconds = max(0.0, seconds)
@@ -55,14 +57,16 @@ def build_review(run_dir: Path, iter_dir: Path, duration_s: float, ceiling_s: fl
     if judge_path.exists():
         try:
             defects = json.loads(judge_path.read_text()).get("defects", []) or []
-        except Exception:
+        except Exception as exc:
+            log.debug("review: unreadable judge.json, reporting no defects: %s", exc)
             defects = []
     qa_pass = False
     qa_path = run_dir / "final" / "qa-final.json"
     if qa_path.exists():
         try:
             qa_pass = bool(json.loads(qa_path.read_text()).get("pass"))
-        except Exception:
+        except Exception as exc:
+            log.debug("review: unreadable qa-final.json, treating as not-passed: %s", exc)
             qa_pass = False
     shipped_with_failures = (not qa_pass) or bool(defects)
     md = format_review(defects, duration_s, ceiling_s, qa_pass, shipped_with_failures)

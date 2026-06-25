@@ -95,7 +95,8 @@ def _ollama_models(base_url: str) -> list[str]:
         r = httpx.get(f"{base_url}/models", timeout=5)
         r.raise_for_status()
         return [m["id"] for m in r.json().get("data", [])]
-    except Exception:
+    except Exception as exc:
+        log.debug("model list probe failed for %s: %s", base_url, exc)
         return []
 
 
@@ -173,7 +174,8 @@ def preflight() -> list[dict]:
     if ffmpeg:
         try:
             major = _ffmpeg_major(subprocess.run([ffmpeg, "-version"], capture_output=True, text=True, timeout=10).stdout)
-        except Exception:
+        except Exception as exc:
+            log.debug("ffmpeg version probe failed: %s", exc)
             major = None
     ff_ok = bool(ffmpeg) and (major is None or major >= 8)
     checks.append({"check": "ffmpeg", "ok": ff_ok,
@@ -206,7 +208,8 @@ def preflight() -> list[dict]:
 
         free_gb = round(shutil.disk_usage(Path.home()).free / 2**30)
         checks.append({"check": "free disk", "ok": free_gb >= 5, "detail": f"{free_gb}GB free"})
-    except Exception:
+    except Exception as exc:
+        log.debug("free-disk probe failed: %s", exc)
         checks.append({"check": "free disk", "ok": True, "detail": "unknown"})
 
     return checks

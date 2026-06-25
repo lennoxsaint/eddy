@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from eddy import log
 from eddy.runs import VIDEO_EXTS
 
 
@@ -62,7 +63,8 @@ def list_runs(runs_dir: Path) -> list[dict]:
         if sp.exists():
             try:
                 state = json.loads(sp.read_text())
-            except Exception:
+            except Exception as exc:
+                log.debug("batch: unreadable state.json for %s: %s", d.name, exc)
                 state = {}
         out.append({"slug": d.name, "phase": state.get("phase", "?"), "best_iter": state.get("best_iter")})
     return out

@@ -7,6 +7,7 @@ import json
 import time
 from pathlib import Path
 
+from eddy import log
 from eddy.config import EddyConfig, load_config
 from eddy.edit.compiler import CompileError, compile_edl
 from eddy.edit.protect import enforce_protection_budget, setup_protections
@@ -214,7 +215,8 @@ def initial_decisions(
     # back to the last spoken word if the manifest/source can't be probed.
     try:
         content_s = probe_duration(Path(manifest(run_dir)["sources"]["camera"]))
-    except Exception:
+    except Exception as exc:
+        log.debug("camera source probe failed; falling back to last-word duration: %s", exc)
         content_s = phrases[-1]["end"] if phrases else target_s
     remove_s = max(0.0, content_s - ceiling_s)
     pct = (remove_s / content_s * 100) if content_s > 0 else 0.0

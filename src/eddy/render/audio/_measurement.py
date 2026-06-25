@@ -7,6 +7,7 @@ import re
 import wave
 from pathlib import Path
 
+from eddy import log
 from eddy.media.ffmpeg import FFMPEG
 
 
@@ -27,7 +28,8 @@ def _echo_artifact_score(wav_path: Path, max_seconds: float = 600.0) -> float:
             rate = wf.getframerate() or 48000
             frames_to_read = min(wf.getnframes(), int(max_seconds * rate))
             raw = wf.readframes(frames_to_read)
-    except Exception:
+    except Exception as exc:
+        log.debug("echo-score WAV read failed for %s (treating as worst-case): %s", wav_path, exc)
         return 1.0
     if width not in (2, 4) or not raw:
         return 1.0
@@ -85,7 +87,8 @@ def _click_event_count(wav_path: Path, threshold: float = 0.82, max_seconds: flo
             rate = wf.getframerate() or 48000
             frames_to_read = min(wf.getnframes(), int(max_seconds * rate))
             raw = wf.readframes(frames_to_read)
-    except Exception:
+    except Exception as exc:
+        log.debug("click-count WAV read failed for %s (treating as zero clicks): %s", wav_path, exc)
         return 0
     if width not in (2, 4) or not raw:
         return 0
