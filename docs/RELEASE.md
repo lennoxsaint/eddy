@@ -1,6 +1,6 @@
 # Release process
 
-Eddy is versioned from git tags (`v0.4`...`v1.0`); the runtime version resolves via
+Eddy is versioned from git tags (`v0.4`...`v1.10.0`); the runtime version resolves via
 `importlib.metadata` / git-describe and is stamped into run receipts. The canonical repo is
 `https://github.com/lennoxsaint/eddy`.
 
@@ -50,26 +50,37 @@ project.
 
 ## Codex Club / 100-user beta share path
 
-For a controlled Codex Club beta, share the GitHub repo link plus the one-sentence Codex install
-prompt from [`CODEX_INSTALL.md`](CODEX_INSTALL.md). That path clones the repo and runs:
+For a controlled Codex Club beta, share the GitHub repo link plus the one-sentence Codex plugin
+install prompt from [`CODEX_INSTALL.md`](CODEX_INSTALL.md):
+
+```text
+@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)
+```
+
+That path installs `plugins/eddy/`, which bundles the skill and MCP config. The plugin wrapper then
+installs the latest stable Eddy tag into `~/.eddy/source` + `~/.eddy/venv`, smoke-checks it, and only
+then swaps it active. Stable tag updates are automatic; `main` is never auto-installed.
+
+The local skill+MCP fallback still exists:
 
 ```bash
 python3 scripts/install_codex.py
 ```
 
-This is different from a polished package release. It installs the skill plus MCP from the checkout
-and records exact blockers. It is acceptable for a supervised 100-user beta only after:
+It installs the skill plus MCP from the checkout and records exact blockers. The plugin path is
+acceptable for a supervised 100-user beta only after:
 
 1. `CI` and `CI matrix (3-OS)` are green on `main`;
 2. `python3 scripts/public_scrub_check.py` passes;
-3. `python3 scripts/install_codex.py --dry-run --json` passes;
-4. `eddy bootstrap --json` reports ready or exact repair steps on the maintainer machine;
-5. public copy says “finished edit or exact blockers,” not “guaranteed perfect on every machine.”
+3. `python3 scripts/install_codex_plugin.py --dry-run --json --ref vX.Y.Z` passes;
+4. `python3 scripts/install_codex.py --dry-run --json` passes for fallback installs;
+5. `eddy bootstrap --json` reports ready or exact repair steps on the maintainer machine;
+6. public copy says “finished edit or exact blockers,” not “guaranteed perfect on every machine.”
 
-Recommended public install command for a green tagged release:
+Recommended non-plugin source install command for a green tagged release:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.9.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.0"
 ```
 
 Before a fresh tag exists, smoke-test the live branch with:
@@ -78,16 +89,22 @@ Before a fresh tag exists, smoke-test the live branch with:
 pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@main"
 ```
 
-## Update check
+## Updates
 
-There is no auto-updater. Users update with:
+Codex plugin users auto-update to the latest stable tag through the plugin bootstrapper. The active
+state and failed-update blockers are written to:
+
+```text
+~/.eddy/plugin-state.json
+```
+
+Manual skill/MCP users update with:
 
 ```bash
 git -C ~/eddy pull && pipx reinstall eddy
 ```
 
-`eddy --version` shows the installed version; compare against the latest tag. An in-app update
-check is deferred until a package channel exists.
+`eddy update-check` remains notify-only for manual checkouts.
 
 ## Rollback
 

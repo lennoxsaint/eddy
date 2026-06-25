@@ -3,8 +3,7 @@ karaoke captions -> QA ledger.
 
 Layouts (approved standard):
 - dual-source: face panel (camera) top, captions, screen panel bottom
-- degraded single-composite (primary for composite recordings): one large rounded
-  panel above the caption zone on navy
+- single talking-head source: crop/fill to 9:16 and place karaoke captions in the bottom third
 """
 
 from __future__ import annotations
@@ -151,6 +150,26 @@ def _render_segment_dual(
     return out
 
 
+def _render_segment_talking_head(source: Path, out: Path, start: float, end: float, run_dir: Path) -> Path:
+    graph = (
+        f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,"
+        f"scale={L.W}:{L.H}:force_original_aspect_ratio=increase,"
+        f"crop={L.W}:{L.H},setsar=1,format=yuv420p[v];"
+        f"[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS[a]"
+    )
+    run_ffmpeg(
+        [
+            "-i", str(source),
+            "-filter_complex", graph,
+            "-map", "[v]", "-map", "[a]",
+            *video_encoder_args("7500k"), "-r", "25",
+            "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
+        ],
+        run_dir=run_dir,
+    )
+    return out
+
+
 def _join_boundary_times(segs: list[tuple[float, float]]) -> list[float]:
     """Return output-timeline join times for visual QA around segment boundaries."""
     cursor = 0.0
@@ -282,14 +301,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             _rounded_mask(face_mask, (L.FACE_SIZE, L.FACE_SIZE), L.FACE_RADIUS)
             _rounded_mask(screen_mask, (L.SCREEN_W, L.SCREEN_H), L.SCREEN_RADIUS)
         else:
-            vw = src_video["width"] or 1920
-            vh = src_video["height"] or 1080
-            panel_h = min(int(L.PANEL_W * vh / vw), 1100)
-            stack_h = panel_h + 56 + L.CAPTION_H
-            panel_y = max(60, (L.H - stack_h) // 2)
-            caption_y = panel_y + panel_h + 56
-            mask = asset_dir / "panel-mask.png"
-            _rounded_mask(mask, (L.PANEL_W, panel_h), L.RADIUS)
+            caption_y = L.TALKING_HEAD_CAPTION_Y
 
         seg_paths = []
         for i, (s, e) in enumerate(segs):
@@ -299,7 +311,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
                 assert screen is not None  # dual layout implies a screen source
                 _render_segment_dual(camera, screen, seg_out, s, e, face_mask, screen_mask, src_video["width"], src_video["height"], run_dir)
             else:
-                _render_segment_single(camera, seg_out, s, e, mask, panel_h, panel_y, run_dir)
+                _render_segment_talking_head(camera, seg_out, s, e, run_dir)
             seg_paths.append(seg_out)
 
         base = asset_dir / "base.mp4"
@@ -352,20 +364,42 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             "silence_qa": silence_qa,
             "loudness_qa": loudness_qa,
             "boundary_qa": {"min_pre_handle_s": round(min_pre, 3), "min_post_handle_s": round(min_post, 3)},
-            "layout": "dual" if dual else "single_composite",
+            "layout": "dual" if dual else "talking_head_916",
             "source_provenance": {
                 "camera": str(camera),
                 "screen": str(screen) if screen else None,
                 "requires_dual": screen_declared,
                 "used_dual": dual,
             },
-            "style_lock": {
-                "canvas": f"{L.W}x{L.H}",
-                "camera_square": {"x": L.FACE_X, "y": L.FACE_Y, "size": L.FACE_SIZE, "radius": L.FACE_RADIUS},
-                "caption_y": L.CAPTION_Y,
-                "screen_panel": {"x": L.SCREEN_X, "y": L.SCREEN_Y, "w": L.SCREEN_W, "h": L.SCREEN_H, "radius": L.SCREEN_RADIUS},
-                "highlight": L.HIGHLIGHT_BLUE,
-            },
+            "style_lock": (
+                {
+                    "canvas": f"{L.W}x{L.H}",
+                    "camera_square": {"x": L.FACE_X, "y": L.FACE_Y, "size": L.FACE_SIZE, "radius": L.FACE_RADIUS},
+                    "caption_y": L.CAPTION_Y,
+                    "screen_panel": {
+                        "x": L.SCREEN_X,
+                        "y": L.SCREEN_Y,
+                        "w": L.SCREEN_W,
+                        "h": L.SCREEN_H,
+                        "radius": L.SCREEN_RADIUS,
+                    },
+                    "highlight": L.HIGHLIGHT_BLUE,
+                }
+                if dual
+                else {
+                    "canvas": f"{L.W}x{L.H}",
+                    "talking_head_frame": {
+                        "x": 0,
+                        "y": 0,
+                        "w": L.W,
+                        "h": L.H,
+                        "crop": L.TALKING_HEAD_CROP,
+                    },
+                    "caption_y": L.TALKING_HEAD_CAPTION_Y,
+                    "caption_zone": "bottom_third",
+                    "highlight": L.HIGHLIGHT_BLUE,
+                }
+            ),
             "qa_pass": (
                 fv is not None
                 and fv["width"] == L.W

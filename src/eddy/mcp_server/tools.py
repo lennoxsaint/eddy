@@ -173,11 +173,11 @@ def eddy_edit_start(
     focus: str | None = None,
     template: str | None = None,
     language: str | None = None,
-    format: str | None = None,
+    format: str | None = "youtube",
     repair: bool = False,
     dry_run: bool = False,
 ) -> dict:
-    """Start Eddy's one-sentence edit flow as a job: finished edit, or exact blockers + support bundle."""
+    """Start Eddy's one-sentence edit flow as a job: finished YouTube edit, or exact blockers."""
     job = jobs().start_edit(
         source,
         slug=slug,

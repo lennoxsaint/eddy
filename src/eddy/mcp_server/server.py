@@ -17,8 +17,10 @@ if TYPE_CHECKING:
 
 _INSTRUCTIONS = (
     "Drive Eddy, a local-first agentic video editor. For the simple user promise — raw footage in, "
-    "finished edit or exact blockers out — start with eddy_edit_start. For lower-level control, use "
-    "eddy_run_start (it "
+    "finished edit or exact blockers out — start with eddy_edit_start. If the user only attached "
+    "video footage and gave no other instruction, pass the resolved attachment path as source and "
+    "use the default youtube format. If attachments cannot be resolved to paths, report "
+    "attached_source_unresolved. For lower-level control, use eddy_run_start (it "
     "returns a job_id immediately); poll eddy_job_status(job_id) until state is 'completed', then "
     "read results with eddy_artifacts(run). Reads (eddy_runs, eddy_run_inspect, eddy_doctor, "
     "eddy_profiles, eddy_qa, eddy_pick, eddy_artifacts) return quickly (eddy_doctor may briefly probe "

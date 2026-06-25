@@ -1,0 +1,22 @@
+{
+  "name": "lennoxsaint-plugins",
+  "interface": {
+    "displayName": "Lennox Saint Plugins"
+  },
+  "plugins": [
+    {
+      "name": "eddy",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/lennoxsaint/eddy.git",
+        "path": "./plugins/eddy",
+        "ref": "v1.10.0"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Creativity"
+    }
+  ]
+}

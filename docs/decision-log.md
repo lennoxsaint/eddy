@@ -570,3 +570,29 @@ hands Codex the GitHub repo link and says "install this."
 `https://github.com/lennoxsaint/eddy` into Codex, then use Eddy to edit my attached footage." The
 honest promise is a local finished edit/Shorts kit or exact blockers with repair steps, not guaranteed
 perfection on every unsupported machine.
+
+## 2026-06-25 — v1.10.0: Codex plugin-first install and stable-tag updates
+
+**Trigger.** Lennox wants any Codex user to paste one public prompt:
+`@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)`, then mention
+`@Eddy` with raw footage attached and get the full Eddy workflow without learning the repo internals.
+
+**Decisions.**
+- Ship a real Codex plugin at `plugins/eddy/` with `.codex-plugin/plugin.json`, an Eddy skill,
+  `.mcp.json`, starter prompts, and a plugin MCP launcher.
+- Add a repo marketplace entry at `.agents/plugins/marketplace.json` using a Git-backed subdirectory
+  source pinned to the stable release tag.
+- Add `scripts/install_codex_plugin.py` so maintainers/users can preview or write a personal
+  marketplace entry without hand-editing JSON.
+- Make plugin updates automatic only for stable `vX.Y.Z` tags. The plugin bootstraps
+  `~/.eddy/source` and `~/.eddy/venv`, smoke-checks the candidate, then swaps active versions.
+  Failed updates keep the previous working tag and write `~/.eddy/plugin-state.json`.
+- Keep `scripts/install_codex.py` as the skill+MCP fallback for older clients and local development.
+- For attachment-only use, the skill routes to `eddy_edit_start(..., format="youtube")`; unresolved
+  attachments fail with `attached_source_unresolved`.
+- When only one video source exists, Shorts default to `talking_head_916`: crop/fill to 1080x1920
+  with karaoke captions in the bottom third. Separate camera/screen sources keep the Yassy stacked
+  layout.
+
+**Public wording.** The public install prompt is the plugin prompt above. Commits to `main` do not
+auto-update users; only stable tags do.

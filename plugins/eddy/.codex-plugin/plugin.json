@@ -1,0 +1,32 @@
+{
+  "name": "eddy",
+  "version": "1.10.0",
+  "description": "Local-first YouTube editor: raw footage in, QA-gated long edit and Shorts out.",
+  "author": {
+    "name": "Lennox Saint",
+    "url": "https://github.com/lennoxsaint"
+  },
+  "homepage": "https://github.com/lennoxsaint/eddy",
+  "repository": "https://github.com/lennoxsaint/eddy",
+  "license": "MIT",
+  "keywords": ["video", "youtube", "editing", "shorts", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Eddy",
+    "shortDescription": "Edit raw footage into YouTube videos and Shorts.",
+    "longDescription": "Eddy is a local-first agentic video editor. Attach raw footage, mention Eddy, and it creates a QA-gated long-form YouTube edit plus Shorts when the footage has strong standalone moments.",
+    "developerName": "Lennox Saint",
+    "category": "Creativity",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "websiteURL": "https://github.com/lennoxsaint/eddy",
+    "privacyPolicyURL": "https://github.com/lennoxsaint/eddy/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/lennoxsaint/eddy/blob/main/EULA.md",
+    "defaultPrompt": [
+      "Edit this footage for YouTube.",
+      "Make a long edit and Shorts.",
+      "Turn this talking-head clip into Shorts."
+    ],
+    "brandColor": "#00F58A"
+  }
+}

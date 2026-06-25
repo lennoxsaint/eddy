@@ -41,6 +41,12 @@ def test_degraded_panel_fits_and_is_centered():
     assert L.PANEL_X == right_margin
 
 
+def test_single_talking_head_captions_are_bottom_third():
+    assert L.TALKING_HEAD_CROP == "fill"
+    assert L.TALKING_HEAD_CAPTION_Y >= int(L.H * 2 / 3)
+    assert L.TALKING_HEAD_CAPTION_Y + L.CAPTION_H <= L.H
+
+
 def test_face_above_caption_zone():
     # the face square ends at or before the caption zone begins
     assert L.FACE_Y + L.FACE_SIZE <= L.CAPTION_Y
@@ -59,6 +65,7 @@ def test_all_vertical_zones_fit_within_canvas_height():
     assert L.FACE_Y >= 0
     assert L.FACE_Y + L.FACE_SIZE <= L.H
     assert L.CAPTION_Y + L.CAPTION_H <= L.H
+    assert L.TALKING_HEAD_CAPTION_Y + L.CAPTION_H <= L.H
     assert L.SCREEN_Y + L.SCREEN_H <= L.H
 
 

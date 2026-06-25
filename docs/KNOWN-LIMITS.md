@@ -41,7 +41,10 @@ defects; if one blocks you, that's a feature request.
   maintainer's machine. The 3-OS CI matrix is the release proof path.
 - **No signed/notarized installers yet.** Requires Apple Developer ID + Windows Authenticode certs
   and an explicit package-release run. Install via `pipx` from source or the offline wheelhouse meanwhile.
-- **No auto-update.** Update manually (`pipx upgrade` / `git pull` + `pipx reinstall`).
+- **Plugin auto-update is stable-tag only.** Codex plugin installs check GitHub tags on install/first
+  use and atomically update `~/.eddy/source` + `~/.eddy/venv` only after smoke checks pass. Commits
+  to `main` do not reach users until a stable tag is cut. Manual skill/MCP installs remain
+  user-controlled and can use `eddy update-check` for notify-only status.
 
 ## Coverage
 - The unit-coverage floor reflects pure logic; the render/whisper/ffmpeg paths are covered by the

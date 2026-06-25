@@ -165,3 +165,28 @@ def test_dual_short_segments_use_filter_trim_not_fast_seek(tmp_path, monkeypatch
     assert "-ss" not in args
     assert "trim=start=10.000:end=12.500" in graph
     assert "atrim=start=10.000:end=12.500" in graph
+
+
+def test_single_source_short_uses_talking_head_916_fill(tmp_path, monkeypatch):
+    seen: dict[str, list[str]] = {}
+
+    def fake_run_ffmpeg(args, run_dir=None, receipts=None):
+        seen["args"] = [str(a) for a in args]
+
+    monkeypatch.setattr(shorts_mod, "run_ffmpeg", fake_run_ffmpeg)
+
+    shorts_mod._render_segment_talking_head(
+        tmp_path / "camera.mp4",
+        tmp_path / "out.mp4",
+        4.0,
+        7.0,
+        tmp_path,
+    )
+
+    args = seen["args"]
+    graph = args[args.index("-filter_complex") + 1]
+    assert "-ss" not in args
+    assert "trim=start=4.000:end=7.000" in graph
+    assert "atrim=start=4.000:end=7.000" in graph
+    assert "scale=1080:1920:force_original_aspect_ratio=increase" in graph
+    assert "crop=1080:1920" in graph

@@ -118,6 +118,8 @@ def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path
     assert "edit" in captured["argv"]
     assert "--dry-run" in captured["argv"]
     assert "--focus" in captured["argv"]
+    assert "--format" in captured["argv"]
+    assert "youtube" in captured["argv"]
 
 
 def test_eddy_doctor_returns_detect_and_preflight():

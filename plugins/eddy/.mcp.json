@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "eddy": {
+      "title": "Eddy",
+      "description": "Start, poll, and inspect local Eddy video-editing jobs.",
+      "cwd": ".",
+      "command": "python3",
+      "args": ["./scripts/eddy_plugin_mcp.py"],
+      "tool_timeout_sec": 900
+    }
+  }
+}

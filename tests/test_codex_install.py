@@ -55,9 +55,10 @@ def test_codex_installer_can_preview_without_python_install():
     assert not [step for step in payload["steps"] if "pip" in " ".join(step.get("command", []))]
 
 
-def test_codex_install_docs_are_skill_plus_mcp_not_marketplace_plugin():
+def test_codex_install_docs_are_plugin_first_with_skill_mcp_fallback():
     docs = (ROOT / "docs" / "CODEX_INSTALL.md").read_text()
-    assert "skill plus MCP" in docs
-    assert "not the Codex Club path today" in docs
+    assert "@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)" in docs
+    assert "plugins/eddy" in docs
+    assert "latest stable tag" in docs
     assert "python3 scripts/install_codex.py" in docs
-    assert "One sentence" in docs
+    assert "skill plus MCP fallback" in docs

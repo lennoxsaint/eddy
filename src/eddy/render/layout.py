@@ -25,8 +25,14 @@ RADIUS = 30
 FACE_RADIUS = 30
 SCREEN_RADIUS = 28
 
-# degraded single-composite layout (primary path for composite recordings):
-# one large rounded panel above the caption zone, navy elsewhere.
+# single-source talking-head layout:
+# when no separate screen source exists, fill a 9:16 Shorts canvas with the talking head and
+# place one-line karaoke captions in the lower third. This is intentionally not the old
+# single-composite panel layout, which made talking-head-only Shorts look like a shrunk long edit.
+TALKING_HEAD_CAPTION_Y = 1320
+TALKING_HEAD_CROP = "fill"
+
+# legacy single-composite panel constants retained only for old ledgers/tests that reference them.
 PANEL_W = 1040
 PANEL_X = (W - PANEL_W) // 2
 

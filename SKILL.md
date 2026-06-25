@@ -13,13 +13,22 @@ Default editorial brain order is Codex/Claude/API first for quality, with local 
 
 ## First-Time Setup
 
-If this repo is not installed yet and the active agent is Codex, run the one-command Codex bootstrap:
+If this repo is being installed in Codex, prefer the plugin path:
+
+```text
+@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)
+```
+
+The plugin bundles this skill plus Eddy's MCP config, then bootstraps the latest stable tagged Eddy
+engine into `~/.eddy/source` and `~/.eddy/venv`. Updates track stable tags, not `main`.
+
+If the active Codex client cannot install plugins yet, run the fallback bootstrap:
 
 ```bash
 python3 scripts/install_codex.py
 ```
 
-This installs Eddy as a **skill plus MCP**: the skill gives Codex the editing rules, and the MCP
+This installs Eddy as a **skill plus MCP fallback**: the skill gives Codex the editing rules, and the MCP
 server gives Codex tools to start/poll/read edit jobs. It also installs Eddy with the MCP extra and
 provisions the local Studio Sound backend unless explicitly skipped.
 
@@ -49,6 +58,10 @@ blocker first.
 ## Default Workflow
 
 1. Confirm the user supplied footage and identify camera/screen/audio sources.
+   - If the user only attached raw video files and supplied no text instruction, default to a
+     YouTube long-form edit plus Shorts.
+   - If Codex cannot resolve attached files into local paths, stop with `attached_source_unresolved`
+     and ask for the file path or folder path.
 2. Run a dry preflight:
 
 ```bash
@@ -115,4 +128,7 @@ before rendering/compositing motion graphics.
 - Remove alternate hooks, false starts, repeated takes, dead air, and low-value tangents.
 - Preserve proof, payoff, context, CTA integrity, and personality moments that help retention.
 - Use the approved stacked Shorts layout when separate camera and screen sources exist: square camera top, karaoke captions in the middle, screen/proof panel underneath.
+- Use the `talking_head_916` Shorts layout when only one talking-head video source exists: crop/fill
+  to 1080x1920, keep the face centered, preserve blinkless joins, and put one-line karaoke captions
+  in the bottom third.
 - Apply local Studio-Sound-style cleanup by default: heavy speech enhancement, denoise/dereverb, mouth-click/plosive cleanup, speech EQ, compression/limiting, loudness normalization, A/B samples, and before/after receipts.

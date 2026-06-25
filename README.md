@@ -38,6 +38,24 @@ Threadify's hosted generation, scheduling, and analytics are the paid layer you 
 
 ## Quickstart for creators
 
+Inside Codex, use the plugin install path:
+
+```text
+@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)
+```
+
+After the plugin finishes installing, attach raw footage and mention:
+
+```text
+@Eddy
+```
+
+If you attach video footage with no other instructions, Eddy defaults to a YouTube long-form edit
+plus Shorts. Single talking-head footage becomes 9:16 Shorts with bottom-third karaoke captions;
+separate camera/screen footage uses Eddy's stacked Shorts layout.
+
+Local CLI fallback:
+
 ```bash
 git clone https://github.com/lennoxsaint/eddy.git
 cd eddy
@@ -66,21 +84,27 @@ Eddy uses Python 3.9-3.11 via `EDDY_STUDIO_SOUND_PYTHON` or the first compatible
 
 ## Quickstart for Codex or Claude
 
-Give the repo link to Codex or Claude and say:
+For Codex, use Plugin Creator:
 
-> Install this Eddy skill, then edit the attached raw footage into a finished YouTube video.
+```text
+@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)
+```
 
-For Codex, the supported install shape is **skill plus MCP**. The skill teaches Codex Eddy's rules;
-the MCP server gives Codex tools to start, poll, and read edits. From the repo root, Codex should run:
+That installs the repo-shipped plugin from `plugins/eddy/`. The plugin bundles Eddy's skill and MCP
+config, then bootstraps the latest stable tagged Eddy engine into `~/.eddy/source` and `~/.eddy/venv`.
+Updates are automatic on first use/job start, but only to stable GitHub tags, not `main`.
+
+For older Codex clients or local fallback, run:
 
 ```bash
 python3 scripts/install_codex.py
 ```
 
-For Claude-style skill folders only, use `scripts/install_agent_skill.py`. Once installed, the agent
-should prefer the `eddy_edit_start` MCP tool and fall back to `eddy edit` if tools have not reloaded
-yet. Eddy either produces local review outputs or writes an exact blocker, a repair plan, and a
-redacted support bundle in the run folder. Full Codex install details:
+That installs the root skill plus MCP server from the checkout. For Claude-style skill folders only,
+use `scripts/install_agent_skill.py`. Once installed, the agent should prefer the `eddy_edit_start`
+MCP tool and fall back to `eddy edit` if tools have not reloaded yet. Eddy either produces local
+review outputs or writes an exact blocker, a repair plan, and a redacted support bundle in the run
+folder. Full Codex install details:
 [docs/CODEX_INSTALL.md](docs/CODEX_INSTALL.md).
 
 Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
@@ -116,7 +140,7 @@ banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_A
 Eddy ships an MCP server so an agent can start edits, watch them, and read the launch kit as tools:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.9.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.0"
 eddy mcp install --client claude-desktop # or claude-code | codex (idempotent, backs up, merges)
 ```
 

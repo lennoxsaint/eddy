@@ -7,7 +7,7 @@ and read the launch kit — as a tool, with no copy-paste.
 Install the server (it's an optional extra so the base install stays slim):
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.9.1"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.0"
 ```
 
 That puts `eddy-mcp` on your PATH. It speaks MCP over **stdio** — clients launch it; you never run it
@@ -38,7 +38,14 @@ eddy mcp install --client codex           # ~/.codex/config.toml
 eddy mcp install --client codex --dry-run # preview, change nothing
 ```
 
-For a new Codex user installing from the GitHub repo, prefer the Codex bootstrap:
+For a new Codex user installing from the GitHub repo, prefer the Codex plugin prompt:
+
+```text
+@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)
+```
+
+The plugin bundles the MCP config and skill, then bootstraps Eddy from the latest stable tag. If the
+client cannot install plugins yet, use the fallback Codex bootstrap:
 
 ```bash
 python3 scripts/install_codex.py

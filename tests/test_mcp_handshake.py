@@ -53,6 +53,7 @@ def test_edit_start_schema_exposes_promise_params():
     rs = next(t for t in _tools() if t.name == "eddy_edit_start")
     props = rs.inputSchema.get("properties", {})
     assert "source" in props and "focus" in props and "dry_run" in props
+    assert props["format"].get("default") == "youtube"
 
 
 def test_destructive_tools_expose_confirm():

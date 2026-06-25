@@ -1,25 +1,103 @@
 # Eddy in Codex
 
-Recommended Codex install shape: **skill plus MCP**.
+Recommended Codex install shape: **plugin first, skill plus MCP fallback**.
 
-That means:
+The public one-sentence install prompt is:
 
-- the **skill** tells Codex when and how to use Eddy;
-- the **MCP server** gives Codex actual tools to start an edit, poll the job, and read artifacts;
-- a **plugin** is not the Codex Club path today unless Eddy is packaged into Codex's curated plugin
-  directory later.
+> @plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)
 
-OpenAI describes Codex plugins as bundles that can package skills, app integrations, and MCP server
-configuration. That is the polished distribution target. For sharing Eddy from a public GitHub repo
-right now, the reliable path is a repo-local installer that registers the skill plus MCP.
+That is the prompt Codex users should paste into the Plugin Creator flow. Do not publish a
+machine-specific skill path as the public install prompt; local absolute paths are maintainer
+convenience only.
 
-## One sentence for a user
+## What the plugin installs
 
-Give Codex the repo link and say:
+The shipped Codex plugin lives at:
 
-> Install https://github.com/lennoxsaint/eddy into Codex, then use Eddy to edit my attached footage.
+```text
+plugins/eddy/
+```
 
-Codex should clone the repo, read `SKILL.md`, and run:
+It contains:
+
+- `.codex-plugin/plugin.json` — Codex plugin metadata and starter prompts.
+- `skills/eddy/SKILL.md` — the editing contract the agent reads when `@Eddy` is mentioned.
+- `.mcp.json` — the plugin MCP server config.
+- `scripts/eddy_plugin_mcp.py` — launches the managed Eddy MCP server.
+- `scripts/eddy_plugin_bootstrap.py` — installs and updates the active Eddy engine from stable tags.
+
+The plugin skill is intentionally thin. It does not freeze editing behavior at plugin-install time.
+On install and on first use, the plugin wrapper checks the latest stable `vX.Y.Z` GitHub tag, installs
+that tag into `~/.eddy/source` and `~/.eddy/venv`, smoke-checks it, and only then swaps it active. If
+the update fails, it keeps the previous working tag and writes the exact blocker to
+`~/.eddy/plugin-state.json`.
+
+Automatic updates track the latest stable tag, not `main`.
+
+## Marketplace entry
+
+The repo ships a marketplace entry at:
+
+```text
+.agents/plugins/marketplace.json
+```
+
+It points at the plugin subdirectory:
+
+```json
+{
+  "name": "eddy",
+  "source": {
+    "source": "git-subdir",
+    "url": "https://github.com/lennoxsaint/eddy.git",
+    "path": "./plugins/eddy",
+    "ref": "v1.10.0"
+  },
+  "policy": {
+    "installation": "AVAILABLE",
+    "authentication": "ON_INSTALL"
+  },
+  "category": "Creativity"
+}
+```
+
+Preview or update a personal marketplace file with:
+
+```bash
+python3 scripts/install_codex_plugin.py --dry-run --json
+python3 scripts/install_codex_plugin.py
+```
+
+The installer writes `~/.agents/plugins/marketplace.json` by default and emits Codex plugin
+deeplinks for local review.
+
+## Use after install
+
+Once installed, the user can attach footage and mention Eddy:
+
+> @Eddy
+
+If raw video files are attached and no instruction text is supplied, Eddy defaults to:
+
+```text
+eddy_edit_start(source=<attached path or folder>, format="youtube")
+```
+
+That means long-form YouTube edit plus Shorts and launch packaging when the relevant gates pass. If
+Codex cannot resolve an attachment into a filesystem path, Eddy reports
+`attached_source_unresolved` with a paste-ready retry instruction instead of guessing.
+
+## Shorts defaults
+
+- Separate camera + screen sources: Yassy stacked layout — square camera top, one-line karaoke
+  captions in the middle, screen/proof panel bottom.
+- Single talking-head video source: `talking_head_916` — crop/fill to 1080x1920, face centered,
+  blinkless segment assembly, one-line karaoke captions in the bottom third.
+- Audio-only or ambiguous multi-file inputs: fail loudly with exact blockers.
+
+## Skill plus MCP fallback
+
+For older Codex clients, local development, or Claude-style installs, the fallback remains:
 
 ```bash
 python3 scripts/install_codex.py
@@ -27,13 +105,12 @@ python3 scripts/install_codex.py
 
 That command:
 
-1. symlinks Eddy into `~/.codex/skills/eddy`;
-2. installs Eddy from the checkout with the MCP extra, preferring Python 3.12/3.11 for video and
-   audio wheel compatibility;
+1. links/copies Eddy into `~/.codex/skills/eddy`;
+2. installs Eddy from the checkout with the MCP extra;
 3. provisions Eddy's local Studio Sound backend unless explicitly skipped;
 4. writes a stable MCP wrapper at `~/.eddy/bin/eddy-mcp`;
 5. registers the MCP server in `~/.codex/config.toml`;
-6. runs basic verification commands and reports exact blockers.
+6. runs verification commands and reports exact blockers.
 
 Preview it safely:
 
@@ -41,55 +118,10 @@ Preview it safely:
 python3 scripts/install_codex.py --dry-run --json
 ```
 
-## Why not just MCP?
+## Why plugin first?
 
-MCP alone gives tools, but it does not teach the agent Eddy's editorial contract: immutable sources,
-Studio Sound gates, Shorts quality gates, motion proof, no publishing, no blur by default, and exact
-blocker reporting. That belongs in a skill.
+A plugin is the clean Codex distribution unit because it bundles the skill and MCP config together.
+MCP alone gives tools, but it does not teach the agent Eddy's editorial contract. A skill alone can
+teach the contract, but long video edits are better as start/poll/read jobs. The plugin ships both.
 
-## Why not just a skill?
-
-A skill alone can tell Codex to run shell commands, but long video edits are better as fire-and-poll
-jobs. MCP gives Codex `eddy_edit_start`, `eddy_job_status`, and `eddy_artifacts`, so the agent can keep
-moving without treating a 20-minute render as one giant brittle shell command.
-
-## Why not a plugin?
-
-A plugin is the cleanest future packaging format because it can bundle the skill and MCP config
-together. It is not the Codex Club path today because Eddy is being shared from a public GitHub repo,
-not from a curated Codex plugin directory. Until Eddy is packaged and approved as a Codex plugin, use
-skill plus MCP.
-
-## What “installed” means
-
-A successful Codex install has all of these:
-
-- `~/.codex/skills/eddy` exists and points at, or copies, the Eddy repo.
-- `eddy` imports from the installed checkout.
-- `~/.eddy/bin/eddy-mcp` exists and launches `python -m eddy.mcp_server.server`.
-- `~/.codex/config.toml` contains:
-
-```toml
-[mcp_servers.eddy]
-command = "/Users/<user>/.eddy/bin/eddy-mcp"
-args = []
-```
-
-- `eddy bootstrap --json` is ready or gives exact repair steps.
-- `eddy studio-sound doctor` is green before a final production edit is accepted.
-
-## Use after install
-
-Once installed, the user can say:
-
-> Use Eddy to edit this footage.
-
-Codex should use the `eddy_edit_start` MCP tool when available. If MCP tools are not visible yet,
-Codex should run:
-
-```bash
-eddy edit /path/to/footage-or-folder
-```
-
-The correct output is either a local launch kit or an exact blocker with a repair plan. Eddy still
-does not upload, publish, send, or schedule anything.
+Eddy still does not upload, publish, send, schedule, or mutate source media.
