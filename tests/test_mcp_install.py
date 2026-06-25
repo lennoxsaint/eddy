@@ -44,9 +44,12 @@ def test_install_creates_then_backs_up(tmp_path):
 
 def test_install_dry_run_writes_nothing(tmp_path):
     target = tmp_path / "config.toml"
+    target.write_text('[mcp_servers.other]\ncommand = "secret-command"\n')
     res = inst.install("codex", path=target, dry_run=True)
-    assert res["action"] == "preview" and not target.exists()
-    assert "eddy" in res["content"]
+    assert res["action"] == "preview"
+    assert target.read_text() == '[mcp_servers.other]\ncommand = "secret-command"\n'
+    assert "eddy" in res["content_preview"]
+    assert "secret-command" not in res["content_preview"]
 
 
 def test_install_codex_is_toml(tmp_path):

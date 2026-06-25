@@ -29,7 +29,7 @@ you can audit.
 ```bash
 git clone https://github.com/lennoxsaint/eddy.git
 cd eddy
-python3 scripts/install_agent_skill.py --agent auto --install-editable
+python3 scripts/install_codex.py        # Codex: skill + MCP + local package + Studio Sound
 eddy doctor                        # detects hardware, recommends a brain, writes config
 eddy studio-sound doctor           # verifies the heavy local voice-enhancement backend
 eddy update-check                  # notify-only update check; never pulls or rewrites files
@@ -58,9 +58,18 @@ Give the repo link to Codex or Claude and say:
 
 > Install this Eddy skill, then edit the attached raw footage into a finished YouTube video.
 
-The root `SKILL.md` and `scripts/install_agent_skill.py` are designed for that flow. Once installed,
-the agent should run `eddy edit` against the attached footage. Eddy either produces local review
-outputs or writes an exact blocker, a repair plan, and a redacted support bundle in the run folder.
+For Codex, the supported install shape is **skill plus MCP**. The skill teaches Codex Eddy's rules;
+the MCP server gives Codex tools to start, poll, and read edits. From the repo root, Codex should run:
+
+```bash
+python3 scripts/install_codex.py
+```
+
+For Claude-style skill folders only, use `scripts/install_agent_skill.py`. Once installed, the agent
+should prefer the `eddy_edit_start` MCP tool and fall back to `eddy edit` if tools have not reloaded
+yet. Eddy either produces local review outputs or writes an exact blocker, a repair plan, and a
+redacted support bundle in the run folder. Full Codex install details:
+[docs/CODEX_INSTALL.md](docs/CODEX_INSTALL.md).
 
 Watch progress: `eddy status <run>`. Everything lands in `~/.eddy/runs/<date-slug>/final/launch-kit/`
 (configurable via `paths.runs_dir`). Reclaim scratch afterwards with `eddy clean <run>`.
@@ -98,6 +107,10 @@ Eddy ships an MCP server so an agent can start edits, watch them, and read the l
 pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@main"
 eddy mcp install --client claude-desktop # or claude-code | codex (idempotent, backs up, merges)
 ```
+
+For Codex users installing from a cloned GitHub repo, prefer `python3 scripts/install_codex.py`
+instead. It writes a stable `~/.eddy/bin/eddy-mcp` wrapper and registers Codex without relying on the
+desktop app inheriting your shell PATH.
 
 A promise-level edit is a job: `eddy_edit_start` returns a `job_id`, `eddy_job_status` polls it, and
 `eddy_artifacts` reads the result after completion. Lower-level agents can still use

@@ -2,6 +2,20 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-25 — Codex distribution is skill plus MCP
+
+1. **Codex install shape:** Eddy's GitHub-link install path is `scripts/install_codex.py`, which
+   installs the root skill and registers the MCP server together.
+2. **Why not skill-only:** skill-only tells Codex the rules but leaves long edit jobs as brittle
+   shell commands.
+3. **Why not MCP-only:** MCP gives tools but does not carry Eddy's source-safety, Studio Sound,
+   Shorts, motion, and no-publish editorial contract.
+4. **Why not plugin today:** Codex plugins are the clean future bundle for skills + MCP config, but
+   Codex Club sharing from a public GitHub repo should use the repo-local skill-plus-MCP installer
+   until Eddy is deliberately packaged as a curated plugin.
+5. **Path robustness:** Codex MCP registration points at a stable wrapper under `~/.eddy/bin/eddy-mcp`
+   so the desktop app does not depend on inheriting the user's shell `PATH`.
+
 ## 2026-06-23 — Public Eddy repo + unattended gate-passing editor
 
 1. **Repo identity:** `/Users/lennoxsaint/eddy` is the canonical public MIT Eddy editor repo.

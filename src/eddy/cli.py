@@ -395,7 +395,9 @@ def mcp_install(
 
     if dry_run:
         ui.note(f"would write {res['path']}:")
-        ui.console().print(res["content"])
+        ui.console().print(res["content_preview"])
+        if res.get("existing_config_preserved"):
+            ui.note("existing config detected; dry-run preview is limited to the Eddy stanza")
         return
     ui.ok(f"{res['action']} {res['path']} — mcpServers.eddy → {command}")
     if res.get("backup"):

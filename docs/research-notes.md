@@ -43,3 +43,14 @@
 - The baked hook playbook is duplicated into `src/eddy/references/` and included as package data so
   GitHub-source installs can run Shorts selection offline even when the installed wheel no longer has
   the repo `docs/` tree beside it.
+
+## Codex install surface (2026-06-25)
+
+- OpenAI release notes describe Codex plugins as bundles that can package skills, app integrations,
+  and MCP server configuration. That makes a plugin the right future packaging target, but not the
+  fastest truthful public-GitHub path for Codex Club.
+- Current Eddy share path: `scripts/install_codex.py` from the cloned repo. It installs the Codex
+  skill, installs Eddy with `[mcp]`, writes a `~/.eddy/bin/eddy-mcp` wrapper, and registers the MCP
+  server in `~/.codex/config.toml`.
+- Decision: document Eddy as **skill plus MCP** for Codex. Plugin packaging is a later curated bundle,
+  not a prerequisite for the first 100-user beta.

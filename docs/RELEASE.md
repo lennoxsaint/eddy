@@ -48,6 +48,24 @@ clone, or the offline wheelhouse (`docs/AIRGAP.md`). Do not document bare index 
 its MCP extra until the package name is owned; the public PyPI name currently belongs to another
 project.
 
+## Codex Club / 100-user beta share path
+
+For a controlled Codex Club beta, share the GitHub repo link plus the one-sentence Codex install
+prompt from [`CODEX_INSTALL.md`](CODEX_INSTALL.md). That path clones the repo and runs:
+
+```bash
+python3 scripts/install_codex.py
+```
+
+This is different from a polished package release. It installs the skill plus MCP from the checkout
+and records exact blockers. It is acceptable for a supervised 100-user beta only after:
+
+1. `CI` and `CI matrix (3-OS)` are green on `main`;
+2. `python3 scripts/public_scrub_check.py` passes;
+3. `python3 scripts/install_codex.py --dry-run --json` passes;
+4. `eddy bootstrap --json` reports ready or exact repair steps on the maintainer machine;
+5. public copy says “finished edit or exact blockers,” not “guaranteed perfect on every machine.”
+
 Recommended public install command for a green tagged release:
 
 ```bash

@@ -38,6 +38,17 @@ eddy mcp install --client codex           # ~/.codex/config.toml
 eddy mcp install --client codex --dry-run # preview, change nothing
 ```
 
+For a new Codex user installing from the GitHub repo, prefer the Codex bootstrap:
+
+```bash
+python3 scripts/install_codex.py
+```
+
+That installs the root skill and the MCP server together, writes a stable wrapper at
+`~/.eddy/bin/eddy-mcp`, and registers Codex with the wrapper path. This avoids PATH surprises in the
+Codex desktop app. Use `eddy mcp install --client codex` directly only when Eddy is already installed
+and `eddy-mcp` is already visible on PATH.
+
 ### Or paste it in by hand
 
 **Claude Desktop** — `claude_desktop_config.json`:

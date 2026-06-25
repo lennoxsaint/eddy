@@ -58,6 +58,17 @@ def render_toml(existing: str | None, command: str) -> str:
     return tomlkit.dumps(doc)
 
 
+def render_preview(client: str, command: str) -> str:
+    """Return only the Eddy server stanza for safe dry-run output.
+
+    The full merged config can contain unrelated user secrets in sibling MCP entries, so dry-run
+    previews must never print the whole target file.
+    """
+    if client == "codex":
+        return f'[mcp_servers.eddy]\ncommand = "{command}"\nargs = []\n'
+    return render_json(None, command)
+
+
 def install(client: str, command: str = DEFAULT_COMMAND, path: Path | None = None, dry_run: bool = False) -> dict:
     """Write (or preview) the MCP registration for `client`. Returns a summary dict."""
     if client not in CLIENTS:
@@ -67,7 +78,14 @@ def install(client: str, command: str = DEFAULT_COMMAND, path: Path | None = Non
     render = render_toml if client == "codex" else render_json
     content = render(existing, command)
 
-    result = {"client": client, "path": str(target), "command": command, "dry_run": dry_run, "content": content}
+    result = {
+        "client": client,
+        "path": str(target),
+        "command": command,
+        "dry_run": dry_run,
+        "content_preview": render_preview(client, command),
+        "existing_config_preserved": existing is not None,
+    }
     if dry_run:
         result["action"] = "preview"
         return result

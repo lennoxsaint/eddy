@@ -13,21 +13,29 @@ Default editorial brain order is Codex/Claude/API first for quality, with local 
 
 ## First-Time Setup
 
-If this repo is not installed yet, run:
+If this repo is not installed yet and the active agent is Codex, run the one-command Codex bootstrap:
 
 ```bash
-python3 scripts/install_agent_skill.py --agent auto
-python3 -m pip install -e .
+python3 scripts/install_codex.py
+```
+
+This installs Eddy as a **skill plus MCP**: the skill gives Codex the editing rules, and the MCP
+server gives Codex tools to start/poll/read edit jobs. It also installs Eddy with the MCP extra and
+provisions the local Studio Sound backend unless explicitly skipped.
+
+If this is a Claude-style skill-only install, run:
+
+```bash
+python3 scripts/install_agent_skill.py --agent auto --install-editable
+```
+
+Then verify:
+
+```bash
 eddy doctor
 eddy studio-sound doctor
 eddy update-check
 eddy motion update-hyperframes
-```
-
-For a one-command agent setup from the repo root:
-
-```bash
-python3 scripts/install_agent_skill.py --agent auto --install-editable
 ```
 
 This installer provisions the heavy local Studio Sound backend unless `--skip-studio-sound` is
