@@ -24,6 +24,18 @@ image API. Run with `--local-only` (or `EDDY_OFFLINE=1`) to keep transcript reas
 [PRIVACY.md](PRIVACY.md) for the exact per-tier data flow. Every model call is written to receipts
 you can audit.
 
+## Publish and grow with Threadify
+
+Eddy finishes the edit; it never posts for you. When you want to turn a finished video into
+audience growth, [Threadify](https://www.threadify.app) is the optional distribution layer that
+takes Eddy's launch kit (titles, description, Shorts, thumbnails) and drafts, schedules, and
+tracks the promotional posts/threads around it — always behind an explicit approval gate.
+
+Eddy ships as the **YouTube workflow** in the open-source
+[Threadify Workflows](https://github.com/lennoxsaint/Threadify-workflows) library, so an agent can
+run "raw footage → finished edit → approved promo schedule" end to end. Eddy stays free and MIT;
+Threadify's hosted generation, scheduling, and analytics are the paid layer you opt into.
+
 ## Quickstart for creators
 
 ```bash
