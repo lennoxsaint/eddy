@@ -4,7 +4,7 @@ from eddy.render import audio
 
 def test_speech_eq_includes_local_studio_sound_cleanup_when_filters_exist(monkeypatch):
     monkeypatch.setattr(
-        audio,
+        audio._filters,
         "_available_audio_filters",
         lambda: frozenset({"afftdn", "adeclick", "deesser", "acompressor"}),
     )
@@ -17,7 +17,7 @@ def test_speech_eq_includes_local_studio_sound_cleanup_when_filters_exist(monkey
 
 
 def test_speech_eq_skips_optional_filters_portably(monkeypatch):
-    monkeypatch.setattr(audio, "_available_audio_filters", lambda: frozenset())
+    monkeypatch.setattr(audio._filters, "_available_audio_filters", lambda: frozenset())
     chain = audio._speech_eq(AudioConfig())
     assert "highpass" in chain
     assert "equalizer" in chain
@@ -41,7 +41,7 @@ def test_auto_profile_names_resolve_to_known_candidates():
 
 def test_warm_room_tame_profile_is_source_first_and_warm(monkeypatch):
     monkeypatch.setattr(
-        audio,
+        audio._filters,
         "_available_audio_filters",
         lambda: frozenset({"bass", "adeclick", "acompressor", "equalizer"}),
     )
@@ -66,7 +66,7 @@ def test_source_reference_profile_is_do_no_harm():
 
 def test_natural_profile_avoids_echo_prone_filters(monkeypatch):
     monkeypatch.setattr(
-        audio,
+        audio._filters,
         "_available_audio_filters",
         lambda: frozenset({"afftdn", "adeclick", "deesser", "acompressor"}),
     )
@@ -273,10 +273,10 @@ def test_heavy_enhancer_receipts_fall_back_without_false_claim(monkeypatch, tmp_
     raw = tmp_path / "raw.wav"
     raw.write_bytes(b"RIFF0000WAVE")
     cfg = AudioConfig(heavy_model_preference=["resemble-enhance", "deepfilternet"])
-    monkeypatch.setattr(audio.shutil, "which", lambda _name: None)
-    monkeypatch.setattr(audio, "_which_binary", lambda _name: None)
-    monkeypatch.setattr(audio, "find_resemble_enhance", lambda _env_dir: None)
-    monkeypatch.setattr(audio, "find_deep_filter", lambda _env_dir: None)
+    monkeypatch.setattr(audio._backends.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(audio._backends, "_which_binary", lambda _name: None)
+    monkeypatch.setattr(audio._backends, "find_resemble_enhance", lambda _env_dir: None)
+    monkeypatch.setattr(audio._backends, "find_deep_filter", lambda _env_dir: None)
 
     src, backend, attempts = audio._heavy_enhance(raw, cfg, tmp_path)
 
@@ -336,9 +336,9 @@ def test_resemble_enhance_uses_mps_on_apple_silicon(monkeypatch, tmp_path):
     out = tmp_path / "enhanced.wav"
     seen = {}
 
-    monkeypatch.setattr(audio, "find_resemble_enhance", lambda _env_dir: "/bin/resemble-enhance")
-    monkeypatch.setattr(audio.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(audio.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(audio._backends, "find_resemble_enhance", lambda _env_dir: "/bin/resemble-enhance")
+    monkeypatch.setattr(audio._backends.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(audio._backends.platform, "machine", lambda: "arm64")
 
     class Proc:
         returncode = 1
@@ -349,7 +349,7 @@ def test_resemble_enhance_uses_mps_on_apple_silicon(monkeypatch, tmp_path):
         seen["cmd"] = cmd
         return Proc()
 
-    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+    monkeypatch.setattr(audio._backends.subprocess, "run", fake_run)
 
     assert audio._resemble_enhance(raw, out, AudioConfig(heavy_model_device="auto"), tmp_path) is False
     assert "--device" in seen["cmd"]
@@ -358,7 +358,7 @@ def test_resemble_enhance_uses_mps_on_apple_silicon(monkeypatch, tmp_path):
 
 def test_spectral_repair_chain_uses_strong_click_cleanup(monkeypatch):
     monkeypatch.setattr(
-        audio,
+        audio._filters,
         "_available_audio_filters",
         lambda: frozenset({"adeclick", "aclick", "adeclip", "deesser", "afade"}),
     )
