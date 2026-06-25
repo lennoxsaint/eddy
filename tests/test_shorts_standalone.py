@@ -5,7 +5,7 @@ boundaries; this asserts the sequence and that the long edit_loop is NOT invoked
 import pytest
 
 import eddy.edit.cutplan as cutplan_mod
-import eddy.loop.controller as ctrl
+import eddy.loop._orchestration as ctrl
 import eddy.render.shorts as shorts_mod
 from eddy.edit.schema import ShortsCandidate
 from eddy.runs import SourceError
