@@ -70,7 +70,7 @@ omit = ["*/__main__.py"]
 # GA coverage FLOOR (ratchet): CI runs `pytest --cov=eddy` which fails under this. Raise it as
 # coverage climbs; never lower it. The render/whisper/ffmpeg paths are integration-tested by the
 # opt-in synthetic e2e (not counted here), so this floor reflects the pure-unit surface. Set a
-# small margin below actual (~68.9%) so an unrelated PR adding one uncovered module doesn't spuriously
+# small margin below actual (~73.5%) so an unrelated PR adding one uncovered module doesn't spuriously
 # red the build — raise it deliberately, not reactively.
-fail_under = 67
+fail_under = 71
 precision = 1
