@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing marketplace.json.")
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
     parser.add_argument("--repo-url", default=REPO_URL)
-    parser.add_argument("--ref", default=None, help="Stable tag to pin, for example v1.10.1.")
+    parser.add_argument("--ref", default=None, help="Stable tag to pin, for example v1.10.2.")
     parser.add_argument(
         "--marketplace-path",
         default=str(Path.home() / ".agents" / "plugins" / "marketplace.json"),

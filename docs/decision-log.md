@@ -600,3 +600,21 @@ failure in `ui.json_output(default=str)` because `Path` objects stringified with
 
 **Public wording.** The public install prompt is the plugin prompt above. Commits to `main` do not
 auto-update users; only stable tags do.
+
+## 2026-06-25 — v1.10.2: Yellow eagle Codex plugin branding
+
+**Trigger.** Lennox wanted the Codex plugin card to stop showing a teal generic icon and green text,
+and instead match Eddy's terminal TUI identity: yellow/gold with the 8-bit eagle.
+
+**Decisions.**
+- Reuse Eddy's existing terminal pixel-art source as the canonical icon source instead of creating a
+  separate brand asset by hand.
+- Set the Codex plugin `brandColor` to `#F8BE34`, the gold used by Eddy's TUI palette.
+- Ship local plugin assets at `plugins/eddy/assets/eddy-eagle-icon.png` and
+  `plugins/eddy/assets/eddy-eagle-logo.png`, then reference them from `composerIcon` and `logo` in
+  `.codex-plugin/plugin.json`.
+- Keep the marketplace and install docs pinned to stable tag `v1.10.2`, so future users get the same
+  yellow eagle identity from the release-gated plugin path.
+
+**Public wording.** New installs get the yellow Eddy plugin card from the stable tag. Existing local
+installs need a plugin reinstall/update, or a Codex app reload if the old card is cached visually.

@@ -1,6 +1,6 @@
 {
   "name": "eddy",
-  "version": "1.10.1",
+  "version": "1.10.2",
   "description": "Local-first YouTube editor: raw footage in, QA-gated long edit and Shorts out.",
   "author": {
     "name": "Lennox Saint",
@@ -27,6 +27,8 @@
       "Make a long edit and Shorts.",
       "Turn this talking-head clip into Shorts."
     ],
-    "brandColor": "#00F58A"
+    "brandColor": "#F8BE34",
+    "composerIcon": "./assets/eddy-eagle-icon.png",
+    "logo": "./assets/eddy-eagle-logo.png"
   }
 }

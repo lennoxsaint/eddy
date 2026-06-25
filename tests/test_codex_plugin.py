@@ -12,12 +12,20 @@ def test_plugin_manifest_and_mcp_are_valid():
     mcp = json.loads((ROOT / "plugins" / "eddy" / ".mcp.json").read_text())
 
     assert plugin["name"] == "eddy"
-    assert plugin["version"] == "1.10.1"
+    assert plugin["version"] == "1.10.2"
     assert plugin["skills"] == "./skills/"
     assert plugin["mcpServers"] == "./.mcp.json"
     assert plugin["interface"]["displayName"] == "Eddy"
     assert len(plugin["interface"]["defaultPrompt"]) <= 3
     assert all(len(prompt) <= 128 for prompt in plugin["interface"]["defaultPrompt"])
+    assert plugin["interface"]["brandColor"] == "#F8BE34"
+    assert plugin["interface"]["composerIcon"] == "./assets/eddy-eagle-icon.png"
+    assert plugin["interface"]["logo"] == "./assets/eddy-eagle-logo.png"
+
+    for asset in ("eddy-eagle-icon.png", "eddy-eagle-logo.png"):
+        asset_path = ROOT / "plugins" / "eddy" / "assets" / asset
+        assert asset_path.exists()
+        assert asset_path.stat().st_size > 0
 
     server = mcp["mcpServers"]["eddy"]
     assert server["cwd"] == "."
@@ -32,7 +40,7 @@ def test_repo_marketplace_uses_git_subdir_stable_tag():
         "source": "git-subdir",
         "url": "https://github.com/lennoxsaint/eddy.git",
         "path": "./plugins/eddy",
-        "ref": "v1.10.1",
+        "ref": "v1.10.2",
     }
     assert entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
     assert entry["category"] == "Creativity"
@@ -47,7 +55,7 @@ def test_install_codex_plugin_dry_run_preview(tmp_path):
             "--dry-run",
             "--json",
             "--ref",
-            "v1.10.1",
+            "v1.10.2",
             "--marketplace-path",
             str(marketplace_path),
         ],
@@ -58,7 +66,7 @@ def test_install_codex_plugin_dry_run_preview(tmp_path):
     payload = json.loads(proc.stdout)
     assert payload["status"] == "preview"
     assert payload["dry_run"] is True
-    assert payload["ref"] == "v1.10.1"
+    assert payload["ref"] == "v1.10.2"
     assert payload["entry"]["source"]["source"] == "git-subdir"
     assert payload["entry"]["source"]["path"] == "./plugins/eddy"
     assert payload["next_prompt"] == "@plugin-creator install [lennoxsaint/eddy](https://github.com/lennoxsaint/eddy)"
