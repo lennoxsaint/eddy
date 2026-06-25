@@ -34,11 +34,14 @@ def _configure(monkeypatch, **env) -> logging.Logger:
     return log.logger()
 
 
-def test_silent_by_default(monkeypatch):
+def test_silent_by_default(monkeypatch, capsys):
     logger = _configure(monkeypatch)
-    # NullHandler only, level above DEBUG → nothing surfaces.
-    assert all(isinstance(h, logging.NullHandler) for h in logger.handlers)
+    # The contract is behavioral, not structural: with no env set, a debug call emits nothing on
+    # either stream (asserting handler identity is fragile — outer harnesses attach their own).
     assert not logger.isEnabledFor(logging.DEBUG)
+    log.debug("should not appear")
+    captured = capsys.readouterr()
+    assert captured.out == "" and captured.err == ""
 
 
 def test_eddy_debug_surfaces_on_stderr(monkeypatch, capsys):

@@ -24,6 +24,10 @@ _configured = False
 def _configure(log: logging.Logger) -> None:
     global _configured
     _configured = True
+    # Start from a clean slate so reconfiguration never stacks handlers (and so a handler attached by
+    # an outer harness — e.g. pytest's log capture — doesn't leak into our silent-by-default contract).
+    for handler in list(log.handlers):
+        log.removeHandler(handler)
     level = os.environ.get("EDDY_LOG", "").strip().upper()
     if not level and os.environ.get("EDDY_DEBUG"):
         level = "DEBUG"
