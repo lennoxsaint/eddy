@@ -7,7 +7,7 @@ This file governs every agent working in this repo.
 
 - **Never edit, delete, move, upload, publish, or transform source video files.** Inputs are read-only; `runs.py` hash-verifies sources before and after every run. All outputs go inside `runs/<run>/`.
 - **No publishing or uploading anywhere, ever, without explicit manual invocation.** Eddy contains no publish code by design.
-- **The repo is the public canonical Eddy editor (`origin` = `lennoxsaint/eddy`), trunk-based on `main`.** Commit and push straight to `main` after tests and the public scrub pass — no PRs, no feature-branch ceremony. Do NOT publish a package (PyPI / marketplace), send external messages, upload videos, or start new paid API jobs without explicit approval from Lennox. The only authorized paid APIs are Gemini + OpenAI image generation for thumbnails, cost-logged per call.
+- **The repo is the public canonical Eddy editor (`origin` = `lennoxsaint/eddy`), trunk-based on `main`.** Commit and push straight to `main` after tests and the public scrub pass — no PRs, no feature-branch ceremony. Do NOT publish a package (PyPI / marketplace), send external messages, upload videos, or start new paid API jobs without explicit approval from Lennox. The only authorized paid APIs are Gemini + OpenAI image generation for thumbnails, cost-logged per call; do not start those thumbnail jobs without explicit current-run approval and a run-specific cost cap.
 - **Do not claim Eddy "fully edits video" until the exact pipeline and quality gates are proven** with receipts on real footage.
 - **Never edit `vendor/yt_tools/`.** Vendored originals are the diff anchor for every port.
 

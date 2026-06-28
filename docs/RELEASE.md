@@ -77,6 +77,12 @@ acceptable for a supervised 100-user beta only after:
 5. `eddy bootstrap --json` reports ready or exact repair steps on the maintainer machine;
 6. public copy says “finished edit or exact blockers,” not “guaranteed perfect on every machine.”
 
+Do not claim Eddy is **ready for a stranger** until the proof packet includes: plugin install proof,
+a fresh attached-footage edit or exact blocker, a redacted support bundle path, `CI` green, and
+`CI matrix (3-OS)` green when public sharing or release packaging is in scope. Keep those proof
+states separate in the claim; a green install is not a proven fresh edit, and a local dogfood is not a
+plugin-install proof.
+
 Recommended non-plugin source install command for a green tagged release:
 
 ```bash
