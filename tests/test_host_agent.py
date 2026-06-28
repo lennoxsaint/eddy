@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from eddy.config import EddyConfig
 from eddy.host_agent import host_packet, submit_host_decisions
@@ -55,7 +56,7 @@ def test_host_submit_compiles_valid_decisions(monkeypatch, tmp_path):
     assert (rd / "host-agent").exists()
     assert (rd / "iterations" / "01" / "edit-decisions.json").exists()
     assert (rd / "iterations" / "01" / "edl.json").exists()
-    assert out["iteration_dir"].endswith("/iterations/01")
+    assert tuple(Path(out["iteration_dir"]).parts[-2:]) == ("iterations", "01")
 
 
 def test_host_submit_invalid_payload_returns_blocker(tmp_path):

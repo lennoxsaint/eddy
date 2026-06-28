@@ -129,7 +129,7 @@ def commit_push(message: str, tag: str | None, *, dry_run: bool = False) -> None
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--message", required=True, help="Commit message for the trunk ship.")
-    parser.add_argument("--tag", help="Optional stable tag to create and push, e.g. v1.10.3.")
+    parser.add_argument("--tag", help="Optional stable tag to create and push, e.g. v1.10.4.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands and validations without running them.")
     args = parser.parse_args(argv)
 
