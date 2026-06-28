@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -53,3 +54,22 @@ def test_public_install_docs_use_github_source_not_occupied_pypi_name():
         assert "pipx install 'eddy[mcp]'" not in text
         assert "pip install 'eddy[mcp]'" not in text
         assert re.search(r"git\+https://github\.com/lennoxsaint/eddy\.git@(main|v\d+\.\d+\.\d+)", text)
+
+
+def test_public_source_install_pins_match_project_version():
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    expected_tag = f"v{version}"
+    docs = [
+        ROOT / "README.md",
+        ROOT / "docs" / "MCP.md",
+        ROOT / "docs" / "RELEASE.md",
+        ROOT / "integrations" / "claude-code" / "README.md",
+    ]
+
+    for doc in docs:
+        text = doc.read_text()
+        pins = re.findall(r"git\+https://github\.com/lennoxsaint/eddy\.git@(v\d+\.\d+\.\d+)", text)
+        assert pins, f"{doc.relative_to(ROOT)} should include a tagged GitHub source install"
+        assert all(pin == expected_tag for pin in pins), (
+            f"{doc.relative_to(ROOT)} should pin public source installs to {expected_tag}; found {pins}"
+        )

@@ -13,7 +13,7 @@ bundles the `eddy-mcp` server with slash commands and a skill.
 ## Prerequisites
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.0"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.2"
 ```
 
 ## Install
