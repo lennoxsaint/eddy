@@ -232,7 +232,15 @@ class FallbackProvider:
             return self.primary.complete(messages, schema=schema, temperature=temperature, max_tokens=max_tokens)
         except ProviderError as e:
             if self.receipts is not None:
-                self.receipts.log("editorial_fallback", primary=self.primary.name, fallback=self.fallback.name, error=str(e)[:200])
+                fields = {"primary": self.primary.name, "fallback": self.fallback.name, "error": str(e)[:200]}
+                self.receipts.log("editorial_fallback", **fields)
+                self.receipts.log(
+                    "route_fallback",
+                    from_path=self.primary.name,
+                    to_path=self.fallback.name,
+                    reason="provider_error",
+                    **fields,
+                )
             return self.fallback.complete(messages, schema=schema, temperature=temperature, max_tokens=max_tokens)
 
 
@@ -264,9 +272,14 @@ _CLOUD_PROVIDERS = {"anthropic", "openai", "claude_cli", "codex_cli"}
 def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
     """Resolve the brain for editorial-reasoning passes. Mechanical work (transcribe,
     render, QA) never calls this — it stays on the local default."""
+    import os
+
     from eddy.privacy import is_offline
 
     setting = cfg.provider.editorial
+    override = os.environ.get("EDDY_EDITORIAL")
+    if override:
+        setting = override
     # --local-only / EDDY_OFFLINE: force the local brain so the transcript never leaves the
     # machine, regardless of editorial='auto' or a claude binary being on PATH.
     if is_offline():
@@ -300,6 +313,7 @@ def get_editorial_provider(cfg: EddyConfig, receipts=None) -> LLMProvider:
         # honest disclosure: a cloud brain means the transcript is sent off-device.
         receipts.log(
             "editorial_brain", chosen=chosen, upgraded=True, fallback=cfg.provider.active,
+            override=override or "",
             egress=(chosen in _CLOUD_PROVIDERS),
         )
     return FallbackProvider(primary, local, receipts=receipts)

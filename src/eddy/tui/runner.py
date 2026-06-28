@@ -122,6 +122,24 @@ class TuiData:
             tag = ""
         return f"{active}{tag}"
 
+    def edit_options(self, source: str, focus: str | None = None) -> dict:
+        """Plain-English edit path choices for the TUI. Fake test configs skip live detection."""
+        if not all(hasattr(self.cfg, attr) for attr in ("loop", "provider")):
+            return {"requires_choice": False, "selected_option_id": None, "options": []}
+        try:
+            from eddy.doctor import detect
+            from eddy.edit_options import edit_path_options
+
+            return edit_path_options(
+                detect(),
+                source=source,
+                focus=focus,
+                host_agent_available=False,
+                cost_cap_usd=float(getattr(self.cfg.loop, "max_run_cost_usd", 0.0) or 0.0),
+            )
+        except Exception:
+            return {"requires_choice": False, "selected_option_id": None, "options": []}
+
     def jobs_status(self) -> list[dict]:
         return self.jobs.list()
 
@@ -230,6 +248,8 @@ class TuiData:
                     local_only=bool(intent.args.get("local_only")),
                     focus=intent.args.get("focus"),
                     focus_mode=intent.args.get("focus_mode"),
+                    edit_path=intent.args.get("edit_path"),
+                    auto_fallback=bool(intent.args.get("auto_fallback", True)),
                     skip_shorts=intent.args.get("skip_shorts"),
                     skip_package=intent.args.get("skip_package"),
                 )

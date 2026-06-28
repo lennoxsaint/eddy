@@ -80,6 +80,23 @@ def test_start_run_without_focus_adds_no_focus_flags(tmp_path):
     assert "--focus" not in job.argv and "--extract" not in job.argv and "--no-extract" not in job.argv
 
 
+def test_start_run_threads_edit_path_and_fallback(tmp_path):
+    jm = _jm(tmp_path, [_Proc(None)])
+    job = jm.start_run("/x/clip.mp4", edit_path="claude_cli", auto_fallback=False)
+    assert "--edit-path" in job.argv
+    assert job.argv[job.argv.index("--edit-path") + 1] == "claude_cli"
+    assert "--no-auto-fallback" in job.argv
+
+
+def test_start_edit_threads_edit_path_and_fallback_policy(tmp_path):
+    jm = _jm(tmp_path, [_Proc(None)])
+    job = jm.start_edit("/x/clip.mp4", edit_path="host_agent", auto_fallback=False, fallback_policy="agent_subscription")
+    assert "--edit-path" in job.argv
+    assert job.argv[job.argv.index("--edit-path") + 1] == "host_agent"
+    assert "--no-auto-fallback" in job.argv
+    assert "--fallback-policy" in job.argv
+
+
 def test_status_tracks_exit_code(tmp_path):
     p = _Proc(None)
     jm = _jm(tmp_path, [p])

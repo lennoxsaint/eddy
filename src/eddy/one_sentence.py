@@ -1,8 +1,9 @@
-"""One-sentence Eddy orchestration: footage in, finished edit or exact blockers out."""
+"""One-sentence Eddy orchestration: footage in, proof-gated edit or exact blockers out."""
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from .bootstrap import repair_plan
 from .bundle import build_bundle
 from .config import load_config
 from .doctor import detect, preflight
+from .edit_options import edit_path_options, provider_for_edit_path
 from .hooks.playbook import playbook_status, resolve_playbook_path
 from .loop.receipts import Receipts
 from .loop.controller import autonomous_run
@@ -43,6 +45,10 @@ def prepare_edit(
     slug: str | None = None,
     focus: str | None = None,
     template_id: str | None = None,
+    edit_path: str | None = None,
+    auto_fallback: bool = True,
+    fallback_policy: str = "agent_subscription",
+    format_name: str = "youtube",
     repair: bool = False,
     dry_run: bool = True,
 ) -> dict[str, Any]:
@@ -55,7 +61,15 @@ def prepare_edit(
     receipt_log = Receipts(run_dir)
     state = RunState(run_dir)
     state.set_phase("one_sentence_preflight")
-    receipt_log.log("one_sentence_started", source=str(source_path), dry_run=dry_run, repair=repair)
+    receipt_log.log(
+        "one_sentence_started",
+        source=str(source_path),
+        dry_run=dry_run,
+        repair=repair,
+        edit_path=edit_path or "",
+        auto_fallback=auto_fallback,
+        fallback_policy=fallback_policy,
+    )
 
     blockers: list[dict[str, Any]] = []
     checks = preflight()
@@ -102,7 +116,19 @@ def prepare_edit(
 
     found = detect()
     route = choose_route(found)
-    if not route.can_execute:
+    options = edit_path_options(
+        found,
+        source=source_path,
+        format=format_name,
+        focus=focus,
+        selected=edit_path,
+        auto_fallback=auto_fallback,
+        fallback_policy=fallback_policy,
+        cost_cap_usd=float(getattr(cfg.loop, "max_run_cost_usd", 0.0) or 0.0),
+    )
+    if options["status"] == "blocked":
+        blockers.extend(options["blockers"])
+    elif not route.can_execute and options.get("selected_option_id") != "host_agent":
         blockers.append(
             _blocker(
                 route.blockers[0] if route.blockers else "route_unavailable",
@@ -148,6 +174,10 @@ def prepare_edit(
         "template": template.to_dict() if template else None,
         "available_templates": template_inventory(),
         "route": route.to_dict(),
+        "edit_options": options,
+        "selected_edit_path": options.get("selected_option_id"),
+        "auto_fallback": auto_fallback,
+        "fallback_policy": fallback_policy,
         "preflight": checks,
         "repair_plan": repair_plan(checks),
         "blockers": blockers,
@@ -167,7 +197,13 @@ def prepare_edit(
         receipt_log.log("one_sentence_blocked", blockers=blockers, support_bundle=str(support_bundle))
     else:
         _write_state(run_dir, summary)
-        receipt_log.log("one_sentence_ready", template=template.id if template else None, route=route.tier)
+        receipt_log.log(
+            "one_sentence_ready",
+            template=template.id if template else None,
+            route=route.tier,
+            edit_path=options.get("selected_option_id"),
+            fallback_order=options.get("fallback", {}).get("order", []),
+        )
 
     verify_sources_unmutated(run_dir)
     return summary
@@ -179,6 +215,9 @@ def edit(
     slug: str | None = None,
     focus: str | None = None,
     template_id: str | None = None,
+    edit_path: str | None = None,
+    auto_fallback: bool = True,
+    fallback_policy: str = "agent_subscription",
     format_name: str = "youtube",
     language: str = "en",
     repair: bool = False,
@@ -191,22 +230,65 @@ def edit(
         slug=slug,
         focus=focus,
         template_id=template_id,
+        edit_path=edit_path,
+        auto_fallback=auto_fallback,
+        fallback_policy=fallback_policy,
+        format_name=format_name,
         repair=repair,
         dry_run=dry_run,
     )
     if prepared["status"] == "blocked" or dry_run:
         return prepared
 
+    selected_edit_path = prepared.get("selected_edit_path")
+    if selected_edit_path == "host_agent":
+        from .transcribe.whisper import transcribe_run
+
+        run_dir = Path(prepared["run_dir"])
+        Receipts(run_dir).log(
+            "host_agent_route_started",
+            edit_path="host_agent",
+            next_tool="eddy_host_packet",
+            auto_fallback=auto_fallback,
+            fallback_policy=fallback_policy,
+        )
+        transcribe_run(run_dir, language=language)
+        state = RunState(run_dir)
+        state.set_phase("awaiting_host_decisions")
+        result = {
+            **prepared,
+            "status": "awaiting_host_decisions",
+            "dry_run": False,
+            "run_dir": str(run_dir),
+            "next_action": (
+                "Call eddy_host_packet(job_id), have the current assistant submit EditDecisions with "
+                "eddy_host_submit(job_id, payload), then render/QA through Eddy."
+            ),
+        }
+        _write_state(run_dir, result)
+        return result
+
     ceiling = resolve_format(format_name)["ceiling_minutes"]
-    run_dir = autonomous_run(
-        Path(source).expanduser(),
-        slug=slug,
-        skip_shorts=False,
-        skip_package=False,
-        language=language,
-        ceiling_minutes=ceiling,
-        focus=focus,
-    )
+    provider = provider_for_edit_path(selected_edit_path)
+    previous = os.environ.get("EDDY_EDITORIAL")
+    try:
+        if provider:
+            os.environ["EDDY_EDITORIAL"] = provider
+        run_dir = autonomous_run(
+            Path(source).expanduser(),
+            slug=slug,
+            skip_shorts=False,
+            skip_package=False,
+            language=language,
+            ceiling_minutes=ceiling,
+            focus=focus,
+        )
+    finally:
+        if provider:
+            if previous is None:
+                os.environ.pop("EDDY_EDITORIAL", None)
+            else:
+                os.environ["EDDY_EDITORIAL"] = previous
     final_qa_path = run_dir / "final" / "qa-final.json"
     final_qa = json.loads(final_qa_path.read_text()) if final_qa_path.exists() else {"pass": False}
     status = "completed" if final_qa.get("pass") else "blocked"

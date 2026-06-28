@@ -2,6 +2,14 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-28 — Proof-gated edit paths and host-agent fallback
+
+1. **Perfect means proof-gated:** Eddy may not describe a weak best-attempt proxy as a perfect edit. A finished edit is complete only when required Eddy gates pass; otherwise Eddy returns exact blockers, support evidence, and route history.
+2. **Options before execution:** MCP hosts must call `eddy_edit_options` before `eddy_edit_start`. Eddy asks "How do you want this edited?" only when more than one runnable edit path exists; unavailable stronger paths are setup suggestions, not selectable choices.
+3. **Generic host-agent path:** Codex Desktop, Claude Code, or any capable host can provide structured editorial decisions through `eddy_host_packet` and `eddy_host_submit`. Eddy still owns source hashing, transcription/cache, compile, render, QA, receipts, and blockers.
+4. **Fallback is recorded, not hidden:** Route fallback reuses the same run directory and transcript cache and writes `route_fallback` receipts. Metered OpenAI/Anthropic API fallback is refused unless a run-specific cost cap exists.
+5. **Shipping path:** `scripts/ship_to_github.py` is the guarded maintainer path for running gates, committing to `main`, pushing, and optionally cutting a stable tag. It refuses force-style shortcuts, dirty run/scratch artifacts, and tag/version mismatches.
+
 ## 2026-06-25 — Codex distribution is skill plus MCP
 
 1. **Codex install shape:** Eddy's GitHub-link install path is `scripts/install_codex.py`, which

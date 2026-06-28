@@ -49,7 +49,16 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
     if out.exists():
         cached = json.loads(out.read_text())
         if cached.get("source_sha256") == m["source_sha256"]["camera"]:
-            receipts.log("transcribe", cache="hit")
+            receipts.log(
+                "transcribe",
+                cache="hit",
+                model=cached.get("model"),
+                language=cached.get("language"),
+                audio_s=round(float(cached.get("duration") or 0.0), 1),
+                segments=len(cached.get("segments") or []),
+                elapsed_s=0.0,
+                message="Transcript cache hit; reusing the existing word-level faster-whisper output.",
+            )
             return out
 
     audio_source = Path(m["sources"].get("mic") or m["sources"]["camera"])
@@ -74,6 +83,14 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
     from eddy.privacy import is_offline
 
     t0 = time.time()
+    receipts.log(
+        "transcribe_started",
+        cache="miss",
+        mode="quality",
+        model=cfg.transcribe.model,
+        compute_type=cfg.transcribe.compute_type,
+        eta_note="Quality transcription can take a while on long footage; future runs reuse this cache by source hash.",
+    )
     # offline/airgapped: never reach HuggingFace — use only already-downloaded weights.
     try:
         model = WhisperModel(
@@ -147,10 +164,12 @@ def transcribe_run(run_dir: Path, language: str | None = None) -> Path:
     receipts.log(
         "transcribe",
         cache="miss",
+        mode="quality",
         model=cfg.transcribe.model,
         language=info.language,
         audio_s=round(info.duration, 1),
-        wall_s=round(time.time() - t0, 1),
+        elapsed_s=round(time.time() - t0, 1),
+        speed_x=round((info.duration or 0.0) / max(time.time() - t0, 0.001), 2),
         segments=len(payload["segments"]),
     )
 

@@ -1,6 +1,6 @@
 # Release process
 
-Eddy is versioned from git tags (`v0.4`...`v1.10.2`); the runtime version resolves via
+Eddy is versioned from git tags (`v0.4`...`v1.10.3`); the runtime version resolves via
 `importlib.metadata` / git-describe and is stamped into run receipts. The canonical repo is
 `https://github.com/lennoxsaint/eddy`.
 
@@ -33,6 +33,16 @@ eddy --version               # confirm the new version
 
 Commit and push normal source changes to `main` after tests and the public scrub pass. Publishing a
 package or installer remains a separate explicit action.
+
+For normal maintainer trunk shipping, prefer the guarded script:
+
+```bash
+python3 scripts/ship_to_github.py --message "ship vX.Y.Z" --tag vX.Y.Z
+```
+
+It runs the local gates, public scrub, and whitespace check before staging, committing, pushing
+`origin main`, and optionally pushing the matching stable tag. It refuses dirty run/scratch artifacts,
+tag/version mismatches, existing tags, and empty commits.
 
 ## Signed / notarized artifacts
 
@@ -75,7 +85,7 @@ acceptable for a supervised 100-user beta only after:
 3. `python3 scripts/install_codex_plugin.py --dry-run --json --ref vX.Y.Z` passes;
 4. `python3 scripts/install_codex.py --dry-run --json` passes for fallback installs;
 5. `eddy bootstrap --json` reports ready or exact repair steps on the maintainer machine;
-6. public copy says “finished edit or exact blockers,” not “guaranteed perfect on every machine.”
+6. public copy says “proof-gated edit or exact blockers,” not “guaranteed perfect on every machine.”
 
 Do not claim Eddy is **ready for a stranger** until the proof packet includes: plugin install proof,
 a fresh attached-footage edit or exact blocker, a redacted support bundle path, `CI` green, and
@@ -86,7 +96,7 @@ plugin-install proof.
 Recommended non-plugin source install command for a green tagged release:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.2"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.3"
 ```
 
 Before a fresh tag exists, smoke-test the live branch with:

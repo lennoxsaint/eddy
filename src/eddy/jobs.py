@@ -117,6 +117,8 @@ class JobManager:
         skip_package: bool | None = None,
         focus: str | None = None,
         focus_mode: str | None = None,
+        edit_path: str | None = None,
+        auto_fallback: bool = True,
     ) -> Job:
         slug = self._free_slug(slug or default_slug(Path(source)))
         args = ["run", str(source), "--slug", slug]
@@ -130,6 +132,10 @@ class JobManager:
             args += ["--profile", profile]
         if local_only:
             args.append("--local-only")
+        if edit_path:
+            args += ["--edit-path", edit_path]
+        if not auto_fallback:
+            args.append("--no-auto-fallback")
         _flag3(args, "skip-shorts", skip_shorts)
         _flag3(args, "skip-package", skip_package)
         if focus:
@@ -150,6 +156,9 @@ class JobManager:
         template: str | None = None,
         language: str | None = None,
         fmt: str | None = None,
+        edit_path: str | None = None,
+        auto_fallback: bool = True,
+        fallback_policy: str = "agent_subscription",
         repair: bool = False,
         dry_run: bool = False,
     ) -> Job:
@@ -163,6 +172,12 @@ class JobManager:
             args += ["--language", language]
         if fmt:
             args += ["--format", fmt]
+        if edit_path:
+            args += ["--edit-path", edit_path]
+        if not auto_fallback:
+            args.append("--no-auto-fallback")
+        if fallback_policy:
+            args += ["--fallback-policy", fallback_policy]
         if repair:
             args.append("--repair")
         if dry_run:

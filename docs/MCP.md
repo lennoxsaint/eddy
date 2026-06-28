@@ -7,7 +7,7 @@ and read the launch kit — as a tool, with no copy-paste.
 Install the server (it's an optional extra so the base install stays slim):
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.2"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.3"
 ```
 
 That puts `eddy-mcp` on your PATH. It speaks MCP over **stdio** — clients launch it; you never run it
@@ -17,9 +17,14 @@ by hand.
 
 The promise-level edit takes 5–15 minutes, so long operations are **asynchronous jobs**:
 
-1. `eddy_edit_start(source, …)` → returns a `job_id` immediately (the run slug).
-2. `eddy_job_status(job_id)` → `running | completed | failed | interrupted` + the current `phase`.
-3. `eddy_artifacts(run)` → titles, description, chapters, shorts ledger, final video path.
+1. `eddy_edit_options(source, …)` → returns runnable edit paths, setup suggestions, and whether the host must ask.
+2. `eddy_edit_start(source, edit_path=..., …)` → returns a `job_id` immediately (the run slug).
+3. `eddy_job_status(job_id)` → `running | completed | failed | interrupted` + the current `phase`.
+4. `eddy_artifacts(run)` → titles, description, chapters, shorts ledger, final video path.
+
+For host-agent mode, poll until the run reaches `awaiting_host_decisions`, call
+`eddy_host_packet(job_id)`, then submit `EditDecisions` with `eddy_host_submit(job_id, payload)`.
+The packet includes transcript/QA text and hashes, never media bytes.
 
 Each long op runs as its own `eddy` subprocess, so a run's own offline/egress state is isolated and
 the hardened CLI path is reused. Cheap reads (`eddy_runs`, `eddy_run_inspect`, `eddy_doctor`,
@@ -104,13 +109,14 @@ owner-gated step.
 
 | Read (instant) | Jobs (start → poll → read) | Destructive (confirm=true) |
 |---|---|---|
-| `eddy_doctor` | `eddy_edit_start` | `eddy_clean` |
+| `eddy_doctor` / `eddy_edit_options` | `eddy_edit_start` | `eddy_clean` |
 | `eddy_runs` | `eddy_shorts_start` | `eddy_purge` |
 | `eddy_run_inspect` | `eddy_transcribe_start` | |
 | `eddy_profiles` | `eddy_run_start` / `eddy_render_start` | |
 | `eddy_qa` | `eddy_batch_start` | |
-| `eddy_pick` | `eddy_job_status` | |
-| `eddy_artifacts` | `eddy_job_cancel` / `eddy_jobs` | |
+| `eddy_pick` | `eddy_host_packet` / `eddy_host_submit` | |
+| `eddy_artifacts` | `eddy_job_status` | |
+| | `eddy_job_cancel` / `eddy_jobs` | |
 
 ## Air-gapped installs
 

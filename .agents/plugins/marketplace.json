@@ -10,7 +10,7 @@
         "source": "git-subdir",
         "url": "https://github.com/lennoxsaint/eddy.git",
         "path": "./plugins/eddy",
-        "ref": "v1.10.2"
+        "ref": "v1.10.3"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -26,7 +26,10 @@ def test_every_tool_registers():
 def test_core_tools_present():
     names = {t.name for t in _tools()}
     for expected in (
+        "eddy_edit_options",
         "eddy_edit_start",
+        "eddy_host_packet",
+        "eddy_host_submit",
         "eddy_run_start",
         "eddy_job_status",
         "eddy_artifacts",
@@ -53,6 +56,7 @@ def test_edit_start_schema_exposes_promise_params():
     rs = next(t for t in _tools() if t.name == "eddy_edit_start")
     props = rs.inputSchema.get("properties", {})
     assert "source" in props and "focus" in props and "dry_run" in props
+    assert "edit_path" in props and "auto_fallback" in props
     assert props["format"].get("default") == "youtube"
 
 

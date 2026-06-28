@@ -51,7 +51,7 @@ It points at the plugin subdirectory:
     "source": "git-subdir",
     "url": "https://github.com/lennoxsaint/eddy.git",
     "path": "./plugins/eddy",
-    "ref": "v1.10.2"
+    "ref": "v1.10.3"
   },
   "policy": {
     "installation": "AVAILABLE",
@@ -80,10 +80,18 @@ Once installed, the user can attach footage and mention Eddy:
 If raw video files are attached and no instruction text is supplied, Eddy defaults to:
 
 ```text
-eddy_edit_start(source=<attached path or folder>, format="youtube")
+eddy_edit_options(source=<attached path or folder>, format="youtube")
 ```
 
-That means long-form YouTube edit plus Shorts and launch packaging when the relevant gates pass. If
+If more than one runnable path exists, the agent asks, "How do you want this edited?" and shows plain
+English options with benefits, drawbacks, privacy/cost notes, and a recommendation. If only one path
+is runnable, the agent starts it directly:
+
+```text
+eddy_edit_start(source=<attached path or folder>, format="youtube", edit_path=<selected_option_id>)
+```
+
+That means proof-gated long-form YouTube edit plus Shorts and launch packaging when the relevant gates pass. If
 Codex cannot resolve an attachment into a filesystem path, Eddy reports
 `attached_source_unresolved` with a paste-ready retry instruction instead of guessing.
 

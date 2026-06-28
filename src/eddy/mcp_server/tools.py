@@ -104,6 +104,26 @@ def eddy_profiles() -> dict:
     return {"profiles": {name: prof.model_dump() for name, prof in cfg.profiles.items()}}
 
 
+def eddy_edit_options(source: str, format: str = "youtube", focus: str | None = None) -> dict:
+    """Return plain-English edit-path choices and setup suggestions for this machine.
+
+    Agents should call this before eddy_edit_start. Ask "How do you want this edited?" only when
+    requires_choice=true; otherwise use selected_option_id.
+    """
+    from eddy.doctor import detect
+    from eddy.edit_options import edit_path_options
+
+    with _quiet():
+        cfg = load_config()
+        return edit_path_options(
+            detect(),
+            source=source,
+            format=format,
+            focus=focus,
+            cost_cap_usd=float(getattr(cfg.loop, "max_run_cost_usd", 0.0) or 0.0),
+        )
+
+
 def eddy_qa(run: str, iteration: int | None = None) -> dict:
     """Run deterministic QA (+ judge if a proxy exists) on a run iteration or the final."""
     from eddy.qa.gate import qa_run
@@ -156,13 +176,16 @@ def eddy_run_start(
     format: str | None = None,
     profile: str | None = None,
     local_only: bool = False,
+    edit_path: str | None = None,
+    auto_fallback: bool = True,
     skip_shorts: bool | None = None,
     skip_package: bool | None = None,
 ) -> dict:
     """Start a full autonomous edit (transcribe -> loop -> render -> shorts -> launch kit) as a job."""
     job = jobs().start_run(
         source, slug=slug, target_minutes=target_minutes, language=language, fmt=format,
-        profile=profile, local_only=local_only, skip_shorts=skip_shorts, skip_package=skip_package,
+        profile=profile, local_only=local_only, edit_path=edit_path, auto_fallback=auto_fallback,
+        skip_shorts=skip_shorts, skip_package=skip_package,
     )
     return {"job_id": job.id, "kind": job.kind, "run_dir": str(job.run_dir), "pid": getattr(job.proc, "pid", None)}
 
@@ -174,6 +197,9 @@ def eddy_edit_start(
     template: str | None = None,
     language: str | None = None,
     format: str | None = "youtube",
+    edit_path: str | None = None,
+    auto_fallback: bool = True,
+    fallback_policy: str = "agent_subscription",
     repair: bool = False,
     dry_run: bool = False,
 ) -> dict:
@@ -185,10 +211,27 @@ def eddy_edit_start(
         template=template,
         language=language,
         fmt=format,
+        edit_path=edit_path,
+        auto_fallback=auto_fallback,
+        fallback_policy=fallback_policy,
         repair=repair,
         dry_run=dry_run,
     )
     return {"job_id": job.id, "kind": job.kind, "run_dir": str(job.run_dir), "pid": getattr(job.proc, "pid", None)}
+
+
+def eddy_host_packet(job_id: str) -> dict:
+    """Return the bounded transcript/QA packet for a host-agent edit. Never returns media bytes."""
+    from eddy.host_agent import host_packet
+
+    return host_packet(_resolve_run(job_id))
+
+
+def eddy_host_submit(job_id: str, payload: dict) -> dict:
+    """Submit host-agent EditDecisions JSON and compile it through Eddy's deterministic compiler."""
+    from eddy.host_agent import submit_host_decisions
+
+    return submit_host_decisions(_resolve_run(job_id), payload)
 
 
 def eddy_shorts_start(source: str, slug: str | None = None, language: str | None = None) -> dict:

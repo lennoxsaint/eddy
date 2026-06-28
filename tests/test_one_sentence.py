@@ -24,6 +24,7 @@ def _fake_manifest(run_dir: Path, source: Path) -> dict:
 
 def _fake_cfg() -> SimpleNamespace:
     return SimpleNamespace(
+        loop=SimpleNamespace(max_run_cost_usd=0.0),
         shorts=SimpleNamespace(
             require_hook_playbook=False,
             hook_playbook_path="docs/references/short-form-hook-playbook.jsonl",
@@ -88,10 +89,25 @@ def test_prepare_edit_writes_support_bundle_for_exact_blocker(monkeypatch, tmp_p
             "credentials": {"codex_cli": False, "claude_cli": False, "openai_api": False, "anthropic_api": False},
         },
     )
+    monkeypatch.setattr(
+        "eddy.one_sentence.edit_path_options",
+        lambda *args, **kwargs: {
+            "status": "blocked",
+            "blockers": [
+                {
+                    "code": "no_edit_path_available",
+                    "message": "No runnable editing path is available on this machine.",
+                    "fix": "Use a host assistant or install a supported route.",
+                }
+            ],
+            "selected_option_id": None,
+            "fallback": {"order": []},
+        },
+    )
 
     result = prepare_edit(source, slug="demo", dry_run=True)
     assert result["status"] == "blocked"
-    assert result["blockers"][0]["code"] == "no_editorial_brain_available"
+    assert result["blockers"][0]["code"] == "no_edit_path_available"
     assert Path(result["support_bundle"]).exists()
     saved = json.loads((run_dir / "one-sentence-state.json").read_text())
     assert saved["support_bundle"] == result["support_bundle"]
@@ -123,5 +139,7 @@ def test_prepare_edit_ready_when_route_and_preflight_pass(monkeypatch, tmp_path)
     result = prepare_edit(source, slug="demo", dry_run=True)
     assert result["status"] == "ready"
     assert result["route"]["tier"] == "api_agent_brain"
+    assert result["edit_options"]["recommended_option_id"] == "host_agent"
+    assert result["edit_options"]["requires_choice"] is True
     assert result["template"]["id"] == "single_camera_course"
     assert json.loads((run_dir / "one-sentence-state.json").read_text())["status"] == "ready"

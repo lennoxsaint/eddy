@@ -59,7 +59,7 @@ Screen {
 }
 
 /* modals */
-ConfirmScreen, DoctorScreen, FailureScreen, PreviewScreen, OutputScreen {
+ConfirmScreen, DoctorScreen, FailureScreen, PreviewScreen, OutputScreen, EditPathScreen {
     align: center middle;
 }
 

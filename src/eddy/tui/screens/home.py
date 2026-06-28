@@ -21,6 +21,7 @@ from eddy.tui import phases
 from eddy.tui.intents import ACTIONS, Intent, interpret_nl, parse_command
 from eddy.tui.runner import TuiData, run_verdict
 from eddy.tui.screens.confirm import ConfirmScreen
+from eddy.tui.screens.edit_path import EditPathScreen
 from eddy.tui.screens.output import OUTPUT_FLAGS, OutputScreen
 from eddy.tui.screens.doctor import DoctorScreen
 from eddy.tui.screens.failure import FailureScreen
@@ -273,6 +274,14 @@ class HomeScreen(Screen):
                     self._status(f"results at {path}" if path else f"{slug} has no results yet")
             return
         if intent.needs_confirm:
+            if a == "run" and intent.args.get("source") and not intent.args.get("edit_path"):
+                plan = self.data.edit_options(intent.args["source"], focus=intent.args.get("focus"))
+                if plan.get("requires_choice"):
+                    self.app.push_screen(
+                        EditPathScreen(intent.describe(), plan),
+                        lambda choice: self._exec_with_edit_path(choice, intent),
+                    )
+                    return
             # a focused / extract edit asks what to PRODUCE (Lennox picks each time); the chooser
             # doubles as the confirm. Every other mutating action uses the plain yes/no confirm.
             if a == "run" and intent.args.get("focus"):
@@ -283,6 +292,13 @@ class HomeScreen(Screen):
                 self.app.push_screen(ConfirmScreen(intent.describe()), lambda ok: self._maybe_exec(ok, intent))
         else:
             self._exec(intent)
+
+    def _exec_with_edit_path(self, choice: str | None, intent: Intent) -> None:
+        if not choice:
+            self._status("cancelled")
+            return
+        intent.args["edit_path"] = choice
+        self._handle_intent(intent)
 
     def _maybe_exec(self, ok: bool | None, intent: Intent) -> None:
         if ok:

@@ -14,6 +14,7 @@ class _FakeCfg:
     def __init__(self, runs_dir: Path) -> None:
         self.runs_dir = runs_dir
         self.profiles: dict = {}
+        self.loop = type("Loop", (), {"max_run_cost_usd": 0.0})()
 
 
 class _FakeProc:
@@ -112,7 +113,9 @@ def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path
         return _FakeProc()
 
     monkeypatch.setattr(tools, "_jobs", JobManager(runs_dir=tmp_path, spawn=spawn))
-    out = tools.eddy_edit_start("/footage", slug="myslug", focus="make a tutorial", dry_run=True)
+    out = tools.eddy_edit_start(
+        "/footage", slug="myslug", focus="make a tutorial", edit_path="host_agent", dry_run=True
+    )
     assert out["job_id"] == "myslug"
     assert out["kind"] == "edit"
     assert "edit" in captured["argv"]
@@ -120,6 +123,36 @@ def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path
     assert "--focus" in captured["argv"]
     assert "--format" in captured["argv"]
     assert "youtube" in captured["argv"]
+    assert "--edit-path" in captured["argv"]
+    assert "host_agent" in captured["argv"]
+
+
+def test_eddy_edit_options_returns_route_plan(monkeypatch, tmp_path):
+    _point_runs_at(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "eddy.doctor.detect",
+        lambda: {
+            "hardware": {"ram_gb": 64},
+            "ollama_models": [],
+            "credentials": {"codex_cli": True, "claude_cli": False, "openai_api": False, "anthropic_api": False},
+        },
+    )
+    out = tools.eddy_edit_options("/footage")
+    assert out["requires_choice"] is True
+    assert out["recommended_option_id"] == "host_agent"
+
+
+def test_host_tools_delegate(monkeypatch, tmp_path):
+    rd = tmp_path / "demo"
+    rd.mkdir()
+    _point_runs_at(monkeypatch, tmp_path)
+    monkeypatch.setattr("eddy.host_agent.host_packet", lambda run_dir: {"run_dir": str(run_dir), "status": "ready"})
+    monkeypatch.setattr(
+        "eddy.host_agent.submit_host_decisions",
+        lambda run_dir, payload: {"run_dir": str(run_dir), "status": "compiled", "payload": payload},
+    )
+    assert tools.eddy_host_packet("demo")["status"] == "ready"
+    assert tools.eddy_host_submit("demo", {"cuts": []})["status"] == "compiled"
 
 
 def test_eddy_doctor_returns_detect_and_preflight():

@@ -19,11 +19,26 @@ def edit(
     template: Optional[str] = typer.Option(None, "--template", help="Force an Eddy template id."),
     language: str = typer.Option("en", "--language", help="Transcription language."),
     format: str = typer.Option("youtube", "--format", help="Content format profile."),
+    edit_path: Optional[str] = typer.Option(
+        None,
+        "--edit-path",
+        help="Editing route to use: host_agent, codex_cli, claude_cli, local, openai_api, or anthropic_api.",
+    ),
+    auto_fallback: bool = typer.Option(
+        True,
+        "--auto-fallback/--no-auto-fallback",
+        help="Automatically fall back to the best available proof-gated route when the selected route stalls or fails.",
+    ),
+    fallback_policy: str = typer.Option(
+        "agent_subscription",
+        "--fallback-policy",
+        help="Fallback policy. Default prefers the current host agent/subscription path.",
+    ),
     repair: bool = typer.Option(False, "--repair", help="Record repair intent and include repair actions in blockers."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Prepare and validate only; do not transcribe/render."),
     json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
-    """One-sentence flow: footage in, finished edit out, or an exact blocker + support bundle."""
+    """One-sentence flow: footage in, proof-gated edit out, or an exact blocker + support bundle."""
     import json
 
     from eddy.one_sentence import edit as run_edit
@@ -34,6 +49,9 @@ def edit(
             slug=slug,
             focus=focus,
             template_id=template,
+            edit_path=edit_path,
+            auto_fallback=auto_fallback,
+            fallback_policy=fallback_policy,
             format_name=format,
             language=language,
             repair=repair,
@@ -84,6 +102,16 @@ def run(
     profile: Optional[str] = typer.Option(None, "--profile", help="Named per-channel profile from config [profiles]. Explicit flags override it."),
     focus: Optional[str] = typer.Option(None, "--focus", help="Focus brief: what to keep / center the edit on (free text)."),
     extract: Optional[bool] = typer.Option(None, "--extract/--no-extract", help="Force topical EXTRACT mode (keep ONLY the focus) on/off; default auto-detects from the brief."),
+    edit_path: Optional[str] = typer.Option(
+        None,
+        "--edit-path",
+        help="Editing route to use: codex_cli, claude_cli, local, openai_api, or anthropic_api. Host-agent mode uses `eddy edit`/MCP.",
+    ),
+    auto_fallback: bool = typer.Option(
+        True,
+        "--auto-fallback/--no-auto-fallback",
+        help="Record/allow automatic route fallback when a selected provider fails.",
+    ),
 ) -> None:
     """Fully autonomous: transcribe -> edit loop -> final render -> shorts -> launch kit."""
     from eddy.config import load_config, resolve_profile
@@ -140,6 +168,12 @@ def run(
         from eddy.privacy import set_offline
 
         set_offline(True)
+    from eddy.edit_options import normalize_edit_path
+
+    selected_edit_path = normalize_edit_path(edit_path)
+    if selected_edit_path == "host_agent":
+        typer.echo("✗ host-agent edit path uses `eddy edit` plus eddy_host_packet/eddy_host_submit, not `eddy run`.", err=True)
+        raise typer.Exit(1)
     # enforce the offline promise at the syscall boundary (covers --local-only AND EDDY_OFFLINE=1)
     from eddy.netguard import maybe_install_egress_guard
 
@@ -172,21 +206,35 @@ def run(
         typer.echo("\ndry run: " + ("OK — ready to run" if ok else "problems found (see FAIL above)"))
         raise typer.Exit(0 if ok else 1)
 
+    import os
+
+    from eddy.edit_options import provider_for_edit_path
     from eddy.loop.controller import autonomous_run
 
     try:
-        autonomous_run(
-            source=source,
-            target_minutes=target_minutes,
-            slug=slug,
-            resume=resume,
-            skip_shorts=skip_shorts,
-            skip_package=skip_package,
-            language=language,
-            ceiling_minutes=ceiling_minutes,
-            focus=focus,
-            focus_mode=focus_mode,
-        )
+        provider = provider_for_edit_path(selected_edit_path)
+        previous = os.environ.get("EDDY_EDITORIAL")
+        try:
+            if provider:
+                os.environ["EDDY_EDITORIAL"] = provider
+            autonomous_run(
+                source=source,
+                target_minutes=target_minutes,
+                slug=slug,
+                resume=resume,
+                skip_shorts=skip_shorts,
+                skip_package=skip_package,
+                language=language,
+                ceiling_minutes=ceiling_minutes,
+                focus=focus,
+                focus_mode=focus_mode,
+            )
+        finally:
+            if provider:
+                if previous is None:
+                    os.environ.pop("EDDY_EDITORIAL", None)
+                else:
+                    os.environ["EDDY_EDITORIAL"] = previous
     except Exception as e:
         from eddy.beacon import send_failure_beacon
         from eddy.errors import friendly_error, write_crash_log

@@ -64,7 +64,7 @@ eddy doctor                        # detects hardware, recommends a brain, write
 eddy studio-sound doctor           # verifies the heavy local voice-enhancement backend
 eddy update-check                  # notify-only update check; never pulls or rewrites files
 eddy motion update-hyperframes     # pin/index the local HyperFrames registry cache
-eddy edit path/to/footage/         # the one-sentence path: finished edit or exact blockers
+eddy edit path/to/footage/         # the one-sentence path: proof-gated edit or exact blockers
 eddy run path/to/footage/          # lower-level full pipeline control
 eddy run talk.mp4 --focus "only keep the part where I explain X"   # topical extract
 ```
@@ -101,8 +101,8 @@ python3 scripts/install_codex.py
 ```
 
 That installs the root skill plus MCP server from the checkout. For Claude-style skill folders only,
-use `scripts/install_agent_skill.py`. Once installed, the agent should prefer the `eddy_edit_start`
-MCP tool and fall back to `eddy edit` if tools have not reloaded yet. Eddy either produces local
+use `scripts/install_agent_skill.py`. Once installed, the agent should call `eddy_edit_options`
+before `eddy_edit_start` and fall back to `eddy edit` if tools have not reloaded yet. Eddy either produces local
 review outputs or writes an exact blocker, a repair plan, and a redacted support bundle in the run
 folder. Full Codex install details:
 [docs/CODEX_INSTALL.md](docs/CODEX_INSTALL.md).
@@ -140,7 +140,7 @@ banner instead. Preview the mascot with `eddy mascot`; `NO_COLOR=1` / `EDDY_NO_A
 Eddy ships an MCP server so an agent can start edits, watch them, and read the launch kit as tools:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.2"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.3"
 eddy mcp install --client claude-desktop # or claude-code | codex (idempotent, backs up, merges)
 ```
 
@@ -148,7 +148,8 @@ For Codex users installing from a cloned GitHub repo, prefer `python3 scripts/in
 instead. It writes a stable `~/.eddy/bin/eddy-mcp` wrapper and registers Codex without relying on the
 desktop app inheriting your shell PATH.
 
-A promise-level edit is a job: `eddy_edit_start` returns a `job_id`, `eddy_job_status` polls it, and
+A promise-level edit starts with options: `eddy_edit_options` says whether the host needs to ask,
+`eddy_edit_start` returns a `job_id`, `eddy_job_status` polls it, and
 `eddy_artifacts` reads the result after completion. Lower-level agents can still use
 `eddy_run_start`. There's also a one-shot Claude Code plugin (`/eddy-run`, `/eddy-shorts`,
 `/eddy-status` + a skill) at [`integrations/claude-code/`](integrations/claude-code). Full details in

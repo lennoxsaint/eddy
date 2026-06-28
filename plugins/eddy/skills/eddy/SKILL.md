@@ -1,6 +1,6 @@
 ---
 name: eddy
-description: Use Eddy to turn attached raw video footage into a QA-gated YouTube long edit and Shorts.
+description: Use Eddy to turn attached raw video footage into a proof-gated YouTube long edit and Shorts.
 ---
 
 # Eddy
@@ -13,10 +13,28 @@ If the user attaches raw video footage and gives no other instruction, treat the
 
 > Edit this footage into a finished YouTube long-form video and Shorts.
 
-Start the edit through the Eddy MCP tool:
+First ask Eddy what edit paths are available:
 
 ```text
-eddy_edit_start(source=<attached file or folder path>, format="youtube")
+eddy_edit_options(source=<attached file or folder path>, format="youtube")
+```
+
+If `requires_choice` is true, ask the user exactly:
+
+> How do you want this edited?
+
+Show the runnable options in plain English: what each option is, practical benefits, drawbacks, privacy/cost notes, and the recommended option. Do not show unavailable setup suggestions as selectable choices.
+
+If `requires_choice` is false, do not ask. Start the edit with the selected option:
+
+```text
+eddy_edit_start(
+  source=<attached file or folder path>,
+  format="youtube",
+  edit_path=<selected_option_id>,
+  auto_fallback=true,
+  fallback_policy="agent_subscription"
+)
 ```
 
 If Codex cannot resolve the attachment into a filesystem path, stop with the exact blocker
@@ -40,6 +58,8 @@ fails to install, report the exact blocker and continue only if a previous worki
 ## Editing Rules
 
 - Never mutate, move, delete, upload, publish, send, or schedule source media.
+- "Perfectly edited" means proof-gated: every required Eddy gate passed. If gates are red, report exact
+  blockers and evidence instead of calling the output perfect.
 - Long-form output should include the edited video, transcript, QA receipts, and launch-kit assets
   when the run reaches those gates.
 - Shorts are quality-gated. If separate camera and screen sources exist, Eddy uses the Yassy stacked
@@ -54,6 +74,26 @@ fails to install, report the exact blocker and continue only if a previous worki
   `storyboard.html`, copied HyperFrames references, and collision proof before compositing.
 
 ## Fallback
+
+If the selected edit path stalls, errors, or repeats the same gate failure without improvement, Eddy
+should automatically fall back to the best allowed alternative path, usually the current host
+assistant/subscription route. Do not silently fall back to metered OpenAI or Anthropic API usage unless
+the run has an explicit cost cap.
+
+For a host-agent edit path, wait for the job to reach `awaiting_host_decisions`, call:
+
+```text
+eddy_host_packet(job_id=<job_id>)
+```
+
+Use that packet to produce a valid `EditDecisions` JSON payload, then submit it:
+
+```text
+eddy_host_submit(job_id=<job_id>, payload=<EditDecisions JSON>)
+```
+
+Invalid host payloads are blockers to repair, not crashes. The packet contains transcript/QA text and
+source hashes, never media bytes.
 
 If plugin MCP tools are not visible yet, use the repo fallback from a cloned checkout:
 
