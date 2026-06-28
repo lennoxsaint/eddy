@@ -6,6 +6,7 @@ candidate ships — so they're worth pinning with deterministic synthetic audio.
 
 from __future__ import annotations
 
+import inspect
 import struct
 import wave
 from pathlib import Path
@@ -33,6 +34,13 @@ def _windows(amplitudes: list[float], window: int = 2400) -> list[int]:
 # --- echo-tail score ------------------------------------------------------------------------------
 def test_echo_score_missing_file_is_worst_case(tmp_path):
     assert _measurement._echo_artifact_score(tmp_path / "nope.wav") == 1.0
+
+
+def test_long_form_audio_scorers_are_bounded_by_default():
+    echo_default = inspect.signature(_measurement._echo_artifact_score).parameters["max_seconds"].default
+    click_default = inspect.signature(_measurement._click_event_count).parameters["max_seconds"].default
+    assert echo_default <= 120.0
+    assert click_default <= 120.0
 
 
 def test_echo_score_too_short_is_zero(tmp_path):

@@ -43,35 +43,39 @@ def _segment_args(
     output_seek = start - seek_start
     speed = speed or 1.0
 
-    vf = "fps=30,setpts=PTS-STARTPTS"
+    vf = f"trim=start={output_seek:.3f}:duration={duration:.3f},setpts=PTS-STARTPTS"
     if proxy_height:
-        vf = f"scale=-2:{proxy_height}," + vf
+        vf += f",scale=-2:{proxy_height}"
+    vf += ",fps=30"
     # v0.3.1 time-compression: the afades run on the source-rate stream (st in source seconds),
     # so atempo is inserted AFTER them and the fade-out st needs no adjustment. setpts=PTS/speed
     # compresses the video timeline to match. Both streams end at duration/speed.
-    af = f"afade=t=in:st=0:d={fade_s:.3f},afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f},asetpts=PTS-STARTPTS"
+    af = (
+        f"atrim=start={output_seek:.3f}:duration={duration:.3f},asetpts=PTS-STARTPTS,"
+        f"afade=t=in:st=0:d={fade_s:.3f},"
+        f"afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f}"
+    )
     if abs(speed - 1.0) > 1e-6:
         # setpts compresses the timeline; the trailing fps=30 re-normalizes the sped video back
         # to CFR 30 (dropping the now-redundant frames) so every segment shares one rate/timebase
         # for the lossless -c copy concat AND the video lands on the same duration as the atempo
         # audio. atempo follows the afades (which run on the source-rate stream, st in source secs).
-        vf = f"{vf},setpts=PTS/{speed:.6f},fps=30"
+        vf = vf.replace("setpts=PTS-STARTPTS", f"setpts=(PTS-STARTPTS)/{speed:.6f}")
         af = (
+            f"atrim=start={output_seek:.3f}:duration={duration:.3f},asetpts=PTS-STARTPTS,"
             f"afade=t=in:st=0:d={fade_s:.3f},"
             f"afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f},"
             f"atempo={speed:.6f},asetpts=PTS-STARTPTS"
         )
 
-    # The -t cap is an OUTPUT-duration limit. With setpts=PTS/speed, ffmpeg reads (cap * speed)
-    # of input to fill it, so the cap must be the OUTPUT length duration/speed — otherwise a sped
-    # segment reads `speed`x more source and emits no net compression (it stays `duration` long).
-    out_t = duration / speed
-    args = ["-ss", f"{seek_start:.3f}", "-i", str(source)]
-    if output_seek > 0:
-        args += ["-ss", f"{output_seek:.3f}"]
-    args += ["-t", f"{out_t:.3f}", "-map", "0:v:0", "-map", "0:a:0", "-vf", vf, "-af", af]
+    input_t = output_seek + duration
+    args = ["-ss", f"{seek_start:.3f}", "-t", f"{input_t:.3f}", "-i", str(source)]
+    args += ["-map", "0:v:0", "-map", "0:a:0", "-vf", vf, "-af", af]
     if proxy_height:
-        args += ["-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-c:a", "aac", "-b:a", "96k"]
+        args += [
+            "-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "96k",
+        ]
     else:
         args += [
             *video_encoder_args("7000k"),  # includes -pix_fmt yuv420p
@@ -119,31 +123,89 @@ def _segment_args_dual(
     cam_x = out_w - cam_size - margin
     cam_y = out_h - cam_size - margin
     crop_expr = "min(iw\\,ih)"
+    video_setpts = "setpts=PTS-STARTPTS"
+    audio_tail = ""
+    if abs(speed - 1.0) > 1e-6:
+        video_setpts = f"setpts=(PTS-STARTPTS)/{speed:.6f}"
+        audio_tail = f",atempo={speed:.6f},asetpts=PTS-STARTPTS"
     graph = (
-        f"[0:v]scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,"
+        f"[0:v]trim=start={output_seek:.3f}:duration={duration:.3f},{video_setpts},"
+        f"scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,"
         f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=rgba[screen];"
-        f"[1:v]crop={crop_expr}:{crop_expr}:(iw-{crop_expr})/2:0,"
+        f"[1:v]trim=start={output_seek:.3f}:duration={duration:.3f},{video_setpts},"
+        f"crop={crop_expr}:{crop_expr}:(iw-{crop_expr})/2:0,"
         f"scale={cam_size}:{cam_size},setsar=1,fps=30,format=rgba[camraw];"
         "[camraw][2:v]alphamerge[cam];"
         f"[screen][cam]overlay={cam_x}:{cam_y}:format=auto,setpts=PTS-STARTPTS[v];"
-        f"[1:a]afade=t=in:st=0:d={fade_s:.3f},"
-        f"afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f},asetpts=PTS-STARTPTS[a]"
+        f"[1:a]atrim=start={output_seek:.3f}:duration={duration:.3f},asetpts=PTS-STARTPTS,"
+        f"afade=t=in:st=0:d={fade_s:.3f},"
+        f"afade=t=out:st={max(0.0, duration - fade_s):.3f}:d={fade_s:.3f}{audio_tail}[a]"
     )
-    if abs(speed - 1.0) > 1e-6:
-        graph = graph.replace("setpts=PTS-STARTPTS[v]", f"setpts=PTS/{speed:.6f},fps=30[v]")
-        graph = graph.replace("asetpts=PTS-STARTPTS[a]", f"atempo={speed:.6f},asetpts=PTS-STARTPTS[a]")
-    out_t = duration / speed
-    args = ["-ss", f"{seek_start:.3f}", "-i", str(screen), "-ss", f"{seek_start:.3f}", "-i", str(camera)]
+    input_t = output_seek + duration
+    args = [
+        "-ss", f"{seek_start:.3f}", "-t", f"{input_t:.3f}", "-i", str(screen),
+        "-ss", f"{seek_start:.3f}", "-t", f"{input_t:.3f}", "-i", str(camera),
+    ]
     args += ["-i", str(mask)]
-    if output_seek > 0:
-        args += ["-ss", f"{output_seek:.3f}"]
-    args += ["-t", f"{out_t:.3f}", "-filter_complex", graph, "-map", "[v]", "-map", "[a]"]
+    args += ["-filter_complex", graph, "-map", "[v]", "-map", "[a]"]
     if proxy_height:
-        args += ["-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-c:a", "aac", "-b:a", "96k"]
+        args += [
+            "-c:v", "libx264", "-preset", proxy_preset, "-crf", "28", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "96k",
+        ]
     else:
         args += [*video_encoder_args("7000k"), "-c:a", "aac", "-b:a", "160k"]
     args += ["-movflags", "+faststart", str(out)]
     return args
+
+
+def _concat_segments_filtergraph(
+    paths: list[Path],
+    out_path: Path,
+    run_dir: Path,
+    render_cfg: RenderConfig,
+    receipts=None,
+    proxy: bool = False,
+) -> dict:
+    if not paths:
+        raise ValueError("no rendered segments to join")
+
+    inputs: list[str] = []
+    filter_parts: list[str] = []
+    concat_labels: list[str] = []
+    for idx, path in enumerate(paths):
+        inputs.extend(["-i", str(path)])
+        filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS,format=yuv420p[v{idx}]")
+        filter_parts.append(f"[{idx}:a]asetpts=PTS-STARTPTS[a{idx}]")
+        concat_labels.append(f"[v{idx}][a{idx}]")
+
+    graph = ";".join(
+        filter_parts + ["".join(concat_labels) + f"concat=n={len(paths)}:v=1:a=1[v][a]"]
+    )
+    if proxy:
+        video_args = ["-c:v", "libx264", "-preset", render_cfg.proxy_preset, "-crf", "28", "-pix_fmt", "yuv420p"]
+        audio_args = ["-c:a", "aac", "-b:a", "128k"]
+    else:
+        video_args = [*video_encoder_args("7000k")]
+        audio_args = ["-c:a", "aac", "-b:a", "160k"]
+
+    run_ffmpeg(
+        [
+            *inputs,
+            "-filter_complex", graph,
+            "-map", "[v]", "-map", "[a]",
+            *video_args, "-r", "30",
+            *audio_args, "-movflags", "+faststart", str(out_path),
+        ],
+        run_dir=run_dir,
+        receipts=receipts,
+    )
+    return {
+        "strategy": "filtergraph_reencode_concat",
+        "reencoded": True,
+        "segment_count": len(paths),
+        "concat_demuxer_copy": False,
+    }
 
 
 def render_edl(
@@ -201,12 +263,8 @@ def render_edl(
         paths = list(pool.map(one, jobs))
 
     list_path = seg_dir / "concat.txt"
-    list_path.write_text("\n".join(f"file {concat_quote(p)}" for p in paths) + "\n")
-    run_ffmpeg(
-        ["-f", "concat", "-safe", "0", "-i", str(list_path), "-c", "copy", "-movflags", "+faststart", str(out_path)],
-        run_dir=run_dir,
-        receipts=receipts,
-    )
+    list_path.write_text("\n".join(f"file {concat_quote(p.resolve())}" for p in paths) + "\n")
+    join_qa = _concat_segments_filtergraph(paths, out_path, run_dir, render_cfg, receipts=receipts, proxy=proxy)
     if receipts is not None:
         receipts.log(
             "render",
@@ -215,5 +273,6 @@ def render_edl(
             segments=len(paths),
             edl_duration_s=edl.total_duration_s,
             layout="screen_with_bottom_right_camera" if screen is not None else "single_source",
+            join_strategy=join_qa["strategy"],
         )
     return out_path

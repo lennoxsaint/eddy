@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from eddy.config import load_config
 from eddy.edit.compiler import CompileError, compile_edl
+from eddy.edit.simulate import simulate
 from eddy.edit.schema import EditDecisions, save
 from eddy.loop.receipts import Receipts
 from eddy.media.probe import duration_s
@@ -159,6 +160,7 @@ def submit_host_decisions(run_dir: Path | str, payload: dict[str, Any]) -> dict[
         return {"status": "blocked", "blockers": [blocker], "decisions_path": str(decisions_path), "run_dir": str(rd)}
 
     cfg = load_config()
+    phrases = load_phrases(rd)
     try:
         edl = compile_edl(
             decisions,
@@ -168,7 +170,7 @@ def submit_host_decisions(run_dir: Path | str, payload: dict[str, Any]) -> dict[
             cfg.render,
             cfg.gates,
             silence_spans=audio_silence_map(rd),
-            phrases=load_phrases(rd),
+            phrases=phrases,
             extract=decisions.x_eddy.focus_mode == "extract",
         )
     except CompileError as exc:
@@ -181,14 +183,24 @@ def submit_host_decisions(run_dir: Path | str, payload: dict[str, Any]) -> dict[
         receipts.log("host_agent_submit_blocked", blocker=blocker, decisions_path=str(decisions_path))
         return {"status": "blocked", "blockers": [blocker], "decisions_path": str(decisions_path), "run_dir": str(rd)}
 
+    manifest_sources = manifest.get("sources") or {}
+    if manifest_sources:
+        edl.sources = {str(key): str(value) for key, value in manifest_sources.items() if value}
+        edl.sources["camera"] = str(source_path)
+
+    sim_report = simulate(
+        edl,
+        decisions,
+        phrases,
+        cfg,
+        decisions.target_runtime_seconds or edl.total_duration_s,
+    )
     edl_path = host_dir / f"edl-{stamp}.json"
     save(edl, edl_path)
     iter_dir = _next_iteration(rd)
     save(decisions, iter_dir / "edit-decisions.json")
     save(edl, iter_dir / "edl.json")
-    (iter_dir / "sim-report.json").write_text(
-        json.dumps({"duration_s": edl.total_duration_s, "source": "host_agent"}, indent=1)
-    )
+    (iter_dir / "sim-report.json").write_text(json.dumps(sim_report, indent=1))
     receipts.log(
         "host_agent_submit",
         decisions_path=str(decisions_path),
@@ -196,6 +208,7 @@ def submit_host_decisions(run_dir: Path | str, payload: dict[str, Any]) -> dict[
         iteration_dir=str(iter_dir),
         ranges=len(edl.ranges),
         duration_s=edl.total_duration_s,
+        sim_pass=sim_report.get("pass"),
     )
     return {
         "status": "compiled",

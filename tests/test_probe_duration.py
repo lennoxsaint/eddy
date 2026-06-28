@@ -20,9 +20,20 @@ def test_eval_fps_handles_null_and_garbage():
 def test_stream_summary_handles_null_fps(monkeypatch):
     monkeypatch.setattr(probe, "probe", lambda p: {
         "format": {"duration": "10"},
-        "streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080, "avg_frame_rate": None}],
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": None,
+                "duration": "9.9",
+            }
+        ],
     })
-    assert stream_summary(Path("x.mp4"))["video"]["fps"] == 0.0  # null fps -> 0.0, no crash
+    video = stream_summary(Path("x.mp4"))["video"]
+    assert video["fps"] == 0.0  # null fps -> 0.0, no crash
+    assert video["duration_s"] == 9.9
 
 
 def test_resolve_prefers_format_duration():
@@ -54,7 +65,10 @@ def test_stream_summary_tolerates_missing_format_and_streams(monkeypatch):
 def test_stream_summary_handles_na_sample_rate(monkeypatch):
     monkeypatch.setattr(probe, "probe", lambda p: {
         "format": {"duration": "10"},
-        "streams": [{"codec_type": "audio", "codec_name": "aac", "sample_rate": "N/A", "channels": 2}],
+        "streams": [
+            {"codec_type": "audio", "codec_name": "aac", "sample_rate": "N/A", "channels": 2, "duration": "9.8"}
+        ],
     })
     s = stream_summary(Path("x.mp4"))
     assert s["audio"]["sample_rate"] == 0 and s["audio"]["channels"] == 2
+    assert s["audio"]["duration_s"] == 9.8

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from eddy.edit.schema import Edl, EdlRange
 from eddy.media.ffmpeg import FfmpegError
 from eddy.qa import deterministic
 
@@ -55,6 +56,34 @@ def test_silent_motion_gate_fails_loud(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda argv, **k: _proc(returncode=1, stderr="boom"))
     r = deterministic.silent_motion_gate(Path("v.mp4"), Path("."), -35.0, 2.0, 0)
     assert r["pass"] is False and "error" in r
+
+
+def test_av_drift_allows_frame_quantization_but_rejects_stream_desync(monkeypatch):
+    edl = Edl(sources={"camera": "x.mp4"}, ranges=[EdlRange(start=i, end=i + 1) for i in range(90)])
+    edl.total_duration_s = 90.0
+    monkeypatch.setattr(
+        deterministic,
+        "stream_summary",
+        lambda p: {
+            "duration_s": 92.0,
+            "video": {"fps": 30.0, "duration_s": 92.0},
+            "audio": {"duration_s": 91.8},
+        },
+    )
+    assert deterministic.av_drift(Path("v.mp4"), edl, 0.5)["pass"] is True
+
+    monkeypatch.setattr(
+        deterministic,
+        "stream_summary",
+        lambda p: {
+            "duration_s": 92.0,
+            "video": {"fps": 30.0, "duration_s": 92.0},
+            "audio": {"duration_s": 90.8},
+        },
+    )
+    r = deterministic.av_drift(Path("v.mp4"), edl, 0.5)
+    assert r["pass"] is False
+    assert r["stream_drift_s"] == 1.2
 
 
 def test_silence_gate_catches_real_dead_air(monkeypatch):

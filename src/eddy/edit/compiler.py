@@ -19,8 +19,12 @@ from eddy.config import GatesConfig, RenderConfig
 from eddy.edit.numeric_safety import needs_numeric_boundary_guard
 from eddy.edit.schema import EditDecisions, Edl, EdlRange
 
-GAP_TIGHTEN_THRESHOLD_S = 0.68  # from approved shorts standard
-GAP_LEAVE_HANDLE_S = 0.12  # silence left on each side of a tightened gap
+# The rendered-output silent_motion gate fails any non-protected silence above 0.6s. Tightening only
+# gaps >=0.68s left 0.6-0.67s mouth-moving pauses intact, which dogfood proved can keep an otherwise
+# good edit from ever shipping. Cut the center of any transcript-visible pause above the packer's
+# gap-record threshold, then leave audible handles on both sides.
+GAP_TIGHTEN_THRESHOLD_S = 0.35
+GAP_LEAVE_HANDLE_S = 0.05  # silence left on each side of a tightened gap
 
 
 class CompileError(ValueError):
@@ -57,7 +61,11 @@ def silence_cut_intervals(
 ) -> list[tuple[float, float]]:
     """Audio-truth silence removal: collapse every word-free silent span >= min_cut_s
     to a ~2*handle micro-pause. This is what kills 'mouth moving, no sound' — spans that
-    produce no transcribed words and so are invisible to inter-word gap tightening."""
+    produce no transcribed words and so are invisible to inter-word gap tightening.
+
+    Whisper can also stretch one word across an actually silent pocket. In that case the rendered
+    QA gate still sees silence. Audio truth may trim the silent side nearest that lone token, but
+    spans that would wipe multiple word centers are treated as speech and left untouched."""
     out: list[tuple[float, float]] = []
     for sp in silence_spans:
         s, e = float(sp["start"]), float(sp["end"])
@@ -66,8 +74,31 @@ def silence_cut_intervals(
         rs, re_ = s + handle_s, e - handle_s
         if re_ - rs <= 0.05:
             continue
-        # safety: never remove a region that overlaps a transcribed word
-        if any(w["start"] < re_ and w["end"] > rs for w in words):
+        # safety: allow one stretched Whisper token, but never remove a normal multi-word phrase
+        # just because silencedetect saw a low-energy pocket.
+        word_centers_inside = [
+            (idx, (float(w["start"]) + float(w["end"])) / 2)
+            for idx, w in enumerate(words)
+            if rs <= (float(w["start"]) + float(w["end"])) / 2 <= re_
+        ]
+        if len(word_centers_inside) > 1:
+            continue
+        if len(word_centers_inside) == 1:
+            idx, center = word_centers_inside[0]
+            prev_center = (
+                (float(words[idx - 1]["start"]) + float(words[idx - 1]["end"])) / 2
+                if idx > 0 else None
+            )
+            next_center = (
+                (float(words[idx + 1]["start"]) + float(words[idx + 1]["end"])) / 2
+                if idx + 1 < len(words) else None
+            )
+            attach_right = prev_center is None or (
+                next_center is not None and next_center - center <= center - prev_center
+            )
+            ps, pe = (rs, center - handle_s) if attach_right else (center + handle_s, re_)
+            if pe - ps > 0.05:
+                out.append((ps, pe))
             continue
         out.append((rs, re_))
     return out
@@ -379,6 +410,39 @@ def cut_transcript(edl: Edl, phrases: list[dict]) -> list[dict]:
                         "out_end": round(cursor + (p["end"] - r.start) / sp, 2),
                     }
                 )
+        cursor += (r.end - r.start) / sp
+    return out
+
+
+def cut_word_transcript(edl: Edl, words: list[dict]) -> list[dict]:
+    """Word-accurate transcript surviving the edit.
+
+    Phrase-level transcript rows can overrun partial EDL boundaries: if the editor cuts a phrase after
+    "real version", the phrase text may still contain "the build as..." even though that audio was not
+    rendered. The judge is text-only, so its evidence must follow the actual word centers inside each
+    EDL range instead of the broader phrase midpoint approximation.
+    """
+    out = []
+    cursor = 0.0
+    for r in edl.ranges:
+        sp = r.speed or 1.0
+        inside = [
+            w for w in words
+            if r.start <= (float(w["start"]) + float(w["end"])) / 2 <= r.end
+        ]
+        if inside:
+            start = float(inside[0]["start"])
+            end = float(inside[-1]["end"])
+            text = "".join(str(w.get("word") or w.get("text") or "") for w in inside).strip()
+            out.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "out_start": cursor + (start - r.start) / sp,
+                    "out_end": cursor + (end - r.start) / sp,
+                    "text": text,
+                }
+            )
         cursor += (r.end - r.start) / sp
     return out
 

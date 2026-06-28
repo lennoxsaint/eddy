@@ -3,8 +3,8 @@
 import pytest
 
 from eddy.config import GatesConfig, RenderConfig
-from eddy.edit.compiler import CompileError, compile_edl, cut_transcript, gap_tighten_intervals
-from eddy.edit.schema import Cut, EditDecisions, ProtectedMoment, Retake
+from eddy.edit.compiler import CompileError, compile_edl, cut_transcript, cut_word_transcript, gap_tighten_intervals
+from eddy.edit.schema import Cut, EditDecisions, Edl, EdlRange, ProtectedMoment, Retake
 
 RENDER = RenderConfig()
 GATES = GatesConfig()
@@ -148,10 +148,25 @@ def test_gap_tightening_cuts_center_leaves_handles():
     intervals = gap_tighten_intervals(words)
     assert len(intervals) == 1
     s, e = intervals[0]
-    # tightened gaps now leave a 0.12s handle each side (was 0.25s) — tighter pacing
+    # tightened gaps now leave a short fade-safe handle each side (was 0.25s) — tighter pacing
     from eddy.edit.compiler import GAP_LEAVE_HANDLE_S
     assert s == pytest.approx(words[4]["end"] + GAP_LEAVE_HANDLE_S, abs=0.005)
     assert e == pytest.approx(words[5]["start"] - GAP_LEAVE_HANDLE_S, abs=0.005)
+
+
+def test_gap_tightening_catches_sub_silent_motion_threshold_pause():
+    from eddy.edit.compiler import GAP_LEAVE_HANDLE_S
+
+    words = make_words(n=4, gap_s=0.1)
+    # 0.5s pauses are below the old 0.68s threshold but still trip the rendered
+    # silent_motion gate once encoder/fade tails are included.
+    shift = 0.5
+    for w in words[2:]:
+        w["start"] = round(w["start"] + shift, 3)
+        w["end"] = round(w["end"] + shift, 3)
+    intervals = gap_tighten_intervals(words)
+    assert intervals
+    assert intervals[0][0] == pytest.approx(words[1]["end"] + GAP_LEAVE_HANDLE_S, abs=0.005)
 
 
 def test_debris_ranges_dropped():
@@ -197,6 +212,23 @@ def test_benchmark_format_roundtrip():
         assert abs(br["duration"] - (er.end - er.start)) < 0.005
 
 
+def test_word_cut_transcript_does_not_overinclude_partial_phrase_tail():
+    edl = Edl(
+        sources={"camera": "cam.mp4"},
+        ranges=[EdlRange(start=10.0, end=12.0)],
+        total_duration_s=2.0,
+    )
+    words = [
+        {"start": 10.0, "end": 10.4, "word": " real"},
+        {"start": 10.4, "end": 10.8, "word": " version"},
+        {"start": 12.4, "end": 12.7, "word": " dangling"},
+    ]
+
+    kept = cut_word_transcript(edl, words)
+
+    assert kept[0]["text"] == "real version"
+
+
 # --- Workstream B: audio-truth silence removal ("mouth moving, no sound") ---
 
 
@@ -221,7 +253,7 @@ def test_silence_span_removed_when_word_free():
 
 
 def test_silence_removal_never_cuts_a_word():
-    """A silence span that (wrongly) overlaps a word must not remove that word."""
+    """A silence span that overlaps multiple normal word centers must not remove that phrase."""
     words = make_words(n=20, word_s=0.3, gap_s=0.1)
     # claim silence right over words 5..7 — must be ignored (overlaps speech)
     bad_span = [{"start": words[5]["start"], "end": words[7]["end"], "dur": 0.9}]
@@ -234,6 +266,23 @@ def test_silence_removal_never_cuts_a_word():
     for w in words:
         mid = (w["start"] + w["end"]) / 2
         assert any(r.start <= mid <= r.end for r in edl.ranges), f"word at {mid} dropped"
+
+
+def test_audio_truth_can_cut_single_stretched_whisper_word():
+    """One overstretched token must not protect rendered silence from the hard QA gate."""
+    words = [
+        {"start": 0.0, "end": 1.3, "word": "before"},
+        {"start": 1.3, "end": 2.8, "word": "stretched"},
+        {"start": 2.9, "end": 4.2, "word": "after"},
+    ]
+    silence = [{"start": 1.5, "end": 2.6, "dur": 1.1}]
+    edl = compile_edl(
+        EditDecisions(), words, "cam.mp4", 4.6, RENDER, GATES,
+        tighten_gaps=False, silence_spans=silence,
+    )
+
+    removed = sum(b.start - a.end for a, b in zip(edl.ranges, edl.ranges[1:]))
+    assert removed > 0.75
 
 
 def test_silence_inside_protected_moment_survives():

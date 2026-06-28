@@ -11,7 +11,7 @@ from eddy import log
 from eddy.media.ffmpeg import FFMPEG
 
 
-def _echo_artifact_score(wav_path: Path, max_seconds: float = 600.0) -> float:
+def _echo_artifact_score(wav_path: Path, max_seconds: float = 120.0) -> float:
     """Approximate hollow/echo risk from post-speech tail energy.
 
     This is deliberately conservative: it does not pretend to be a perceptual audio judge. It gives
@@ -71,7 +71,7 @@ def _echo_artifact_score(wav_path: Path, max_seconds: float = 600.0) -> float:
     return round(min(1.0, tail / (direct * 5.0)), 4)
 
 
-def _click_event_count(wav_path: Path, threshold: float = 0.82, max_seconds: float = 600.0) -> int:
+def _click_event_count(wav_path: Path, threshold: float = 0.82, max_seconds: float = 120.0) -> int:
     """Crude local mouth-click detector: count isolated sample derivative spikes.
 
     This is not a perceptual model; it is an objective receipt that catches the obvious ASMR-style

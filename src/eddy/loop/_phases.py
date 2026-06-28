@@ -9,7 +9,7 @@ from pathlib import Path
 
 from eddy.config import load_config
 from eddy.cost import run_cost_summary
-from eddy.edit.compiler import CompileError, cut_transcript
+from eddy.edit.compiler import CompileError, cut_word_transcript
 from eddy.edit.cutplan import (
     beat_map,
     compile_with_repair,
@@ -186,7 +186,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         )
         save_qa(qa, iter_dir)
 
-        kept = cut_transcript(edl, phrases)
+        kept = cut_word_transcript(edl, words)
         judge = run_judge(
             provider, receipts, sim, decisions, edl, kept, cfg,
             focus=decisions.x_eddy.focus, focus_mode=decisions.x_eddy.focus_mode,

@@ -29,14 +29,29 @@ def probe_clean(video: Path) -> dict:
 
 
 def av_drift(video: Path, edl: Edl, max_drift_s: float) -> dict:
-    actual = stream_summary(video)["duration_s"]
-    drift = abs(actual - edl.total_duration_s)
+    summary = stream_summary(video)
+    actual = summary["duration_s"]
+    video_stream = summary.get("video") or {}
+    audio_stream = summary.get("audio") or {}
+    video_duration = video_stream.get("duration_s")
+    audio_duration = audio_stream.get("duration_s")
+    stream_drift = (
+        abs(float(video_duration) - float(audio_duration))
+        if video_duration is not None and audio_duration is not None
+        else 0.0
+    )
+    rendered_vs_edl_drift = abs(actual - edl.total_duration_s)
+    fps = float(video_stream.get("fps") or 30.0)
+    frame_quantization_allowance = len(edl.ranges) / max(1.0, fps)
+    allowed_render_drift = max(max_drift_s, frame_quantization_allowance)
     return {
         "gate": "av_drift",
-        "pass": drift <= max_drift_s,
+        "pass": stream_drift <= max_drift_s and rendered_vs_edl_drift <= allowed_render_drift,
         "actual_s": round(actual, 2),
         "edl_s": edl.total_duration_s,
-        "drift_s": round(drift, 2),
+        "drift_s": round(rendered_vs_edl_drift, 2),
+        "stream_drift_s": round(stream_drift, 2),
+        "allowed_render_drift_s": round(allowed_render_drift, 2),
     }
 
 

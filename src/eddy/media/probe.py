@@ -63,6 +63,7 @@ def stream_summary(path: Path) -> dict:
             "width": v.get("width"),
             "height": v.get("height"),
             "fps": eval_fps(v.get("avg_frame_rate", "0/1")),
+            "duration_s": _to_float(v.get("duration")),
         },
         "audio": None
         if a is None
@@ -70,6 +71,7 @@ def stream_summary(path: Path) -> dict:
             "codec": a.get("codec_name"),
             "sample_rate": int(_to_float(a.get("sample_rate")) or 0),
             "channels": a.get("channels"),
+            "duration_s": _to_float(a.get("duration")),
         },
     }
 

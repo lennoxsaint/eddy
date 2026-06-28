@@ -11,9 +11,16 @@ def _run_dir(tmp_path):
     rd = tmp_path / "run"
     (rd / "transcript").mkdir(parents=True)
     source = tmp_path / "camera.mp4"
+    screen = tmp_path / "screen.mp4"
     source.write_bytes(b"fake")
+    screen.write_bytes(b"screen")
     (rd / "manifest.json").write_text(
-        json.dumps({"sources": {"camera": str(source)}, "source_sha256": {"camera": "abc"}})
+        json.dumps(
+            {
+                "sources": {"camera": str(source), "screen": str(screen)},
+                "source_sha256": {"camera": "abc", "screen": "def"},
+            }
+        )
     )
     (rd / "transcript" / "takes_packed.md").write_text("[0.00-2.00] hello world")
     (rd / "transcript" / "words.json").write_text(
@@ -24,14 +31,14 @@ def _run_dir(tmp_path):
                     {
                         "words": [
                             {"start": 0.1, "end": 0.5, "word": "hello", "probability": 0.99},
-                            {"start": 0.6, "end": 1.1, "word": "world", "probability": 0.99},
+                            {"start": 0.6, "end": 1.6, "word": "world", "probability": 0.99},
                         ]
                     }
                 ],
             }
         )
     )
-    (rd / "transcript" / "phrases.json").write_text(json.dumps([{"start": 0.1, "end": 1.1, "text": "hello world"}]))
+    (rd / "transcript" / "phrases.json").write_text(json.dumps([{"start": 0.1, "end": 1.6, "text": "hello world"}]))
     (rd / "transcript" / "audio-silence.json").write_text("[]")
     return rd
 
@@ -42,6 +49,7 @@ def test_host_packet_includes_context_but_never_media_bytes(tmp_path):
     assert packet["status"] == "ready"
     assert "hello world" in packet["transcript"]["excerpt"]
     assert packet["sources"]["camera"]["bytes_included"] is False
+    assert packet["sources"]["screen"]["bytes_included"] is False
     assert packet["media_policy"] == "No media bytes are included in this packet."
 
 
@@ -56,6 +64,12 @@ def test_host_submit_compiles_valid_decisions(monkeypatch, tmp_path):
     assert (rd / "host-agent").exists()
     assert (rd / "iterations" / "01" / "edit-decisions.json").exists()
     assert (rd / "iterations" / "01" / "edl.json").exists()
+    edl = json.loads((rd / "iterations" / "01" / "edl.json").read_text())
+    sim = json.loads((rd / "iterations" / "01" / "sim-report.json").read_text())
+    assert edl["sources"]["screen"].endswith("screen.mp4")
+    assert "boundary_cards" in sim
+    assert "verdicts" in sim
+    assert "pass" in sim
     assert tuple(Path(out["iteration_dir"]).parts[-2:]) == ("iterations", "01")
 
 
