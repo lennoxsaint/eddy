@@ -10,4 +10,5 @@ __pycache__/
 .coverage
 .DS_Store
 eddy.toml.local
+AGENTS.local.md
 .linear-key
