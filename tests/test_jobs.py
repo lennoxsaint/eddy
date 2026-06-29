@@ -90,11 +90,20 @@ def test_start_run_threads_edit_path_and_fallback(tmp_path):
 
 def test_start_edit_threads_edit_path_and_fallback_policy(tmp_path):
     jm = _jm(tmp_path, [_Proc(None)])
-    job = jm.start_edit("/x/clip.mp4", edit_path="host_kernel", auto_fallback=False, fallback_policy="agent_subscription")
+    job = jm.start_edit(
+        "/x/clip.mp4",
+        edit_path="host_kernel",
+        auto_fallback=False,
+        fallback_policy="agent_subscription",
+        motion_mode="required",
+        audio_audition="required",
+    )
     assert "--edit-path" in job.argv
     assert job.argv[job.argv.index("--edit-path") + 1] == "host_kernel"
     assert "--no-auto-fallback" in job.argv
     assert "--fallback-policy" in job.argv
+    assert job.argv[job.argv.index("--motion-mode") + 1] == "required"
+    assert job.argv[job.argv.index("--audio-audition") + 1] == "required"
 
 
 def test_status_tracks_exit_code(tmp_path):

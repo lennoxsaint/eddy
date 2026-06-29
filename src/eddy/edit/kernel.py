@@ -10,12 +10,20 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-from eddy.edit.retakes import STOPWORDS, norm_word
+from eddy.edit.retakes import STOPWORDS, norm_word, retake_candidates
 
 CandidateKind = Literal["retake", "word_gap", "audio_silence", "filler_reset"]
 
 OPENING_SCAN_S = 320.0
 OPENING_BODY_STARTERS = (
+    "i'll build",
+    "i will build",
+    "i'll show",
+    "i will show",
+    "let's ",
+    "lets ",
+    "here is",
+    "here's",
     "the post",
     "someone",
     "first ",
@@ -79,6 +87,34 @@ class OpeningHookCluster:
         return data
 
 
+@dataclass(frozen=True)
+class RetakeGroupVariant:
+    id: str
+    start_s: float
+    end_s: float
+    text: str
+    word_count: int
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RetakeGroup:
+    id: str
+    kind: str
+    phrase: str
+    default_variant_id: str
+    policy: str
+    variants: list[RetakeGroupVariant]
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["variants"] = [variant.to_dict() for variant in self.variants]
+        return data
+
+
 def _candidate_id(kind: str, start_s: float, end_s: float, index: int) -> str:
     start_ms = int(round(start_s * 1000))
     end_ms = int(round(end_s * 1000))
@@ -107,6 +143,16 @@ def _info_count(tokens: list[str]) -> int:
     return sum(1 for token in tokens if token not in STOPWORDS and len(token) > 2)
 
 
+def _has_immediate_repeat(tokens: list[str]) -> bool:
+    for n in (4, 3, 2):
+        for i in range(0, max(0, len(tokens) - (2 * n) + 1)):
+            left = tokens[i : i + n]
+            right = tokens[i + n : i + 2 * n]
+            if left == right and _info_count(left) >= 1:
+                return True
+    return False
+
+
 def _words_text(words: list[dict], start_s: float, end_s: float, *, limit: int = 18) -> str:
     inside = [
         str(w.get("word", "")).strip()
@@ -114,6 +160,18 @@ def _words_text(words: list[dict], start_s: float, end_s: float, *, limit: int =
         if float(w.get("start", 0.0)) >= start_s - 0.02 and float(w.get("end", 0.0)) <= end_s + 0.02
     ]
     return " ".join(" ".join(inside).split()[:limit])
+
+
+def _variant_from_row(prefix: str, row: dict, index: int, reason: str) -> RetakeGroupVariant:
+    text = _norm_text(str(row.get("text", "")))
+    return RetakeGroupVariant(
+        id=_stable_span_id(prefix, float(row["start"]), float(row["end"]), index),
+        start_s=_round_time(float(row["start"])),
+        end_s=_round_time(float(row["end"])),
+        text=text,
+        word_count=len(_tokens(text)),
+        reason=reason,
+    )
 
 
 def _phrase_rows(words: list[dict], phrases: list[dict] | None = None) -> list[dict]:
@@ -167,11 +225,10 @@ def _hook_chunks(rows: list[dict]) -> list[dict]:
         if row["start"] > OPENING_SCAN_S:
             break
         text_l = row["text"].lower()
-        if len(chunks) >= 2 and any(text_l.startswith(prefix) for prefix in OPENING_BODY_STARTERS):
+        if chunks and any(text_l.startswith(prefix) for prefix in OPENING_BODY_STARTERS):
             break
         starts_new_hook = any(text_l.startswith(prefix) for prefix in OPENING_HOOK_STARTERS)
-        previous_is_clean = not retake_clean_failures([{"text": chunks[-1]["text"]}]) if chunks else True
-        if chunks and (row["start"] - chunks[-1]["end"] <= 1.0 or (not starts_new_hook and previous_is_clean)):
+        if chunks and row["start"] - chunks[-1]["end"] <= 6.0 and not starts_new_hook:
             chunks[-1] = {
                 "start": chunks[-1]["start"],
                 "end": row["end"],
@@ -204,15 +261,177 @@ def opening_hook_cluster(words: list[dict], phrases: list[dict] | None = None) -
         )
         for idx, chunk in enumerate(chunks)
     ]
-    default = variants[-1]
+    clean_complete = [
+        variant
+        for variant in variants
+        if variant.word_count >= 6 and not _has_immediate_repeat(_tokens(variant.text))
+    ]
+    default = clean_complete[-1] if clean_complete else variants[-1]
     return OpeningHookCluster(
         id=_stable_span_id("opening_hook_cluster", variants[0].start_s, variants[-1].end_s, 1),
         start_s=variants[0].start_s,
         end_s=variants[-1].end_s,
         default_variant_id=default.id,
-        policy="last_clean_hook_wins",
+        policy="best_clean_hook_wins",
         variants=variants,
     )
+
+
+def opening_body_start_candidates(words: list[dict], phrases: list[dict] | None = None, *, limit: int = 8) -> list[dict]:
+    rows = _phrase_rows(words, phrases)
+    out: list[dict] = []
+    for idx, row in enumerate(rows):
+        if row["start"] > OPENING_SCAN_S:
+            break
+        text_l = row["text"].lower()
+        if any(text_l.startswith(prefix) for prefix in OPENING_BODY_STARTERS) or "let's go" in text_l:
+            out.append(
+                {
+                    "id": _stable_span_id("opening_body_start", row["start"], row["end"], len(out) + 1),
+                    "start_s": row["start"],
+                    "end_s": row["end"],
+                    "text": row["text"],
+                    "reason": "Likely first real body/setup beat after hook attempts.",
+                    "row_index": idx,
+                }
+            )
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _phrase_containing(rows: list[dict], at_s: float) -> dict | None:
+    for row in rows:
+        if float(row["start"]) - 0.05 <= at_s <= float(row["end"]) + 0.05:
+            return row
+    return None
+
+
+def transcript_retake_groups(
+    words: list[dict],
+    phrases: list[dict] | None = None,
+    *,
+    max_gap_s: float = 240.0,
+    limit: int = 80,
+) -> list[RetakeGroup]:
+    """Group raw transcript retakes into proof units.
+
+    A group is the durable fact: these variants are competing attempts at the same thought. The
+    creator-good gate fails if more than one variant survives the kept transcript.
+    """
+
+    rows = _phrase_rows(words, phrases)
+    groups: list[RetakeGroup] = []
+    seen_keys: set[tuple[int, int, str]] = set()
+
+    cluster = opening_hook_cluster(words, rows)
+    if cluster and len(cluster.variants) >= 2:
+        groups.append(
+            RetakeGroup(
+                id=cluster.id.replace("opening_hook_cluster", "retake_group_opening_hook"),
+                kind="opening_hook",
+                phrase="opening hook",
+                default_variant_id=cluster.default_variant_id,
+                policy="best_clean_hook_wins",
+                variants=[
+                    RetakeGroupVariant(
+                        id=variant.id,
+                        start_s=variant.start_s,
+                        end_s=variant.end_s,
+                        text=variant.text,
+                        word_count=variant.word_count,
+                        reason=variant.reason,
+                    )
+                    for variant in cluster.variants
+                ],
+            )
+        )
+
+    for item in retake_candidates(words, max_gap_s=max_gap_s, limit=limit * 2):
+        first_start = float(item.get("first_start_s", 0.0))
+        second_start = float(item.get("second_start_s", 0.0))
+        phrase = _norm_text(str(item.get("phrase", "")))
+        first_row = _phrase_containing(rows, first_start)
+        second_row = _phrase_containing(rows, second_start)
+        if not first_row or not second_row or first_row == second_row:
+            continue
+        key = (int(round(first_row["start"] * 10)), int(round(second_row["start"] * 10)), phrase)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        variants = [
+            _variant_from_row("retake_variant", first_row, 1, "Earlier transcript variant"),
+            _variant_from_row("retake_variant", second_row, 2, "Later transcript variant"),
+        ]
+        groups.append(
+            RetakeGroup(
+                id=_stable_span_id("retake_group", first_row["start"], second_row["end"], len(groups) + 1),
+                kind="repeated_take",
+                phrase=phrase,
+                default_variant_id=variants[-1].id,
+                policy="latest_clean_variant_wins",
+                variants=variants,
+            )
+        )
+        if len(groups) >= limit:
+            break
+
+    return groups[:limit]
+
+
+def retake_group_removal_cuts(
+    groups: list[RetakeGroup],
+    *,
+    selected_variants: dict[str, str] | None = None,
+) -> list[dict]:
+    selected_variants = selected_variants or {}
+    cuts: list[dict] = []
+    for group in groups:
+        selected_id = selected_variants.get(group.id) or group.default_variant_id
+        valid = {variant.id for variant in group.variants}
+        if selected_id not in valid:
+            selected_id = group.default_variant_id
+        for variant in group.variants:
+            if variant.id == selected_id:
+                continue
+            cuts.append(
+                {
+                    "start_s": variant.start_s,
+                    "end_s": variant.end_s,
+                    "quote": variant.text[:140],
+                    "reason": f"Transcript-Hard Retake Removal: {group.kind} keeps {selected_id} and removes {variant.id}.",
+                    "group_id": group.id,
+                    "variant_id": variant.id,
+                    "selected_variant_id": selected_id,
+                }
+            )
+    return cuts
+
+
+def retake_group_survivor_failures(edl_ranges: list[Any], groups: list[RetakeGroup], *, limit: int = 12) -> list[dict]:
+    failures: list[dict] = []
+
+    def survives(variant: RetakeGroupVariant) -> bool:
+        center = (variant.start_s + variant.end_s) / 2
+        return any(float(r.start) <= center <= float(r.end) for r in edl_ranges)
+
+    for group in groups:
+        surviving = [variant for variant in group.variants if survives(variant)]
+        if len(surviving) > 1:
+            failures.append(
+                {
+                    "type": "retake_group_survived",
+                    "group_id": group.id,
+                    "kind": group.kind,
+                    "phrase": group.phrase,
+                    "surviving_variant_ids": [variant.id for variant in surviving],
+                    "quotes": [variant.text[:140] for variant in surviving],
+                    "policy": group.policy,
+                }
+            )
+        if len(failures) >= limit:
+            return failures
+    return failures
 
 
 def _short_hook_text(text: str) -> str:
@@ -407,6 +626,22 @@ def build_edit_candidates(
                 reason=reason,
                 **kwargs,
             )
+        )
+
+    for item in retake_group_removal_cuts(transcript_retake_groups(words, max_gap_s=240.0, limit=80)):
+        add(
+            "retake",
+            float(item["start_s"]),
+            float(item["end_s"]),
+            str(item["reason"]),
+            quote=str(item.get("quote", "")),
+            source="transcript_hard_retake_ledger",
+            metadata={
+                "group_id": item.get("group_id"),
+                "variant_id": item.get("variant_id"),
+                "selected_variant_id": item.get("selected_variant_id"),
+                "retake_group": True,
+            },
         )
 
     for item in _immediate_retake_spans(words):

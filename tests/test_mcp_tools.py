@@ -125,6 +125,8 @@ def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path
     assert "youtube" in captured["argv"]
     assert "--edit-path" in captured["argv"]
     assert "host_kernel" in captured["argv"]
+    assert captured["argv"][captured["argv"].index("--motion-mode") + 1] == "required"
+    assert captured["argv"][captured["argv"].index("--audio-audition") + 1] == "required"
 
 
 def test_eddy_edit_options_returns_route_plan(monkeypatch, tmp_path):

@@ -201,6 +201,8 @@ def eddy_edit_start(
     edit_path: str | None = None,
     auto_fallback: bool = True,
     fallback_policy: str = "agent_subscription",
+    motion_mode: str | None = "required",
+    audio_audition: str | None = "required",
     repair: bool = False,
     dry_run: bool = False,
 ) -> dict:
@@ -215,6 +217,8 @@ def eddy_edit_start(
         edit_path=edit_path,
         auto_fallback=auto_fallback,
         fallback_policy=fallback_policy,
+        motion_mode=motion_mode,
+        audio_audition=audio_audition,
         repair=repair,
         dry_run=dry_run,
     )

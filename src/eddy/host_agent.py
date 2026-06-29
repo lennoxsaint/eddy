@@ -20,8 +20,10 @@ from eddy.edit.kernel import (
     EditCandidate,
     build_edit_candidates,
     candidates_by_id,
+    opening_body_start_candidates,
     opening_hook_cluster,
     raw_short_candidates,
+    transcript_retake_groups,
 )
 from eddy.edit.retakes import filler_candidates, retake_candidates
 from eddy.edit.simulate import simulate
@@ -88,9 +90,10 @@ class HostIntentV1(BaseModel):
     rejected_candidate_ids: list[str] = Field(default_factory=list)
     candidate_annotations: dict[str, str] = Field(default_factory=dict)
     selected_opening_hook_variant_id: str = ""
+    selected_retake_group_variants: dict[str, str] = Field(default_factory=dict)
     selected_short_candidate_ids: list[str] = Field(default_factory=list)
     shorts_candidates: list[ShortsCandidate] = Field(default_factory=list)
-    retake_clean_policy: str = "last_clean_hook_wins"
+    retake_clean_policy: str = "best_clean_hook_wins"
     protected_moments: list[HostProtectedMoment] = Field(default_factory=list)
     raw_cuts: list[HostExpertOverride] = Field(default_factory=list)
     expert_overrides: list[HostExpertOverride] = Field(default_factory=list)
@@ -201,35 +204,50 @@ def _opening_hook_cuts(intent: HostIntentV1, cluster: dict[str, Any] | None) -> 
         return []
 
     cuts: list[Cut] = []
-    cluster_start = float(cluster["start_s"])
-    selected_start = float(selected["start_s"])
-    if selected_start > cluster_start + 0.05:
-        cuts.append(
-            Cut(
-                start_s=cluster_start,
-                end_s=selected_start,
-                quote=str(selected.get("text", ""))[:120],
-                reason=(
-                    "Opening Hook Cluster: keep selected hook variant and remove earlier hook "
-                    "attempts according to last-clean-hook-wins."
-                ),
-                tier="MANDATORY",
-            )
-        )
-
-    selected_end = float(selected["end_s"])
     for variant in cluster.get("variants", []):
         if variant["id"] == selected_id:
             continue
         start_s = float(variant["start_s"])
         end_s = float(variant["end_s"])
-        if start_s > selected_end + 0.05:
+        cuts.append(
+            Cut(
+                start_s=start_s,
+                end_s=end_s,
+                quote=str(variant.get("text", ""))[:120],
+                reason=(
+                    "Best Clean Hook: remove unselected opening hook variant and keep the "
+                    f"selected variant {selected_id}."
+                ),
+                tier="MANDATORY",
+            )
+        )
+    return cuts
+
+
+def _retake_group_cuts(groups: list[dict[str, Any]], selected_variants: dict[str, str]) -> list[Cut]:
+    cuts: list[Cut] = []
+    for group in groups:
+        if str(group.get("kind", "")) == "opening_hook":
+            continue
+        group_id = str(group.get("id", ""))
+        variants = [item for item in group.get("variants", []) if isinstance(item, dict)]
+        valid_ids = {str(item.get("id", "")) for item in variants}
+        selected_id = selected_variants.get(group_id) or str(group.get("default_variant_id", ""))
+        if selected_id not in valid_ids:
+            selected_id = str(group.get("default_variant_id", ""))
+        for variant in variants:
+            variant_id = str(variant.get("id", ""))
+            if variant_id == selected_id:
+                continue
             cuts.append(
                 Cut(
-                    start_s=start_s,
-                    end_s=end_s,
-                    quote=str(variant.get("text", ""))[:120],
-                    reason="Opening Hook Cluster: remove unselected later hook attempt.",
+                    start_s=float(variant.get("start_s", 0.0)),
+                    end_s=float(variant.get("end_s", 0.0)),
+                    quote=str(variant.get("text", ""))[:140],
+                    reason=(
+                        "Transcript-Hard Retake Removal: "
+                        f"{group.get('kind', 'retake_group')} keeps {selected_id} and removes {variant_id}."
+                    ),
                     tier="MANDATORY",
                 )
             )
@@ -269,6 +287,7 @@ def _intent_to_decisions(
     *,
     opening_cluster: dict[str, Any] | None = None,
     short_hints: list[dict[str, Any]] | None = None,
+    retake_groups: list[dict[str, Any]] | None = None,
 ) -> EditDecisions:
     indexed = candidates_by_id(candidates)
     missing = [candidate_id for candidate_id in intent.selected_candidate_ids if candidate_id not in indexed]
@@ -282,6 +301,7 @@ def _intent_to_decisions(
 
     retakes: list[Retake] = []
     cuts: list[Cut] = _opening_hook_cuts(intent, opening_cluster)
+    cuts.extend(_retake_group_cuts(retake_groups or [], intent.selected_retake_group_variants))
     for candidate_id in dict.fromkeys(intent.selected_candidate_ids):
         candidate = indexed[candidate_id]
         reason = intent.candidate_annotations.get(candidate_id) or candidate.reason
@@ -327,6 +347,7 @@ def _intent_to_decisions(
                 intent.selected_opening_hook_variant_id
                 or ((opening_cluster or {}).get("default_variant_id") if opening_cluster else "")
             ),
+            "selected_retake_group_variants": intent.selected_retake_group_variants,
             "selected_short_candidate_ids": intent.selected_short_candidate_ids,
             "retake_clean_policy": intent.retake_clean_policy,
             "targeted_repair_directives": [directive.model_dump() for directive in intent.targeted_repair_directives],
@@ -372,6 +393,8 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
     words = _safe_words(rd)
     phrases = _safe_json_list(load_phrases, rd)
     hook_cluster = opening_hook_cluster(words, phrases)
+    body_starts = opening_body_start_candidates(words, phrases)
+    groups = transcript_retake_groups(words, phrases, max_gap_s=240.0, limit=80)
     short_hints = raw_short_candidates(phrases, min_s=10.0, max_s=59.0) if phrases else []
     history = read_history(rd)
     loop_status = evaluate_repair_loop(history, elapsed_s=elapsed_since_started(rd))
@@ -429,9 +452,21 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
             ),
         },
         "opening_hook_context": hook_cluster.to_dict() if hook_cluster else {
-            "policy": "last_clean_hook_wins",
+            "policy": "best_clean_hook_wins",
             "variants": [],
             "default_variant_id": "",
+        },
+        "opening_body_start_context": {
+            "candidates": body_starts,
+            "selection_rule": "Use these to avoid treating a setup/body line as the opening hook.",
+        },
+        "retake_group_context": {
+            "count": len(groups),
+            "groups": [group.to_dict() for group in groups],
+            "policy": (
+                "Transcript-Hard Retake Removal: Eddy removes all non-selected variants in each group. "
+                "The host may set selected_retake_group_variants when a non-default variant is stronger."
+            ),
         },
         "shorts_candidate_context": {
             "count": len(short_hints),
@@ -466,12 +501,15 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
         transcript_chars=len(packet["transcript"]["excerpt"]),
         candidate_count=len(candidates),
         opening_hook_variants=len(hook_cluster.variants) if hook_cluster else 0,
+        retake_groups=len(groups),
         raw_short_candidates=len(short_hints),
         media_bytes_included=False,
         requested_host_action=packet["requested_host_action"]["type"],
     )
     if hook_cluster:
         receipts.log("opening_hook_cluster", **hook_cluster.to_dict())
+    if groups:
+        receipts.log("retake_group_ledger", count=len(groups), groups=[group.to_dict() for group in groups])
     return packet
 
 
@@ -497,6 +535,7 @@ def _payload_to_decisions(run_dir: Path, payload: dict[str, Any]) -> tuple[EditD
         words = _safe_words(run_dir)
         phrases = _safe_json_list(load_phrases, run_dir)
         cluster = opening_hook_cluster(words, phrases)
+        groups = transcript_retake_groups(words, phrases, max_gap_s=240.0, limit=80)
         hints = raw_short_candidates(phrases, min_s=10.0, max_s=59.0) if phrases else []
         return (
             _intent_to_decisions(
@@ -504,6 +543,7 @@ def _payload_to_decisions(run_dir: Path, payload: dict[str, Any]) -> tuple[EditD
                 _kernel_candidates(run_dir),
                 opening_cluster=cluster.to_dict() if cluster else None,
                 short_hints=hints,
+                retake_groups=[group.to_dict() for group in groups],
             ),
             "host_intent_v1",
             intent,

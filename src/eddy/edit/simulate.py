@@ -9,8 +9,8 @@ import json
 from pathlib import Path
 
 from eddy.config import EddyConfig
-from eddy.edit.compiler import cut_transcript, cut_word_transcript
-from eddy.edit.kernel import retake_clean_failures
+from eddy.edit.compiler import cut_transcript, cut_word_transcript, cut_words
+from eddy.edit.kernel import retake_clean_failures, retake_group_survivor_failures, transcript_retake_groups
 from eddy.edit.schema import EditDecisions, Edl
 
 
@@ -85,9 +85,14 @@ def simulate(
 ) -> dict:
     kept = cut_transcript(edl, phrases)
     word_kept = cut_word_transcript(edl, words) if words else []
+    kept_words = cut_words(edl, words) if words else []
     kept_for_gates = word_kept or kept
     cards = boundary_cards(edl, phrases)
-    retake_failures = retake_clean_failures(kept_for_gates)
+    retake_group_failures = (
+        retake_group_survivor_failures(edl.ranges, transcript_retake_groups(words, phrases))
+        if words else []
+    )
+    retake_failures = [*retake_group_failures, *retake_clean_failures(kept_for_gates)]
 
     # dead air remaining inside keep ranges — silence inside a protected moment is
     # a deliberate visual beat (demo footage), not a defect. The exception is NARROW:
@@ -115,6 +120,36 @@ def simulate(
         or FADE_FLOOR_S <= c["end_handle_s"] < cfg.gates.min_boundary_handle_s
     ]
 
+    gap_failures = []
+    gap_values = []
+    for a, b in zip(kept_words, kept_words[1:]):
+        gap = float(b["out_start"]) - float(a["out_end"])
+        if gap <= 0:
+            continue
+        gap_values.append(gap)
+        src = float(a["end"])
+        protected = any(pm.start_s <= src <= pm.end_s for pm in decisions.protected_moments)
+        if gap > cfg.gates.gap_pacing_max_s and not protected:
+            gap_failures.append(
+                {
+                    "after_out_s": round(float(a["out_end"]), 2),
+                    "gap_s": round(gap, 2),
+                    "before": str(a.get("text", ""))[-40:],
+                    "after": str(b.get("text", ""))[:40],
+                }
+            )
+    gap_values_sorted = sorted(gap_values)
+    if gap_values_sorted:
+        p95_idx = min(len(gap_values_sorted) - 1, int(round((len(gap_values_sorted) - 1) * 0.95)))
+        gap_summary = {
+            "count": len(gap_values_sorted),
+            "median_s": round(gap_values_sorted[len(gap_values_sorted) // 2], 3),
+            "p95_s": round(gap_values_sorted[p95_idx], 3),
+            "max_s": round(gap_values_sorted[-1], 3),
+        }
+    else:
+        gap_summary = {"count": 0, "median_s": 0.0, "p95_s": 0.0, "max_s": 0.0}
+
     # beat density: kept seconds + words-per-minute per beat. Long beats are the
     # structural-cut candidates when over target; sustained fast WPM flags "reading the
     # screen aloud" runs the editorial brain should compress to the essential items.
@@ -141,6 +176,7 @@ def simulate(
         "no_dead_air": not dead_air,
         "handles_safe": not thin_handles and not handle_warnings,
         "retake_clean": not retake_failures,
+        "gap_pacing": not gap_failures,
         "has_content": len(kept) > 0,
     }
 
@@ -168,6 +204,16 @@ def simulate(
         "retake_clean": {
             "pass": not retake_failures,
             "failures": retake_failures,
+        },
+        "retake_clean_v2": {
+            "pass": not retake_group_failures,
+            "failures": retake_group_failures,
+        },
+        "gap_pacing": {
+            "pass": not gap_failures,
+            "target_s": [cfg.gates.gap_pacing_min_s, cfg.gates.gap_pacing_max_s],
+            "summary": gap_summary,
+            "failures": gap_failures[:20],
         },
         "verdicts": verdicts,
         "pass": all(verdicts.values()),

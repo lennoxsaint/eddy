@@ -159,6 +159,8 @@ class JobManager:
         edit_path: str | None = None,
         auto_fallback: bool = True,
         fallback_policy: str = "agent_subscription",
+        motion_mode: str | None = None,
+        audio_audition: str | None = None,
         repair: bool = False,
         dry_run: bool = False,
     ) -> Job:
@@ -178,6 +180,10 @@ class JobManager:
             args.append("--no-auto-fallback")
         if fallback_policy:
             args += ["--fallback-policy", fallback_policy]
+        if motion_mode:
+            args += ["--motion-mode", motion_mode]
+        if audio_audition:
+            args += ["--audio-audition", audio_audition]
         if repair:
             args.append("--repair")
         if dry_run:

@@ -42,6 +42,8 @@ def test_auto_profile_names_resolve_to_known_candidates():
         "warm_model_10",
         "natural_voice",
         "click_rescue",
+        "broadcast_clean",
+        "surgical_click_rescue",
     ]
 
 
@@ -451,6 +453,26 @@ def test_click_event_count_detects_impulse_clicks(tmp_path):
         wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
 
     assert audio._click_event_count(wav, threshold=0.8) >= 1
+
+
+def test_mouth_click_score_catches_smaller_transient_clicks(tmp_path):
+    import struct
+    import wave
+
+    wav = tmp_path / "mouth-clicks.wav"
+    rate = 48000
+    samples = [0] * rate
+    for offset in range(2000, 22000, 2000):
+        samples[offset] = 14000
+        samples[offset + 1] = -12000
+        samples[offset + 2] = 0
+    with wave.open(str(wav), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
+
+    assert audio._mouth_click_score(wav) > AudioConfig().mouth_click_score_max
 
 
 def test_resemble_enhance_uses_mps_on_apple_silicon(monkeypatch, tmp_path):

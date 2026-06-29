@@ -175,7 +175,7 @@ def test_host_packet_includes_opening_cluster_and_raw_shorts(tmp_path):
 
     opening = packet["opening_hook_context"]
     shorts = packet["shorts_candidate_context"]
-    assert opening["policy"] == "last_clean_hook_wins"
+    assert opening["policy"] == "best_clean_hook_wins"
     assert len(opening["variants"]) == 3
     assert opening["default_variant_id"] == opening["variants"][-1]["id"]
     assert shorts["count"] >= 1
@@ -202,7 +202,7 @@ def test_host_intent_defaults_to_last_opening_hook_and_compiles_shorts(monkeypat
     decisions = json.loads((rd / "iterations" / "01" / "edit-decisions.json").read_text())
     directive = decisions["x_eddy"]["directive"][0]
     assert directive["selected_opening_hook_variant_id"] == packet["opening_hook_context"]["default_variant_id"]
-    assert decisions["cuts"][0]["reason"].startswith("Opening Hook Cluster")
+    assert decisions["cuts"][0]["reason"].startswith("Best Clean Hook")
     assert decisions["shorts_candidates"]
 
 

@@ -40,7 +40,7 @@ from ._filters import (
     _speech_eq,
     _spectral_repair_chain,
 )
-from ._measurement import _click_event_count, _echo_artifact_score, measure_lufs
+from ._measurement import _click_event_count, _echo_artifact_score, _mouth_click_score, measure_lufs
 from ._profiles import (
     STUDIO_SOUND_PROFILES,
     StudioSoundProfile,
@@ -75,6 +75,7 @@ __all__ = [
     "_speech_eq",
     "_spectral_repair_chain",
     "_click_event_count",
+    "_mouth_click_score",
     "_echo_artifact_score",
     "_studio_sound_profile_names",
 ]
@@ -93,6 +94,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
         run_ffmpeg(["-i", str(video), "-vn", "-ac", "2", "-ar", "48000", str(raw)], run_dir=run_dir, receipts=receipts)
 
         before_clicks = _click_event_count(raw, cfg.click_threshold)
+        before_mouth_score = _mouth_click_score(raw)
 
         # optional heavy speech enhancement model(s), then portable spectral polish
         src, backend, backend_attempts = _heavy_enhance(raw, cfg, run_dir, receipts=receipts)
@@ -107,6 +109,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
                 "backend_attempts": backend_attempts,
                 "lufs_before": before,
                 "click_events_before": before_clicks,
+                "mouth_click_score_before": before_mouth_score,
                 "error": "heavy Studio Sound backend required but not available; run `eddy studio-sound install`",
             }
             if receipts is not None:
@@ -121,11 +124,13 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
         clean = Path(selected["path"])
         after_clicks = int(selected.get("click_events_after") or 0)
         click_gate_pass = bool(selected.get("click_gate_pass"))
+        mouth_click_gate_pass = bool(selected.get("mouth_click_gate_pass", True))
         echo_gate_pass = bool(selected.get("echo_gate_pass"))
         selected_loudness_gate_pass = _loudness_gate_pass(selected, cfg)
         strong_cleanup_gate_pass = _strong_cleanup_gate_pass(selected, cfg)
         quality_gate_pass = (
             click_gate_pass
+            and mouth_click_gate_pass
             and echo_gate_pass
             and selected_loudness_gate_pass
             and strong_cleanup_gate_pass
@@ -172,6 +177,9 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
                 click_events_before=before_clicks,
                 click_events_after=after_clicks,
                 click_gate_pass=click_gate_pass,
+                mouth_click_score_before=before_mouth_score,
+                mouth_click_score_after=selected.get("mouth_click_score_after"),
+                mouth_click_gate_pass=mouth_click_gate_pass,
                 echo_gate_pass=echo_gate_pass,
                 loudness_gate_pass=selected_loudness_gate_pass,
                 strong_cleanup_gate_pass=strong_cleanup_gate_pass,
@@ -197,6 +205,9 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             "click_events_before": before_clicks,
             "click_events_after": after_clicks,
             "click_gate_pass": click_gate_pass,
+            "mouth_click_score_before": before_mouth_score,
+            "mouth_click_score_after": selected.get("mouth_click_score_after"),
+            "mouth_click_gate_pass": mouth_click_gate_pass,
             "echo_gate_pass": echo_gate_pass,
             "loudness_gate_pass": selected_loudness_gate_pass,
             "strong_cleanup_gate_pass": strong_cleanup_gate_pass,

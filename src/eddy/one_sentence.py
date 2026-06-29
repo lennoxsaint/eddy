@@ -10,7 +10,7 @@ from typing import Any
 from .atomicio import atomic_write_text
 from .bootstrap import repair_plan
 from .bundle import build_bundle
-from .config import load_config
+from .config import AUDIO_AUDITION_ENV, MOTION_MODE_ENV, load_config
 from .doctor import detect, preflight
 from .edit_options import edit_path_options, provider_for_edit_path
 from .hooks.playbook import playbook_status, resolve_playbook_path
@@ -23,8 +23,25 @@ from .runs import assert_sources_decodable, discover_sources, manifest as load_m
 from .templates import select_template, template_inventory
 
 
-def _motion_cache_ready() -> bool:
-    cache = Path(".eddy/hyperframes-cache/hyperframes-pin.json")
+def _set_mode_env(motion_mode: str | None, audio_audition: str | None) -> dict[str, str | None]:
+    previous = {MOTION_MODE_ENV: os.environ.get(MOTION_MODE_ENV), AUDIO_AUDITION_ENV: os.environ.get(AUDIO_AUDITION_ENV)}
+    if motion_mode:
+        os.environ[MOTION_MODE_ENV] = motion_mode.strip().lower()
+    if audio_audition:
+        os.environ[AUDIO_AUDITION_ENV] = audio_audition.strip().lower()
+    return previous
+
+
+def _restore_mode_env(previous: dict[str, str | None]) -> None:
+    for key, value in previous.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+
+
+def _motion_cache_ready(cache_dir: str) -> bool:
+    cache = Path(cache_dir) / "hyperframes-pin.json"
     return cache.exists()
 
 
@@ -48,6 +65,8 @@ def prepare_edit(
     edit_path: str | None = None,
     auto_fallback: bool = True,
     fallback_policy: str = "agent_subscription",
+    motion_mode: str | None = None,
+    audio_audition: str | None = None,
     format_name: str = "youtube",
     repair: bool = False,
     dry_run: bool = True,
@@ -153,7 +172,12 @@ def prepare_edit(
                 )
             )
 
-    if template and "motion_graphics" in template.outputs and not _motion_cache_ready():
+    if (
+        template
+        and "motion_graphics" in template.outputs
+        and cfg.motion.mode.strip().lower() != "off"
+        and not _motion_cache_ready(cfg.motion.cache_dir)
+    ):
         blockers.append(
             _blocker(
                 "hyperframes_cache_missing",
@@ -218,6 +242,8 @@ def edit(
     edit_path: str | None = None,
     auto_fallback: bool = True,
     fallback_policy: str = "agent_subscription",
+    motion_mode: str | None = None,
+    audio_audition: str | None = None,
     format_name: str = "youtube",
     language: str = "en",
     repair: bool = False,
@@ -225,75 +251,81 @@ def edit(
 ) -> dict[str, Any]:
     """Run the one-sentence edit flow."""
 
-    prepared = prepare_edit(
-        source,
-        slug=slug,
-        focus=focus,
-        template_id=template_id,
-        edit_path=edit_path,
-        auto_fallback=auto_fallback,
-        fallback_policy=fallback_policy,
-        format_name=format_name,
-        repair=repair,
-        dry_run=dry_run,
-    )
-    if prepared["status"] == "blocked" or dry_run:
-        return prepared
-
-    selected_edit_path = prepared.get("selected_edit_path")
-    if selected_edit_path == "host_kernel":
-        from .transcribe.whisper import transcribe_run
-        from .host_agent import host_packet
-
-        run_dir = Path(prepared["run_dir"])
-        Receipts(run_dir).log(
-            "host_kernel_route_started",
-            edit_path="host_kernel",
-            next_tool="eddy_host_packet",
+    previous_modes = _set_mode_env(motion_mode, audio_audition)
+    try:
+        prepared = prepare_edit(
+            source,
+            slug=slug,
+            focus=focus,
+            template_id=template_id,
+            edit_path=edit_path,
             auto_fallback=auto_fallback,
             fallback_policy=fallback_policy,
+            motion_mode=motion_mode,
+            audio_audition=audio_audition,
+            format_name=format_name,
+            repair=repair,
+            dry_run=dry_run,
         )
-        transcribe_run(run_dir, language=language)
-        packet = host_packet(run_dir)
-        state = RunState(run_dir)
-        state.set_phase("awaiting_host_intent")
-        result = {
-            **prepared,
-            "status": "awaiting_host_intent",
-            "legacy_status": "awaiting_host_decisions",
-            "dry_run": False,
-            "run_dir": str(run_dir),
-            "host_contract": "host_intent_v1",
-            "candidate_count": packet.get("candidate_context", {}).get("count", 0),
-            "next_action": (
-                "Call eddy_host_packet(job_id), have the current assistant submit host_intent_v1 with "
-                "eddy_host_submit(job_id, payload), then render/QA through Eddy."
-            ),
-        }
-        _write_state(run_dir, result)
-        return result
+        if prepared["status"] == "blocked" or dry_run:
+            return prepared
 
-    ceiling = resolve_format(format_name)["ceiling_minutes"]
-    provider = provider_for_edit_path(selected_edit_path)
-    previous = os.environ.get("EDDY_EDITORIAL")
-    try:
-        if provider:
-            os.environ["EDDY_EDITORIAL"] = provider
-        run_dir = autonomous_run(
-            Path(source).expanduser(),
-            slug=slug,
-            skip_shorts=False,
-            skip_package=False,
-            language=language,
-            ceiling_minutes=ceiling,
-            focus=focus,
-        )
+        selected_edit_path = prepared.get("selected_edit_path")
+        if selected_edit_path == "host_kernel":
+            from .transcribe.whisper import transcribe_run
+            from .host_agent import host_packet
+
+            run_dir = Path(prepared["run_dir"])
+            Receipts(run_dir).log(
+                "host_kernel_route_started",
+                edit_path="host_kernel",
+                next_tool="eddy_host_packet",
+                auto_fallback=auto_fallback,
+                fallback_policy=fallback_policy,
+            )
+            transcribe_run(run_dir, language=language)
+            packet = host_packet(run_dir)
+            state = RunState(run_dir)
+            state.set_phase("awaiting_host_intent")
+            result = {
+                **prepared,
+                "status": "awaiting_host_intent",
+                "legacy_status": "awaiting_host_decisions",
+                "dry_run": False,
+                "run_dir": str(run_dir),
+                "host_contract": "host_intent_v1",
+                "candidate_count": packet.get("candidate_context", {}).get("count", 0),
+                "next_action": (
+                    "Call eddy_host_packet(job_id), have the current assistant submit host_intent_v1 with "
+                    "eddy_host_submit(job_id, payload), then render/QA through Eddy."
+                ),
+            }
+            _write_state(run_dir, result)
+            return result
+
+        ceiling = resolve_format(format_name)["ceiling_minutes"]
+        provider = provider_for_edit_path(selected_edit_path)
+        previous = os.environ.get("EDDY_EDITORIAL")
+        try:
+            if provider:
+                os.environ["EDDY_EDITORIAL"] = provider
+            run_dir = autonomous_run(
+                Path(source).expanduser(),
+                slug=slug,
+                skip_shorts=False,
+                skip_package=False,
+                language=language,
+                ceiling_minutes=ceiling,
+                focus=focus,
+            )
+        finally:
+            if provider:
+                if previous is None:
+                    os.environ.pop("EDDY_EDITORIAL", None)
+                else:
+                    os.environ["EDDY_EDITORIAL"] = previous
     finally:
-        if provider:
-            if previous is None:
-                os.environ.pop("EDDY_EDITORIAL", None)
-            else:
-                os.environ["EDDY_EDITORIAL"] = previous
+        _restore_mode_env(previous_modes)
     final_qa_path = run_dir / "final" / "qa-final.json"
     final_qa = json.loads(final_qa_path.read_text()) if final_qa_path.exists() else {"pass": False}
     status = "completed" if final_qa.get("pass") else "blocked"

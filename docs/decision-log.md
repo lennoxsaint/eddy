@@ -2,6 +2,34 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-30 — Creator-good default edit gates supersede media-valid success
+
+1. **Default edit target:** `Eddy, edit this` means a Creator-Good Edit, not a media-valid render.
+   Long-form output must pass transcript-hard retake removal, best-clean-hook selection,
+   word-onset safety, gap pacing, Strong Studio Sound, first-60 HyperFrames motion, deterministic
+   QA, and Shorts gates or return exact blockers with evidence.
+2. **Retakes are transcript-hard:** Opening hook attempts, reset loops, repeated claims, and separated
+   duplicate takes are grouped into a retake ledger from word/phrase transcript evidence. Eddy hard
+   removes every non-selected variant unless the host protects one with receipt evidence. The
+   `retake_clean_v2` gate fails when more than one variant from a group survives.
+3. **Best clean hook beats accidental latest:** The host may choose the strongest complete hook from
+   Eddy's variants; if it does not, Eddy keeps the latest complete clean hook as the fallback and
+   removes the other attempts.
+4. **Gap pacing is separate from word safety:** Cut handles still protect first syllables, while
+   ordinary spoken-word gaps collapse toward roughly 0.35s-0.55s. Longer unprotected gaps now fail
+   a pacing gate even if dead-air detection would pass.
+5. **Studio Sound requires local audition proof:** `source_reference` is an A/B baseline only. Eddy
+   selects among local heavy cleanup profiles, including broadcast and click-rescue profiles, using
+   mouth-click/transient, echo, loudness, and strong-cleanup gates. A detector that cannot measure
+   the issue blocks instead of returning a false green.
+6. **First-60 HyperFrames motion is mandatory by default:** YouTube edits write a run-local
+   `frame.md`, storyboard proof, copied HyperFrames asset manifest, overlay render, probes,
+   collision proof, and final composite receipt. Missing pinned cache or render proof is an exact
+   blocker unless motion is explicitly disabled for an advanced/test run.
+7. **Shorts inherit retake truth:** Shorts are mined from the raw transcript, but candidate spans
+   overlapping non-selected retake variants are excluded. Zero production Shorts is a blocker unless
+   the ledger proves no standalone non-retake clips can pass.
+
 ## 2026-06-29 — Retake-clean dogfood repair gates are required
 
 1. **Retake-clean is a product gate:** A media-valid long video is still a failed Eddy edit if failed

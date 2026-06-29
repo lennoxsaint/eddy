@@ -8,7 +8,7 @@ from eddy.config import AudioConfig
 from eddy.media.ffmpeg import run_ffmpeg
 
 from ._filters import _profile_polish_chain
-from ._measurement import _click_event_count, _echo_artifact_score, measure_lufs
+from ._measurement import _click_event_count, _echo_artifact_score, _mouth_click_score, measure_lufs
 from ._profiles import StudioSoundProfile
 
 
@@ -30,6 +30,7 @@ def _render_profile_candidate(
             receipts=receipts,
         )
         clicks = _click_event_count(out, cfg.click_threshold)
+        mouth_score = _mouth_click_score(out)
         echo_score = _echo_artifact_score(out)
         return {
             "profile": profile.name,
@@ -42,6 +43,8 @@ def _render_profile_candidate(
             "reference_echo_artifact_score": echo_score,
             "click_events_after": clicks,
             "click_gate_pass": True,
+            "mouth_click_score_after": mouth_score,
+            "mouth_click_gate_pass": mouth_score <= cfg.mouth_click_score_max,
             "echo_artifact_score": echo_score,
             "echo_gate_pass": True,
         }
@@ -64,8 +67,14 @@ def _render_profile_candidate(
         receipts=receipts,
     )
     before_clicks = _click_event_count(raw, cfg.click_threshold)
+    before_mouth_score = _mouth_click_score(raw)
     clicks = _click_event_count(out, cfg.click_threshold)
+    mouth_score = _mouth_click_score(out)
     click_gate_pass = clicks <= before_clicks or clicks <= max(8, int(before_clicks * 0.35))
+    if before_mouth_score > cfg.mouth_click_score_max:
+        mouth_click_gate_pass = mouth_score <= max(cfg.mouth_click_score_max, before_mouth_score * 0.75)
+    else:
+        mouth_click_gate_pass = mouth_score <= cfg.mouth_click_score_max
     reference_echo_score = _echo_artifact_score(raw)
     echo_score = _echo_artifact_score(out)
     echo_gate_pass = _echo_gate_pass(echo_score, reference_echo_score, cfg)
@@ -80,6 +89,9 @@ def _render_profile_candidate(
         "reference_echo_artifact_score": reference_echo_score,
         "click_events_after": clicks,
         "click_gate_pass": click_gate_pass,
+        "mouth_click_score_before": before_mouth_score,
+        "mouth_click_score_after": mouth_score,
+        "mouth_click_gate_pass": mouth_click_gate_pass,
         "echo_artifact_score": echo_score,
         "echo_gate_pass": echo_gate_pass,
     }
@@ -88,6 +100,7 @@ def _render_profile_candidate(
 def _candidate_score(candidate: dict, before_clicks: int, cfg: AudioConfig) -> float:
     clicks = float(candidate.get("click_events_after") or 0)
     click_ratio = clicks / max(1.0, float(before_clicks))
+    mouth_score = float(candidate.get("mouth_click_score_after") or 0.0)
     echo_score = float(candidate.get("echo_artifact_score") or 0.0)
     lufs = candidate.get("lufs_after")
     lufs_penalty = abs(float(lufs) - cfg.target_lufs) / 10.0 if lufs is not None else 0.5
@@ -100,6 +113,7 @@ def _candidate_score(candidate: dict, before_clicks: int, cfg: AudioConfig) -> f
         "natural_voice": 0.00,
         "click_rescue": 0.04,
         "broadcast_clean": 0.12,
+        "surgical_click_rescue": 0.16,
     }.get(str(candidate.get("profile")), 0.08)
     if candidate.get("click_gate_pass"):
         # Once the click gate passes, do not keep chasing a numerically smaller click count at the
@@ -108,7 +122,8 @@ def _candidate_score(candidate: dict, before_clicks: int, cfg: AudioConfig) -> f
         click_component = min(click_ratio, 1.0) * 0.08
     else:
         click_component = click_ratio * 0.50
-    return round(click_component + (echo_score * 0.35) + lufs_penalty + overprocess_penalty, 5)
+    mouth_component = max(0.0, mouth_score - cfg.mouth_click_score_max) * 4.0
+    return round(click_component + mouth_component + (echo_score * 0.35) + lufs_penalty + overprocess_penalty, 5)
 
 
 def _loudness_gate_pass(candidate: dict, cfg: AudioConfig, tolerance: float = 2.0) -> bool:
@@ -172,6 +187,7 @@ def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: Audi
     passing = [
         c for c in scored
         if c.get("click_gate_pass") and c.get("echo_gate_pass") and c.get("loudness_gate_pass")
+        and c.get("mouth_click_gate_pass", True)
     ]
     strong_passing = [c for c in passing if _strong_cleanup_gate_pass(c, cfg)]
     if cfg.require_heavy_backend and strong_passing:
@@ -185,6 +201,7 @@ def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: Audi
             heavy_gate_passes = [
                 c for c in heavy_pool
                 if c.get("click_gate_pass") and c.get("echo_gate_pass") and c.get("loudness_gate_pass")
+                and c.get("mouth_click_gate_pass", True)
             ]
             return min(heavy_gate_passes or heavy_pool, key=lambda c: c["selection_score"])
     reference = next((c for c in passing if c.get("profile") == "source_reference"), None)

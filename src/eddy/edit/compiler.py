@@ -23,8 +23,9 @@ from eddy.edit.schema import EditDecisions, Edl, EdlRange
 # gaps >=0.68s left 0.6-0.67s mouth-moving pauses intact, which dogfood proved can keep an otherwise
 # good edit from ever shipping. Cut the center of any transcript-visible pause above the packer's
 # gap-record threshold, then leave audible handles on both sides.
-GAP_TIGHTEN_THRESHOLD_S = 0.35
-GAP_LEAVE_HANDLE_S = 0.12  # silence left on each side of a tightened gap
+GAP_TIGHTEN_THRESHOLD_S = 0.55
+GAP_TARGET_S = 0.45  # tightened ordinary spoken-word gaps land in the 0.35-0.55s creator-good band
+GAP_LEAVE_HANDLE_S = GAP_TARGET_S / 2  # silence left on each side of a tightened gap
 
 
 class CompileError(ValueError):
@@ -484,6 +485,31 @@ def cut_word_transcript(edl: Edl, words: list[dict]) -> list[dict]:
                     "text": text,
                 }
             )
+        cursor += (r.end - r.start) / sp
+    return out
+
+
+def cut_words(edl: Edl, words: list[dict]) -> list[dict]:
+    """Individual kept words with output-timeline timestamps."""
+    out: list[dict] = []
+    cursor = 0.0
+    for r in edl.ranges:
+        sp = r.speed or 1.0
+        for w in words:
+            ws = float(w["start"])
+            we = float(w["end"])
+            center = (ws + we) / 2
+            if r.start <= center <= r.end:
+                out.append(
+                    {
+                        **w,
+                        "start": ws,
+                        "end": we,
+                        "out_start": cursor + (ws - r.start) / sp,
+                        "out_end": cursor + (we - r.start) / sp,
+                        "text": str(w.get("word") or w.get("text") or "").strip(),
+                    }
+                )
         cursor += (r.end - r.start) / sp
     return out
 

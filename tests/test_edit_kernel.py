@@ -23,7 +23,7 @@ WORDS = [
 
 def test_kernel_retake_candidates_preserve_last_take_bias():
     candidates = build_edit_candidates(words=WORDS, retakes=retake_candidates(WORDS))
-    retake = next(candidate for candidate in candidates if candidate.kind == "retake")
+    retake = next(candidate for candidate in candidates if candidate.kind == "retake" and "second_start_s" in candidate.metadata)
 
     assert retake.start_s < retake.metadata["second_start_s"]
     assert retake.end_s < retake.metadata["second_start_s"]
@@ -52,8 +52,9 @@ def test_kernel_audio_silence_candidates_skip_protected_spans():
         protected_spans=[{"start_s": 5.8, "end_s": 7.1, "reason": "intentional pause"}],
     )
 
-    assert [candidate.kind for candidate in candidates] == ["audio_silence"]
-    assert candidates[0].start_s == 8.08
+    audio_silence = [candidate for candidate in candidates if candidate.kind == "audio_silence"]
+    assert len(audio_silence) == 1
+    assert audio_silence[0].start_s == 8.08
 
 
 def test_kernel_selected_candidate_ids_compile_to_valid_edl():
@@ -94,7 +95,7 @@ def test_opening_hook_cluster_defaults_to_last_clean_hook():
     assert "duplicate Codex" in cluster.variants[-1].text
 
 
-def test_opening_hook_cluster_prefers_last_clean_hook_over_dirty_variant():
+def test_opening_hook_cluster_prefers_best_clean_hook_over_dirty_later_variant():
     phrases = [
         {"start": 34.0, "end": 43.9, "text": "You are renting your AI coding model and you don't have to"},
         {"start": 58.7, "end": 64.2, "text": "You are renting your AI coding model but you don't have to"},
@@ -107,13 +108,12 @@ def test_opening_hook_cluster_prefers_last_clean_hook_over_dirty_variant():
     cluster = opening_hook_cluster([], phrases)
 
     assert cluster is not None
-    assert cluster.default_variant_id == cluster.variants[-1].id
-    assert cluster.variants[-3].start_s == 242.1
-    assert cluster.variants[-3].end_s == 255.7
-    assert cluster.variants[-2].start_s == 260.0
-    assert cluster.variants[-1].start_s == 274.8
-    assert cluster.variants[-1].end_s == 280.6
-    assert cluster.variants[-1].text == "I'll build the whole thing on screen"
+    assert len(cluster.variants) == 3
+    assert cluster.default_variant_id == cluster.variants[1].id
+    assert cluster.variants[-1].start_s == 242.1
+    assert cluster.variants[-1].end_s == 267.1
+    assert "free local ones" in cluster.variants[-1].text
+    assert "I'll build" not in cluster.variants[-1].text
 
 
 def test_kernel_immediate_retake_candidates_remove_first_duplicate_phrase():

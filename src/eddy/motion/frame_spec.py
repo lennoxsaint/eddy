@@ -102,6 +102,34 @@ redesign the overlay rather than promoting it.
     return path
 
 
+def write_creator_good_frame(out_dir: Path) -> Path:
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "frame.md"
+    path.write_text(
+        """---
+frame_name: Eddy Creator-Good First-60
+canvas: "1920x1080"
+background: "transparent"
+foreground: "#F7F8FB"
+accent_primary: "#37FF8B"
+accent_warning: "#FF4D4D"
+accent_secondary: "#39BDF8"
+typeface: "Inter"
+motion_style: ["kinetic hook labels", "screen-safe proof overlays", "subtle launch motion"]
+forbidden: ["covering face", "covering screen proof", "covering captions", "generic decorative blobs"]
+---
+
+# Eddy Creator-Good First-60
+
+This frame is for the first 30-60 seconds of a default Eddy YouTube edit. It must reinforce the
+spoken hook with compact proof labels, directional rails, and lightweight motion without obscuring
+the camera PiP, screen content, captions, or proof UI.
+"""
+    )
+    return path
+
+
 def hyperframes_commit(hyperframes_root: Path) -> str:
     root = Path(hyperframes_root)
     try:

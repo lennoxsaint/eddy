@@ -59,6 +59,8 @@ def _run_plan(cfg: EddyConfig, skip_shorts: bool, skip_package: bool) -> list[st
     plan.append("final_render")
     if cfg.audio.studio_sound:
         plan.append("studio_sound")
+    if cfg.motion.mode.strip().lower() != "off":
+        plan.append("first_60_motion")
     if not skip_shorts:
         plan.append("shorts")
     if not skip_package:
@@ -188,6 +190,14 @@ def autonomous_run(
         audio_result = studio_sound(final, run_dir, cfg.audio, receipts=receipts)
         if not audio_result.get("quality_gate_pass", False):
             raise RuntimeError(audio_result.get("error") or "Studio Sound quality gate failed")
+
+    if cfg.motion.mode.strip().lower() != "off":
+        state.set_phase("first_60_motion")
+        from eddy.render.motion import apply_first_60_motion
+
+        motion_result = apply_first_60_motion(final, run_dir, cfg, receipts=receipts)
+        if not motion_result.get("quality_gate_pass", False):
+            raise RuntimeError(motion_result.get("error") or "First-60 motion quality gate failed")
 
     final_qa = run_deterministic(
         final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),

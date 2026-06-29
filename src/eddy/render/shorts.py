@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from eddy.config import load_config
-from eddy.edit.kernel import raw_short_candidates
+from eddy.edit.kernel import raw_short_candidates, transcript_retake_groups
 from eddy.edit.schema import ShortsCandidate, load_decisions
 from eddy.loop.receipts import Receipts
 from eddy.media.ffmpeg import run_ffmpeg, video_encoder_args
@@ -290,6 +290,62 @@ def _mined_short_candidates(run_dir: Path, min_s: float, max_s: float, limit: in
     ]
 
 
+def _retake_exclusion_spans(run_dir: Path) -> list[dict]:
+    """Return non-selected raw transcript variants that Shorts must not mine or render."""
+    try:
+        groups = transcript_retake_groups(words_flat(run_dir), load_phrases(run_dir))
+    except Exception:
+        return []
+    spans: list[dict] = []
+    for group in groups:
+        selected = group.default_variant_id
+        for variant in group.variants:
+            if variant.id == selected:
+                continue
+            spans.append(
+                {
+                    "group_id": group.id,
+                    "variant_id": variant.id,
+                    "kind": group.kind,
+                    "start_s": variant.start_s,
+                    "end_s": variant.end_s,
+                    "text": variant.text,
+                }
+            )
+    return spans
+
+
+def _candidate_overlaps_retake(candidate: ShortsCandidate, spans: list[dict], *, min_overlap_s: float = 0.25) -> bool:
+    start = float(candidate.start_s)
+    end = float(candidate.end_s)
+    for span in spans:
+        overlap = min(end, float(span["end_s"])) - max(start, float(span["start_s"]))
+        if overlap >= min_overlap_s:
+            return True
+    return False
+
+
+def _filter_retaken_short_candidates(
+    candidates: list[ShortsCandidate],
+    spans: list[dict],
+) -> tuple[list[ShortsCandidate], list[dict]]:
+    kept: list[ShortsCandidate] = []
+    dropped: list[dict] = []
+    for candidate in candidates:
+        if _candidate_overlaps_retake(candidate, spans):
+            dropped.append(
+                {
+                    "start_s": float(candidate.start_s),
+                    "end_s": float(candidate.end_s),
+                    "hook": candidate.hook,
+                    "reason": "Candidate overlaps a transcript-hard retake variant.",
+                }
+            )
+        else:
+            kept.append(candidate)
+    return kept, dropped
+
+
 def _write_short_blocker(out_root: Path, receipts: Receipts, code: str, message: str, evidence: dict) -> list[dict]:
     ledger = [
         {
@@ -348,6 +404,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
 
     out_root = run_dir / "final" / "shorts"
     out_root.mkdir(parents=True, exist_ok=True)
+    retake_exclusion_spans = _retake_exclusion_spans(run_dir)
 
     if not decisions.shorts_candidates:
         mined = _mined_short_candidates(
@@ -369,6 +426,33 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
                 "no_standalone_short_candidates",
                 "No host or raw-transcript Shorts candidates were available.",
                 {"source": "raw_transcript_miner", "min_s": cfg.shorts.min_s, "max_s": cfg.shorts.max_s},
+            )
+
+    if retake_exclusion_spans and decisions.shorts_candidates:
+        original_count = len(decisions.shorts_candidates)
+        decisions.shorts_candidates, dropped_retakes = _filter_retaken_short_candidates(
+            decisions.shorts_candidates,
+            retake_exclusion_spans,
+        )
+        if dropped_retakes:
+            receipts.log(
+                "shorts_retakes_excluded",
+                original_candidate_count=original_count,
+                kept_candidate_count=len(decisions.shorts_candidates),
+                dropped_candidate_count=len(dropped_retakes),
+                dropped=dropped_retakes[:20],
+                exclusion_spans=retake_exclusion_spans[:20],
+            )
+        if not decisions.shorts_candidates:
+            return _write_short_blocker(
+                out_root,
+                receipts,
+                "short_candidates_all_retakes",
+                "All Shorts candidates overlapped transcript-hard retake variants.",
+                {
+                    "dropped_count": len(dropped_retakes),
+                    "retake_exclusion_spans": retake_exclusion_spans[:20],
+                },
             )
 
     selected_candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count, playbook_records)

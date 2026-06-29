@@ -9,6 +9,8 @@ import tomlkit
 from pydantic import BaseModel, Field
 
 CONFIG_ENV = "EDDY_CONFIG"
+MOTION_MODE_ENV = "EDDY_MOTION_MODE"
+AUDIO_AUDITION_ENV = "EDDY_AUDIO_AUDITION"
 DEFAULT_USER_CONFIG = Path("~/.config/eddy/eddy.toml").expanduser()
 PROJECT_CONFIG = Path("eddy.toml")
 
@@ -170,6 +172,8 @@ class AudioConfig(BaseModel):
             "warm_model_10",
             "natural_voice",
             "click_rescue",
+            "broadcast_clean",
+            "surgical_click_rescue",
         ]
     )
     studio_sound_env: str = "~/.cache/eddy/studio-sound/resemble-enhance-py311"
@@ -182,6 +186,7 @@ class AudioConfig(BaseModel):
     )
     write_ab_samples: bool = True
     click_threshold: float = 0.68
+    mouth_click_score_max: float = 0.045
     target_lufs: float = -14.0  # YouTube integrated loudness
     true_peak_db: float = -1.5
     lra: float = 11.0
@@ -216,6 +221,8 @@ class GatesConfig(BaseModel):
     silence_min_cut_s: float = 0.40  # audio-silent span >= this (and no words) gets removed
     silence_handle_s: float = 0.12  # silence left each side of a removed silent span
     max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
+    gap_pacing_min_s: float = 0.35  # ordinary spoken-word gaps should keep a natural floor
+    gap_pacing_max_s: float = 0.55  # unprotected spoken-word gaps above this feel draggy
     allow_redaction: bool = False  # default is no blur/redaction; use explicit opt-in for privacy edits
     # v1.6 extract continuity (only applied when compile_edl runs with extract=True): consolidate the
     # many small keep ranges a topical extract produces into a few contiguous blocks, so explanations
@@ -228,6 +235,14 @@ class GatesConfig(BaseModel):
 class TelemetryConfig(BaseModel):
     enabled: bool = False  # OPT-IN only — never on by default
     endpoint: str = ""     # where anonymized failure beacons are sent (you provide this)
+
+
+class MotionConfig(BaseModel):
+    """HyperFrames-backed first-60 motion layer for default YouTube edits."""
+
+    mode: str = "required"  # required | off
+    first_60_seconds: float = 60.0
+    cache_dir: str = ".eddy/hyperframes-cache"
 
 
 class PathsConfig(BaseModel):
@@ -256,6 +271,7 @@ class EddyConfig(BaseModel):
     render: RenderConfig = Field(default_factory=RenderConfig)
     shorts: ShortsConfig = Field(default_factory=ShortsConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
+    motion: MotionConfig = Field(default_factory=MotionConfig)
     thumbnails: ThumbnailsConfig = Field(default_factory=ThumbnailsConfig)
     gates: GatesConfig = Field(default_factory=GatesConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
@@ -300,10 +316,11 @@ def migrate_config(data: dict) -> dict:
 def load_config(path: Path | None = None) -> EddyConfig:
     p = path or config_path()
     if not p.exists():
-        return EddyConfig()
+        return _apply_env_overrides(EddyConfig())
     try:
         doc = tomlkit.parse(p.read_text())
-        return EddyConfig.model_validate(migrate_config(doc.unwrap()))
+        cfg = EddyConfig.model_validate(migrate_config(doc.unwrap()))
+        return _apply_env_overrides(cfg)
     except Exception as e:
         # a malformed / out-of-date config must NOT brick every command (including doctor). Warn and
         # fall back to defaults; `eddy doctor` can rewrite a clean config.
@@ -314,7 +331,17 @@ def load_config(path: Path | None = None) -> EddyConfig:
             "Run `eddy doctor` to rewrite it.",
             file=sys.stderr,
         )
-        return EddyConfig()
+        return _apply_env_overrides(EddyConfig())
+
+
+def _apply_env_overrides(cfg: EddyConfig) -> EddyConfig:
+    motion_mode = os.environ.get(MOTION_MODE_ENV)
+    if motion_mode:
+        cfg.motion.mode = motion_mode.strip().lower()
+    audio_audition = os.environ.get(AUDIO_AUDITION_ENV)
+    if audio_audition:
+        cfg.audio.studio_sound = audio_audition.strip().lower() != "off"
+    return cfg
 
 
 def update_config_sections(sections: dict, path: Path | None = None) -> Path:

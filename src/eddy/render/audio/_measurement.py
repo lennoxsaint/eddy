@@ -111,6 +111,67 @@ def _click_event_count(wav_path: Path, threshold: float = 0.82, max_seconds: flo
     return count
 
 
+def _mouth_click_score(wav_path: Path, max_seconds: float = 120.0) -> float:
+    """Adaptive transient score for mouth-click risk.
+
+    The older gate only counted very large derivative spikes, which can report zero on exactly the
+    kind of smaller wet mouth clicks a creator hears immediately. This score is intentionally simple
+    and local: it looks for isolated high-derivative events relative to the file's own noise floor.
+    """
+    if not wav_path.exists():
+        return 1.0
+    try:
+        with wave.open(str(wav_path), "rb") as wf:
+            channels = max(1, wf.getnchannels())
+            width = wf.getsampwidth()
+            rate = wf.getframerate() or 48000
+            frames_to_read = min(wf.getnframes(), int(max_seconds * rate))
+            raw = wf.readframes(frames_to_read)
+    except Exception as exc:
+        log.debug("mouth-click WAV read failed for %s (treating as worst-case): %s", wav_path, exc)
+        return 1.0
+    if width not in (2, 4) or not raw:
+        return 1.0
+    import statistics
+    import struct
+
+    fmt = "<" + ("h" if width == 2 else "i") * (len(raw) // width)
+    try:
+        vals = struct.unpack(fmt, raw)
+    except struct.error:
+        return 1.0
+    max_amp = float((2 ** (8 * width - 1)) - 1)
+    mono: list[float] = []
+    for i in range(0, len(vals), channels):
+        mono.append(sum(float(v) for v in vals[i:i + channels]) / channels / max_amp)
+    if len(mono) < 4:
+        return 0.0
+    jumps = [abs(mono[i] - mono[i - 1]) for i in range(1, len(mono))]
+    if not jumps:
+        return 0.0
+    ordered = sorted(jumps)
+    median = statistics.median(ordered)
+    p99 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.99))]
+    adaptive = max(0.025, median * 12.0, p99 * 0.62)
+    refractory = int(rate * 0.010)
+    last = -refractory
+    events = 0
+    total_excess = 0.0
+    for idx, jump in enumerate(jumps):
+        if jump < adaptive or idx - last < refractory:
+            continue
+        # Mouth clicks are short transients; ignore full-scale clipping/screams as a different defect.
+        local_amp = abs(mono[idx])
+        if local_amp > 0.92:
+            continue
+        events += 1
+        total_excess += jump - adaptive
+        last = idx
+    seconds = max(0.001, len(mono) / rate)
+    density = events / seconds
+    return round(min(1.0, density * 0.035 + total_excess * 0.08), 5)
+
+
 def measure_lufs(media: Path) -> float | None:
     """Integrated loudness (LUFS) via loudnorm measurement pass. None on failure."""
     import subprocess

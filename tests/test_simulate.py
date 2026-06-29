@@ -64,6 +64,25 @@ def phrase(start, end, text):
     return {"start": start, "end": end, "text": text}
 
 
+def words_from_phrases(phrases):
+    words = []
+    for item in phrases:
+        parts = item["text"].split()
+        step = (item["end"] - item["start"]) / max(1, len(parts))
+        cursor = item["start"]
+        for part in parts:
+            words.append(
+                {
+                    "start": round(cursor, 3),
+                    "end": round(cursor + min(0.32, step * 0.68), 3),
+                    "word": f" {part}",
+                    "probability": 0.99,
+                }
+            )
+            cursor += step
+    return words
+
+
 def test_single_range_no_splice_passes_clean():
     # one keep range, no cut between ranges -> nothing removed, no cards, clean pass
     edl = mk_edl([EdlRange(start=0.0, end=10.0, start_handle_s=0.2, end_handle_s=0.2)])
@@ -80,8 +99,9 @@ def test_single_range_no_splice_passes_clean():
     assert rep["verdicts"] == {
         "no_dead_air": True,
         "handles_safe": True,
-        "has_content": True,
         "retake_clean": True,
+        "gap_pacing": True,
+        "has_content": True,
     }
 
 
@@ -197,6 +217,38 @@ def test_retake_clean_gate_fails_repeated_surviving_takes():
 
     assert rep["verdicts"]["retake_clean"] is False
     assert rep["retake_clean"]["failures"]
+    assert rep["pass"] is False
+
+
+def test_retake_clean_v2_fails_separated_duplicate_takes():
+    edl = mk_edl([EdlRange(start=0.0, end=25.0, start_handle_s=0.2, end_handle_s=0.2)])
+    phrases = [
+        phrase(1.0, 4.0, "So today we build codex routes"),
+        phrase(9.0, 12.0, "So today we build codex routes"),
+        phrase(14.0, 17.0, "Now the real walkthrough begins"),
+    ]
+    d = EditDecisions()
+    rep = simulate(edl, d, phrases, CFG, TARGET_S, words=words_from_phrases(phrases))
+
+    assert rep["verdicts"]["retake_clean"] is False
+    assert rep["retake_clean_v2"]["pass"] is False
+    assert rep["retake_clean_v2"]["failures"][0]["type"] == "retake_group_survived"
+    assert rep["pass"] is False
+
+
+def test_gap_pacing_gate_catches_draggy_unprotected_word_gap():
+    edl = mk_edl([EdlRange(start=0.0, end=5.0, start_handle_s=0.2, end_handle_s=0.2)])
+    phrases = [phrase(0.0, 0.3, "hello"), phrase(1.2, 1.5, "world")]
+    words = [
+        {"start": 0.0, "end": 0.3, "word": " hello", "probability": 0.99},
+        {"start": 1.2, "end": 1.5, "word": " world", "probability": 0.99},
+    ]
+    d = EditDecisions()
+    rep = simulate(edl, d, phrases, CFG, TARGET_S, words=words)
+
+    assert rep["verdicts"]["no_dead_air"] is True
+    assert rep["verdicts"]["gap_pacing"] is False
+    assert rep["gap_pacing"]["failures"][0]["gap_s"] == 0.9
     assert rep["pass"] is False
 
 

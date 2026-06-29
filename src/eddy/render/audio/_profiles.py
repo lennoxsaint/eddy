@@ -136,6 +136,20 @@ STUDIO_SOUND_PROFILES: dict[str, StudioSoundProfile] = {
         room_cut_db=0.0,
         notes="Most processed candidate: reserved for noisy/echo-heavy source audio.",
     ),
+    "surgical_click_rescue": StudioSoundProfile(
+        name="surgical_click_rescue",
+        dry_mix=0.06,
+        click_passes=3,
+        deesser_passes=2,
+        denoise=True,
+        presence_gain_db=2.2,
+        compressor_ratio=2.8,
+        source_mode="heavy",
+        warm_low_shelf_db=0.0,
+        box_cut_db=0.0,
+        room_cut_db=-1.4,
+        notes="Most click-focused candidate: use when mouth clicks survive balanced cleanup.",
+    ),
 }
 
 

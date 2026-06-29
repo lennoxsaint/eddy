@@ -145,6 +145,28 @@ def test_mined_short_candidates_use_raw_transcript_when_host_omits_shorts(tmp_pa
     assert "duplicate Codex" in mined[0].hook
 
 
+def test_short_candidates_exclude_transcript_hard_retake_spans():
+    candidates = [
+        ShortsCandidate(start_s=0.0, end_s=15.0, hook="Failed first hook"),
+        ShortsCandidate(start_s=20.0, end_s=40.0, hook="Clean standalone short"),
+    ]
+    spans = [
+        {
+            "group_id": "retake_group_opening_hook_1",
+            "variant_id": "opening_hook_variant_001",
+            "kind": "opening_hook",
+            "start_s": 2.0,
+            "end_s": 8.0,
+            "text": "failed hook attempt",
+        }
+    ]
+
+    kept, dropped = shorts_mod._filter_retaken_short_candidates(candidates, spans)
+
+    assert [c.hook for c in kept] == ["Clean standalone short"]
+    assert dropped[0]["hook"] == "Failed first hook"
+
+
 def test_write_short_blocker_creates_ledger_and_receipt(tmp_path):
     out_root = tmp_path / "shorts"
     out_root.mkdir()
