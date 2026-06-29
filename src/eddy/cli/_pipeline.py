@@ -22,7 +22,7 @@ def edit(
     edit_path: Optional[str] = typer.Option(
         None,
         "--edit-path",
-        help="Editing route to use: host_agent, codex_cli, claude_cli, local, openai_api, or anthropic_api.",
+        help="Editing route to use: host_kernel (default), legacy_autonomous, codex_cli, claude_cli, local, openai_api, or anthropic_api.",
     ),
     auto_fallback: bool = typer.Option(
         True,
@@ -76,6 +76,12 @@ def edit(
         typer.echo(f"✓ ready: {result['run_dir']}")
         typer.echo("  next: run the same command without --dry-run")
         return
+    if result["status"] in {"awaiting_host_intent", "awaiting_host_decisions"}:
+        typer.echo(f"✓ host-kernel ready: {result['run_dir']}")
+        typer.echo(f"  contract: {result.get('host_contract', 'host_intent_v1')}")
+        typer.echo(f"  candidates: {result.get('candidate_count', 0)}")
+        typer.echo(f"  next: {result['next_action']}")
+        return
     typer.echo(f"✗ blocked: {result['run_dir']}", err=True)
     for blocker in result["blockers"]:
         typer.echo(f"  - {blocker['code']}: {blocker['message']}", err=True)
@@ -105,7 +111,7 @@ def run(
     edit_path: Optional[str] = typer.Option(
         None,
         "--edit-path",
-        help="Editing route to use: codex_cli, claude_cli, local, openai_api, or anthropic_api. Host-agent mode uses `eddy edit`/MCP.",
+        help="Editing route to use for legacy autonomous mode: codex_cli, claude_cli, local, openai_api, or anthropic_api. Host-kernel mode uses `eddy edit`/MCP.",
     ),
     auto_fallback: bool = typer.Option(
         True,
@@ -171,8 +177,8 @@ def run(
     from eddy.edit_options import normalize_edit_path
 
     selected_edit_path = normalize_edit_path(edit_path)
-    if selected_edit_path == "host_agent":
-        typer.echo("✗ host-agent edit path uses `eddy edit` plus eddy_host_packet/eddy_host_submit, not `eddy run`.", err=True)
+    if selected_edit_path == "host_kernel":
+        typer.echo("✗ host-kernel edit path uses `eddy edit` plus eddy_host_packet/eddy_host_submit, not `eddy run`.", err=True)
         raise typer.Exit(1)
     # enforce the offline promise at the syscall boundary (covers --local-only AND EDDY_OFFLINE=1)
     from eddy.netguard import maybe_install_egress_guard

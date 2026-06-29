@@ -1,6 +1,6 @@
 # Default Eddy Prompt
 
 Edit the attached raw footage into a proof-gated YouTube long-form video and Shorts. Preserve source
-media, ask for the edit path only when multiple runnable options exist, apply Eddy Studio Sound,
-remove retakes and dead air, render blinkless joins, and output exact local artifact paths or exact
-blockers with evidence.
+media, use the host-kernel path through the current assistant when available, apply studio-quality
+voice cleanup, remove retakes and dead air through Eddy candidate IDs and proof gates, render
+blinkless joins, and output exact local artifact paths or exact blockers with evidence.

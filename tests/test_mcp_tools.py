@@ -114,7 +114,7 @@ def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path
 
     monkeypatch.setattr(tools, "_jobs", JobManager(runs_dir=tmp_path, spawn=spawn))
     out = tools.eddy_edit_start(
-        "/footage", slug="myslug", focus="make a tutorial", edit_path="host_agent", dry_run=True
+        "/footage", slug="myslug", focus="make a tutorial", edit_path="host_kernel", dry_run=True
     )
     assert out["job_id"] == "myslug"
     assert out["kind"] == "edit"
@@ -124,7 +124,7 @@ def test_eddy_edit_start_delegates_to_one_sentence_command(monkeypatch, tmp_path
     assert "--format" in captured["argv"]
     assert "youtube" in captured["argv"]
     assert "--edit-path" in captured["argv"]
-    assert "host_agent" in captured["argv"]
+    assert "host_kernel" in captured["argv"]
 
 
 def test_eddy_edit_options_returns_route_plan(monkeypatch, tmp_path):
@@ -138,8 +138,8 @@ def test_eddy_edit_options_returns_route_plan(monkeypatch, tmp_path):
         },
     )
     out = tools.eddy_edit_options("/footage")
-    assert out["requires_choice"] is True
-    assert out["recommended_option_id"] == "host_agent"
+    assert out["requires_choice"] is False
+    assert out["recommended_option_id"] == "host_kernel"
 
 
 def test_host_tools_delegate(monkeypatch, tmp_path):

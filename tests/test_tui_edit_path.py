@@ -16,10 +16,10 @@ class _Host(App):
             EditPathScreen(
                 "run ~/x.mp4",
                 {
-                    "recommended_option_id": "host_agent",
+                    "recommended_option_id": "host_kernel",
                     "options": [
                         {
-                            "id": "host_agent",
+                            "id": "host_kernel",
                             "label": "Use this assistant",
                             "runnable": True,
                             "summary": "Best current assistant path.",

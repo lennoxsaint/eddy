@@ -128,7 +128,7 @@ def prepare_edit(
     )
     if options["status"] == "blocked":
         blockers.extend(options["blockers"])
-    elif not route.can_execute and options.get("selected_option_id") != "host_agent":
+    elif not route.can_execute and options.get("selected_option_id") != "host_kernel":
         blockers.append(
             _blocker(
                 route.blockers[0] if route.blockers else "route_unavailable",
@@ -241,27 +241,32 @@ def edit(
         return prepared
 
     selected_edit_path = prepared.get("selected_edit_path")
-    if selected_edit_path == "host_agent":
+    if selected_edit_path == "host_kernel":
         from .transcribe.whisper import transcribe_run
+        from .host_agent import host_packet
 
         run_dir = Path(prepared["run_dir"])
         Receipts(run_dir).log(
-            "host_agent_route_started",
-            edit_path="host_agent",
+            "host_kernel_route_started",
+            edit_path="host_kernel",
             next_tool="eddy_host_packet",
             auto_fallback=auto_fallback,
             fallback_policy=fallback_policy,
         )
         transcribe_run(run_dir, language=language)
+        packet = host_packet(run_dir)
         state = RunState(run_dir)
-        state.set_phase("awaiting_host_decisions")
+        state.set_phase("awaiting_host_intent")
         result = {
             **prepared,
-            "status": "awaiting_host_decisions",
+            "status": "awaiting_host_intent",
+            "legacy_status": "awaiting_host_decisions",
             "dry_run": False,
             "run_dir": str(run_dir),
+            "host_contract": "host_intent_v1",
+            "candidate_count": packet.get("candidate_context", {}).get("count", 0),
             "next_action": (
-                "Call eddy_host_packet(job_id), have the current assistant submit EditDecisions with "
+                "Call eddy_host_packet(job_id), have the current assistant submit host_intent_v1 with "
                 "eddy_host_submit(job_id, payload), then render/QA through Eddy."
             ),
         }

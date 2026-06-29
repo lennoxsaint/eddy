@@ -2,6 +2,23 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-29 — Host-kernel editing becomes the default
+
+1. **Default path:** `@Eddy edit this` should auto-select `host_kernel` when the current assistant can
+   participate. The route chooser is reserved for cases where no host path exists or the user asks
+   for an advanced/legacy route.
+2. **Contract shape:** Host assistants now send `host_intent_v1`: edit goal, keep/drop priorities,
+   retake policy, gap policy, pacing preference, Shorts preference, visual insert notes, candidate
+   IDs, and targeted repair directives. Legacy `EditDecisions` remains accepted for one release.
+3. **Kernel boundary:** Eddy generates deterministic candidate removals from word-level transcripts,
+   silence maps, audio-truth silence, retake hints, filler/reset markers, and protected spans. Hosts
+   select/annotate candidate IDs; raw timestamp edits require an explicit expert override receipt.
+4. **Repair loop:** Eddy owns packet history, compile/render/QA receipts, and stop conditions. The
+   budget is 10 repair passes or 3 hours; repeated identical QA failure without improvement is an
+   exact blocker, not a weak "best effort" shipment.
+5. **Audio wording:** Public docs should say "studio-quality voice cleanup" unless Eddy is explicitly
+   comparing a chosen Descript workflow. Heavy backend or quality-gate failure blocks packaging.
+
 ## 2026-06-29 — Studio Sound backend fallback must be automatic
 
 1. **DeepFilterNet is the default heavy backend:** The product promise in `docs/PRD.md` names

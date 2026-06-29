@@ -17,14 +17,16 @@ by hand.
 
 The promise-level edit takes 5–15 minutes, so long operations are **asynchronous jobs**:
 
-1. `eddy_edit_options(source, …)` → returns runnable edit paths, setup suggestions, and whether the host must ask.
+1. `eddy_edit_options(source, …)` → normally selects `host_kernel`; returns setup suggestions and whether the host must ask.
 2. `eddy_edit_start(source, edit_path=..., …)` → returns a `job_id` immediately (the run slug).
 3. `eddy_job_status(job_id)` → `running | completed | failed | interrupted` + the current `phase`.
 4. `eddy_artifacts(run)` → titles, description, chapters, shorts ledger, final video path.
 
-For host-agent mode, poll until the run reaches `awaiting_host_decisions`, call
-`eddy_host_packet(job_id)`, then submit `EditDecisions` with `eddy_host_submit(job_id, payload)`.
-The packet includes transcript/QA text and hashes, never media bytes.
+For host-kernel mode, poll until the run reaches `awaiting_host_intent`, call
+`eddy_host_packet(job_id)`, then submit `host_intent_v1` with `eddy_host_submit(job_id, payload)`.
+The packet includes transcript/QA text, source hashes, prior repair history, and Eddy candidate
+IDs/reasons, never media bytes. Legacy `EditDecisions` payloads are still accepted for one
+compatibility release.
 
 Each long op runs as its own `eddy` subprocess, so a run's own offline/egress state is isolated and
 the hardened CLI path is reused. Cheap reads (`eddy_runs`, `eddy_run_inspect`, `eddy_doctor`,

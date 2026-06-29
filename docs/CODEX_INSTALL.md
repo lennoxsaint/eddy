@@ -83,9 +83,10 @@ If raw video files are attached and no instruction text is supplied, Eddy defaul
 eddy_edit_options(source=<attached path or folder>, format="youtube")
 ```
 
-If more than one runnable path exists, the agent asks, "How do you want this edited?" and shows plain
-English options with benefits, drawbacks, privacy/cost notes, and a recommendation. If only one path
-is runnable, the agent starts it directly:
+In normal Codex sessions Eddy selects `host_kernel`, skips the technical chooser, and edits through
+the current assistant. If the host path is unavailable or an advanced route is explicitly requested,
+the agent asks, "How do you want this edited?" and shows plain English options with benefits,
+drawbacks, privacy/cost notes, and a recommendation. Otherwise it starts directly:
 
 ```text
 eddy_edit_start(source=<attached path or folder>, format="youtube", edit_path=<selected_option_id>)

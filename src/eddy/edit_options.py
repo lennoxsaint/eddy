@@ -14,6 +14,10 @@ FALLBACK_TRIGGERS = (
 )
 
 _ALIASES = {
+    "host_kernel": "host_kernel",
+    "host-kernel": "host_kernel",
+    "host_agent": "host_kernel",
+    "host-agent": "host_kernel",
     "codex": "codex_cli",
     "codex-cli": "codex_cli",
     "claude": "claude_cli",
@@ -23,9 +27,12 @@ _ALIASES = {
     "ollama": "local_high_quality",
     "openai": "openai_api",
     "anthropic": "anthropic_api",
-    "host": "host_agent",
-    "agent": "host_agent",
-    "subscription": "host_agent",
+    "host": "host_kernel",
+    "agent": "host_kernel",
+    "subscription": "host_kernel",
+    "autonomous": "legacy_autonomous",
+    "legacy": "legacy_autonomous",
+    "legacy-autonomous": "legacy_autonomous",
 }
 
 
@@ -148,28 +155,52 @@ def edit_path_options(
     normalized_selected = normalize_edit_path(selected, preferred_local=local_id)
 
     options: list[EditPath] = []
+    explicit_advanced = normalized_selected not in (None, "host_kernel")
+
     if host_agent_available:
         options.append(
             _option(
-                "host_agent",
+                "host_kernel",
                 "Use this assistant",
-                "host_agent",
-                "Eddy keeps the media local and asks the assistant you are already using to make the editing decisions.",
+                "host_kernel",
+                "Eddy keeps media local, asks the assistant you are already using for taste/repair intent, and keeps all cuts behind Eddy's proof gates.",
                 (
                     "Best use of the subscription or agent session already in front of you.",
                     "Eddy still owns source hashing, rendering, QA, receipts, and blockers.",
-                    "The cleanest fallback when a CLI model stalls.",
+                    "Skips the technical route chooser for the normal @Eddy edit this flow.",
                 ),
                 (
-                    "The transcript and QA packet are shown to the host assistant.",
-                    "The assistant must submit structured decisions before Eddy can render.",
+                    "The transcript, QA packet, and candidate list are shown to the host assistant.",
+                    "The assistant must submit structured intent before Eddy can render.",
                 ),
                 "Raw media bytes stay local. Transcript and QA text go to the current assistant session.",
                 "Usually included in the current assistant subscription; no metered API fallback is started.",
             )
         )
 
-    if credentials.get("codex_cli"):
+    if normalized_selected == "legacy_autonomous":
+        options.append(
+            _option(
+                "legacy_autonomous",
+                "Use legacy auto loop",
+                "autonomous",
+                "Eddy uses the older provider-driven edit loop instead of the host-kernel contract.",
+                (
+                    "Useful for advanced unattended regression tests.",
+                    "Keeps the old autonomous provider behavior available for one release.",
+                ),
+                (
+                    "More hidden model-loop behavior and less host taste control.",
+                    "Not the recommended product path for @Eddy edit this.",
+                ),
+                "Raw media stays local; transcript routing follows the selected provider.",
+                "No metered API fallback unless a run-specific cost cap is configured.",
+            )
+        )
+
+    show_advanced_paths = (not host_agent_available) or explicit_advanced
+
+    if show_advanced_paths and credentials.get("codex_cli"):
         options.append(
             _option(
                 "codex_cli",
@@ -190,7 +221,7 @@ def edit_path_options(
             )
         )
 
-    if credentials.get("claude_cli"):
+    if show_advanced_paths and credentials.get("claude_cli"):
         options.append(
             _option(
                 "claude_cli",
@@ -211,7 +242,7 @@ def edit_path_options(
             )
         )
 
-    if _has_local(found):
+    if show_advanced_paths and _has_local(found):
         if ram_gb >= 32:
             options.append(
                 _option(
@@ -283,18 +314,19 @@ def edit_path_options(
     for api_id, label in (("openai_api", "OpenAI API"), ("anthropic_api", "Anthropic API")):
         if _metered_api_enabled(found, api_id):
             if cost_cap_usd > 0:
-                options.append(
-                    _option(
-                        api_id,
-                        f"Use {label}",
-                        "openai" if api_id == "openai_api" else "anthropic",
-                        f"Eddy may use the metered {label} route within the configured run cap.",
-                        ("Can be a strong fallback when subscription routes fail.",),
-                        ("Metered spend is possible and must stay under the run-specific cap.",),
-                        "Raw media stays local; transcript text is sent to the metered API.",
-                        f"Allowed only up to this run's cap: ${cost_cap_usd:.2f}.",
+                if show_advanced_paths:
+                    options.append(
+                        _option(
+                            api_id,
+                            f"Use {label}",
+                            "openai" if api_id == "openai_api" else "anthropic",
+                            f"Eddy may use the metered {label} route within the configured run cap.",
+                            ("Can be a strong fallback when subscription routes fail.",),
+                            ("Metered spend is possible and must stay under the run-specific cap.",),
+                            "Raw media stays local; transcript text is sent to the metered API.",
+                            f"Allowed only up to this run's cap: ${cost_cap_usd:.2f}.",
+                        )
                     )
-                )
             else:
                 setup_suggestions.append(
                     {
@@ -306,7 +338,7 @@ def edit_path_options(
                 )
 
     runnable = [option for option in options if option.runnable]
-    recommended = "host_agent" if any(o.id == "host_agent" for o in runnable) else (runnable[0].id if runnable else None)
+    recommended = "host_kernel" if any(o.id == "host_kernel" for o in runnable) else (runnable[0].id if runnable else None)
     if normalized_selected and not any(option.id == normalized_selected for option in runnable):
         setup_suggestions.insert(
             0,
@@ -333,7 +365,7 @@ def edit_path_options(
     order: list[str] = []
     for candidate in (
         selected_option,
-        "host_agent" if fallback_policy == "agent_subscription" else None,
+        "host_kernel" if fallback_policy == "agent_subscription" else None,
         "codex_cli",
         "claude_cli",
         local_id,
@@ -360,7 +392,7 @@ def edit_path_options(
         "format": format,
         "focus": focus or "",
         "question": "How do you want this edited?",
-        "requires_choice": len(runnable) > 1 and normalized_selected is None,
+        "requires_choice": (not host_agent_available) and len(runnable) > 1 and normalized_selected is None,
         "recommended_option_id": recommended,
         "selected_option_id": selected_option,
         "options": marked,

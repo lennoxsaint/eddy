@@ -17,11 +17,12 @@ if TYPE_CHECKING:
 
 _INSTRUCTIONS = (
     "Drive Eddy, a local-first agentic video editor. For the simple user promise — raw footage in, "
-    "proof-gated edit or exact blockers out — start with eddy_edit_options. If requires_choice is "
-    "true, ask the user 'How do you want this edited?' and show the plain-English options; otherwise "
-    "pass selected_option_id to eddy_edit_start(edit_path=...). If the selected path is host_agent, "
-    "poll until the job reaches awaiting_host_decisions, then call eddy_host_packet and submit "
-    "EditDecisions with eddy_host_submit. If the user only attached video footage and gave no other "
+    "proof-gated edit or exact blockers out — start with eddy_edit_options. In the normal host "
+    "assistant path it returns selected_option_id=host_kernel and requires_choice=false; pass that to "
+    "eddy_edit_start(edit_path=...). If requires_choice is true, ask the user 'How do you want this "
+    "edited?' and show the plain-English options. If the selected path is host_kernel, poll until "
+    "the job reaches awaiting_host_intent, then call eddy_host_packet and submit host_intent_v1 with "
+    "eddy_host_submit. If the user only attached video footage and gave no other "
     "instruction, pass the resolved attachment path as source and use the default youtube format. If "
     "attachments cannot be resolved to paths, report attached_source_unresolved. For lower-level "
     "control, use eddy_run_start (it returns a job_id immediately); poll eddy_job_status(job_id) "

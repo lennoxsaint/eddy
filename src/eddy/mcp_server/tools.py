@@ -107,7 +107,8 @@ def eddy_profiles() -> dict:
 def eddy_edit_options(source: str, format: str = "youtube", focus: str | None = None) -> dict:
     """Return plain-English edit-path choices and setup suggestions for this machine.
 
-    Agents should call this before eddy_edit_start. Ask "How do you want this edited?" only when
+    Agents should call this before eddy_edit_start. The normal host-assistant path selects
+    host_kernel and skips the chooser. Ask "How do you want this edited?" only when
     requires_choice=true; otherwise use selected_option_id.
     """
     from eddy.doctor import detect
@@ -203,7 +204,7 @@ def eddy_edit_start(
     repair: bool = False,
     dry_run: bool = False,
 ) -> dict:
-    """Start Eddy's one-sentence edit flow as a job: finished YouTube edit, or exact blockers."""
+    """Start Eddy's one-sentence edit flow as a job: host-kernel edit, finished YouTube edit, or exact blockers."""
     job = jobs().start_edit(
         source,
         slug=slug,
@@ -221,14 +222,14 @@ def eddy_edit_start(
 
 
 def eddy_host_packet(job_id: str) -> dict:
-    """Return the bounded transcript/QA packet for a host-agent edit. Never returns media bytes."""
+    """Return the bounded host_intent_v1 transcript/QA/candidate packet. Never returns media bytes."""
     from eddy.host_agent import host_packet
 
     return host_packet(_resolve_run(job_id))
 
 
 def eddy_host_submit(job_id: str, payload: dict) -> dict:
-    """Submit host-agent EditDecisions JSON and compile it through Eddy's deterministic compiler."""
+    """Submit host_intent_v1 or legacy EditDecisions JSON and compile it through Eddy's deterministic compiler."""
     from eddy.host_agent import submit_host_decisions
 
     return submit_host_decisions(_resolve_run(job_id), payload)

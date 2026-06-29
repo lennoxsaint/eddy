@@ -8,7 +8,7 @@ As a solo YouTube creator, every raw recording I make is full of retakes, false 
 
 ## Solution
 
-Eddy is a source-safe CLI app: drop raw footage in (`camera.mp4` + `screen.mp4` + optional `mic.wav`, or a single composite recording), and an editorial brain loops — transcript → cut plan → simulation → proxy render → QA → judge — until the edit is actually done, then produces the complete launch kit with zero human input until final review:
+Eddy is a source-safe CLI app and host-kernel editor: drop raw footage in (`camera.mp4` + `screen.mp4` + optional `mic.wav`, or a single composite recording), and the current host assistant supplies taste while Eddy owns the deterministic editing kernel, render, studio-quality voice cleanup, QA, receipts, and exact blockers. The normal flow is transcript/cache → Eddy cut candidates → host intent/repairs → deterministic compile/render/QA → launch kit:
 
 - edited long video (publish-ready)
 - shorts with blue karaoke captions in the approved stacked layout
@@ -16,20 +16,26 @@ Eddy is a source-safe CLI app: drop raw footage in (`camera.mp4` + `screen.mp4` 
 - 10 grounded title candidates
 - chapters + YouTube description
 
-The editorial brain defaults to Codex/Claude/API quality when available. Hardware-aware onboarding (`eddy doctor`) detects the machine and recommends the best working tier while surfacing whether local unlimited editing is viable: codex CLI (ChatGPT/Codex subscription), claude CLI (Claude subscription), OpenAI API, Anthropic API, or Ollama local. Every decision, model call, render command, and QA verdict is written to receipts. Sources are never mutated. Nothing is ever published automatically.
+The default edit path is `host_kernel`: Codex Desktop, Claude Code, or another capable host assistant
+receives a bounded transcript/QA/candidate packet and returns `host_intent_v1`. Hardware-aware
+onboarding (`eddy doctor`) still detects codex CLI, claude CLI, API keys, and Ollama, but those are
+advanced or fallback surfaces rather than the default user promise. Every decision, model call,
+render command, and QA verdict is written to receipts. Sources are never mutated. Nothing is ever
+published automatically.
 
-Audio is not a cosmetic post-pass. Eddy provisions a heavy local Studio Sound backend via
-`eddy studio-sound install`: DeepFilterNet is the required default, then Eddy layers mouth-click
+Audio is not a cosmetic post-pass. Eddy provisions a heavy local studio-quality voice cleanup backend
+via `eddy studio-sound install`: DeepFilterNet is the required default, then Eddy layers mouth-click
 repair, EQ, compression/limiting, loudness normalization, and A/B proof on top. If the heavy backend
-is missing, default runs fail the audio quality gate rather than shipping an ffmpeg-only
-approximation. Resemble Enhance remains an optional experimental backend, not the default promise.
+is missing or the quality gate fails, default runs block packaging rather than shipping an
+ffmpeg-only approximation. Resemble Enhance remains an optional experimental backend, not the default
+promise.
 
 ## User Stories
 
 1. As a solo YouTube creator, I want to drop a raw recording into one command, so that I get a complete launch kit without touching an editor.
 2. As a creator, I want retakes and false starts removed automatically with last-take bias, so that the final cut keeps my best delivery without me scrubbing the timeline.
 3. As a creator, I want long word gaps and dead air tightened while natural micro-pauses survive, so that the video is paced well but still feels human.
-4. As a creator, I want the edit loop to iterate autonomously and only show me the finished result, so that my time is spent reviewing, not supervising.
+4. As a creator, I want Eddy and my current assistant to repair the edit loop until proof gates pass, so that my time is spent reviewing, not supervising raw timeline surgery.
 5. As a creator, I want a deterministic QA gate (no clipped words, no dead air, duration in band, clean streams), so that mechanical defects can never ship regardless of model quality.
 6. As a creator, I want an AI judge to score editorial quality against a rubric before the final render, so that pacing and narrative continuity problems get fixed in the loop, not in my review.
 7. As a creator, I want the loop to keep repairing and rerendering until gates pass, stopping only for an impossible blocker with exact evidence, so that I wake up to a real finished edit instead of a sample.
@@ -60,19 +66,38 @@ approximation. Resemble Enhance remains an optional experimental backend, not th
 
 ## Implementation Decisions
 
-- **Two-artifact editorial contract.** The model emits a remove-list `edit-decisions.json` (Claire schema v1.0: text-anchored cuts in MANDATORY/RECOMMENDED/OPTIONAL tiers, retake adjudications with last-take bias, protected moments, shorts candidates). A deterministic compiler emits the keep-list `edl.json` (video-use schema v1: source ranges with beats/quotes/reasons). Models reason about quoted text; renderers consume only compiled ranges.
+- **Host-kernel contract.** Default hosts emit `host_intent_v1`: edit goal, keep/drop priorities,
+  retake policy, gap policy, pacing preference, Shorts preference, visual insert notes, selected
+  Eddy candidate IDs, and targeted repair directives. Legacy hosts may still emit a remove-list
+  `edit-decisions.json` (Claire schema v1.0) for one release. A deterministic compiler emits the
+  keep-list `edl.json` (video-use schema v1: source ranges with beats/quotes/reasons). Hosts reason
+  about intent and candidate IDs; renderers consume only compiled ranges.
+- **Deterministic editing kernel.** Eddy generates candidate removals from word-level transcripts,
+  transcript gap maps, audio-truth silence, retake hints, filler/reset markers, and protected spans.
+  Hosts may select/annotate candidate IDs, but Eddy owns hard boundaries, word snapping, handles,
+  protected content, compiler validation, and EDL generation. Raw timestamp edits require an explicit
+  expert override receipt.
 - **Compiler owns all mechanical invariants:** word-boundary snapping with 50/80ms pads, no range under 1.2s, ranges sorted/merged, 30ms audio fades at every boundary, per-segment extract then lossless `-c copy` concat. Model output that violates invariants is returned as a structured error for delta repair (max 2 attempts).
-- **The agentic loop separates judgment from mechanics.** Model-driven: beat map (once), cut decisions, delta revisions responding to typed defect directives (`restore | extend_pad | tighten_gap | drop_beat | swap_take | trim_tail`). Deterministic: everything else. Revisions are always deltas against the previous decisions — never from-scratch replans — to prevent oscillation.
+- **The agentic loop separates taste from mechanics.** Host-driven: narrative priorities, keep/drop
+  taste, candidate selection, and targeted repairs. Deterministic: candidate generation, hard cut
+  mechanics, compile, render, audio cleanup, QA, receipts, and blockers. Revisions are deltas against
+  prior packets and evidence, not hidden from-scratch replans.
 - **Tiered QA pyramid, cheap to expensive:** tier 0 transcript simulation (duration band, mid-word cuts, protected moments, dead air); tier 1 boundary audio probes (clipped-word and pop detection); tier 2 480p proxy + contact sheet (stream-clean, A/V drift, black/freeze detection); tier 3 one full-res final render on the best attempt only.
 - **Text-only judge, honestly designed.** The judge never claims to watch video. Evidence packet: cut transcript with beats, per-boundary splice cards (last words kept → cut summary → next words kept), stats block, "what was lost" summaries. Rubric: hook integrity ×2, boundary continuity ×3, pacing ×2, completeness/no-orphans ×2, ending+CTA ×1. Defect-list-first output via JSON schema, temperature 0.2, code-side consistency checks (score/defect mismatch → resample once → take min and flag `judge_unstable`). If unstable at q4 quant, judge demotes to advisory; deterministic gates always required independently.
 - **Done gate:** all deterministic gates pass AND judge >= 8/10. The loop keeps revising until the gate passes or records an impossible blocker (`missing_source`, `corrupt_source`, `missing_dependency`, or repeated identical failure after changing strategy). Best-attempt shipping is not allowed when `require_gate_pass` is true.
-- **Five working providers behind one protocol** (`complete(messages, schema?) → text|dict`): codex CLI subprocess (default when available), claude CLI subprocess, OpenAI API, Anthropic API, and Ollama via OpenAI-compatible endpoint for local unlimited/private editing. `eddy doctor` detects chip/RAM, Ollama models, credentials and CLIs, then recommends and writes the tier without pretending weak hardware can run heavy local models.
+- **Provider routes remain advanced surfaces** behind one protocol (`complete(messages, schema?) →
+  text|dict`): codex CLI subprocess, claude CLI subprocess, OpenAI API, Anthropic API, and Ollama via
+  OpenAI-compatible endpoint for local unlimited/private editing. `eddy doctor` detects chip/RAM,
+  Ollama models, credentials and CLIs without pretending weak hardware can run heavy local models.
+  The older provider-driven autonomous loop is explicit `legacy_autonomous`, not the default promise.
 - **Shorts render ports the proven standard** (`vendor/yt_tools/` read-only references): 1080×1920 stacked layout, square face panel in the top half, blue karaoke caption zone in the gap, screen panel in the bottom half, black background, current-word highlight, spoken/future word dimming; audio-safe handles 0.24s start / 0.32s internal / 0.52s final; sentence-final QA ledger per short. Degraded single-composite layout is allowed only when no separate screen track exists, and fails if separate screen footage is declared.
 - **Chapters are deterministic** (beat map mapped to output timeline); the model writes only the 2–5 word labels. Title candidates must carry the transcript quote that grounds them.
 - **Thumbnails are the only paid path:** sharpest face frames (Laplacian ranking) at high-energy moments → Gemini image API + OpenAI image API, N candidates each, cost logged per call, skip-with-receipt when keys are absent.
 - **Run state is files:** per-run directory with manifest (source sha256 + config snapshot), transcript artifacts, per-iteration artifacts (decisions, EDL, sim report, proxy, QA, judge, directive), `state.json` for resume, append-only `receipts.jsonl`, and a `final/launch-kit/` output.
 - **Hard gates enforced in code:** sources opened read-only and hash-verified before/after every run; every ffmpeg output path asserted inside the run directory; no default blur/redaction; PIP/camera blink detection; source-lock Shorts validation; no publish/upload integration exists in v1; public distribution requires scrub checks and MIT docs to pass first.
-- **Studio Sound quality gate:** local voice enhancement must use a receipt-proven heavy backend by default. ffmpeg-only EQ/loudnorm is allowed only as an explicitly lowered policy and is never described as Studio Sound quality.
+- **Studio-quality voice cleanup gate:** local voice enhancement must use a receipt-proven heavy
+  backend by default. ffmpeg-only EQ/loudnorm is allowed only as an explicitly lowered policy and is
+  never described as studio-quality cleanup.
 - **Motion overlays use HyperFrames `frame.md`.** Premium overlays require a project-local lowercase `frame.md`, copied HyperFrames references, lint/inspect/render receipts, collision proof, and visual-taste QA before compositing.
 - **Config:** `eddy.toml` (tomlkit round-trip; doctor updates only hardware-derived sections), provider/loop/render/shorts/thumbnails/gates sections; ship-ready defaults resolve to `~/.config/eddy/` with project-local override.
 

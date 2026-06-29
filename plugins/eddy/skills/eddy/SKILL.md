@@ -25,7 +25,9 @@ If `requires_choice` is true, ask the user exactly:
 
 Show the runnable options in plain English: what each option is, practical benefits, drawbacks, privacy/cost notes, and the recommended option. Do not show unavailable setup suggestions as selectable choices.
 
-If `requires_choice` is false, do not ask. Start the edit with the selected option:
+If `requires_choice` is false, do not ask. Start the edit with the selected option. In normal Codex
+or Claude host sessions this should be `host_kernel`, which means Eddy will edit through the current
+assistant and return a proof-gated edit or exact blocker:
 
 ```text
 eddy_edit_start(
@@ -69,7 +71,8 @@ fails to install, report the exact blocker and continue only if a previous worki
   preserve blinkless segment assembly, and place one-line karaoke captions in the bottom third.
 - If an audio-only source or ambiguous multi-file source is supplied, fail loudly with the exact
   blocker instead of rendering a weak output.
-- Studio Sound is a hard gate for final edits. Do not silently downgrade to basic EQ/loudness.
+- Studio-quality voice cleanup is a hard gate for final edits. Do not silently downgrade to basic
+  EQ/loudness or call it Studio Sound.
 - Premium motion graphics require a project-local `frame.md`, `storyboard.md`, static
   `storyboard.html`, copied HyperFrames references, and collision proof before compositing.
 
@@ -80,20 +83,24 @@ should automatically fall back to the best allowed alternative path, usually the
 assistant/subscription route. Do not silently fall back to metered OpenAI or Anthropic API usage unless
 the run has an explicit cost cap.
 
-For a host-agent edit path, wait for the job to reach `awaiting_host_decisions`, call:
+For a host-kernel edit path, wait for the job to reach `awaiting_host_intent`, call:
 
 ```text
 eddy_host_packet(job_id=<job_id>)
 ```
 
-Use that packet to produce a valid `EditDecisions` JSON payload, then submit it:
+Use that packet to produce a valid `host_intent_v1` JSON payload. Select Eddy candidate IDs and
+describe the edit goal, keep/drop priorities, retake policy, gap policy, pacing preference, Shorts
+preference, visual insert notes, and targeted repair directives. Do not freehand raw timestamps unless
+you explicitly mark an expert override. Then submit it:
 
 ```text
-eddy_host_submit(job_id=<job_id>, payload=<EditDecisions JSON>)
+eddy_host_submit(job_id=<job_id>, payload=<host_intent_v1 JSON>)
 ```
 
-Invalid host payloads are blockers to repair, not crashes. The packet contains transcript/QA text and
-source hashes, never media bytes.
+Invalid host payloads are blockers to repair, not crashes. Legacy `EditDecisions` payloads are still
+accepted for one compatibility release. The packet contains transcript/QA text, source hashes, and
+candidate IDs/reasons, never media bytes.
 
 If plugin MCP tools are not visible yet, use the repo fallback from a cloned checkout:
 

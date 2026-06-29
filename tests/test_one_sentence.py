@@ -139,7 +139,7 @@ def test_prepare_edit_ready_when_route_and_preflight_pass(monkeypatch, tmp_path)
     result = prepare_edit(source, slug="demo", dry_run=True)
     assert result["status"] == "ready"
     assert result["route"]["tier"] == "api_agent_brain"
-    assert result["edit_options"]["recommended_option_id"] == "host_agent"
-    assert result["edit_options"]["requires_choice"] is True
+    assert result["edit_options"]["recommended_option_id"] == "host_kernel"
+    assert result["edit_options"]["requires_choice"] is False
     assert result["template"]["id"] == "single_camera_course"
     assert json.loads((run_dir / "one-sentence-state.json").read_text())["status"] == "ready"
