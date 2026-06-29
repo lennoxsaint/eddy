@@ -74,6 +74,8 @@ def test_long_concat_uses_filtergraph_reencode(monkeypatch, tmp_path):
     argv = seen["argv"]
     assert result["strategy"] == "filtergraph_reencode_concat"
     assert "-filter_complex" in argv
-    assert "concat=n=2:v=1:a=1" in argv[argv.index("-filter_complex") + 1]
+    graph = argv[argv.index("-filter_complex") + 1]
+    assert "concat=n=2:v=1:a=1" in graph
+    assert graph.count("setsar=1") == 2
     assert "-f" not in argv[:4]
     assert result["concat_demuxer_copy"] is False

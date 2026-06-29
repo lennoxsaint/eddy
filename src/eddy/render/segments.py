@@ -175,7 +175,7 @@ def _concat_segments_filtergraph(
     concat_labels: list[str] = []
     for idx, path in enumerate(paths):
         inputs.extend(["-i", str(path)])
-        filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS,format=yuv420p[v{idx}]")
+        filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS,setsar=1,format=yuv420p[v{idx}]")
         filter_parts.append(f"[{idx}:a]asetpts=PTS-STARTPTS[a{idx}]")
         concat_labels.append(f"[v{idx}][a{idx}]")
 

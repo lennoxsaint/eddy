@@ -130,6 +130,7 @@ def test_shorts_segment_join_uses_blinkless_reencode_not_concat_copy(tmp_path, m
     assert result["concat_demuxer_copy"] is False
     assert "concat=n=2:v=1:a=1" in graph
     assert "setpts=PTS-STARTPTS" in graph
+    assert graph.count("setsar=1") == 2
     assert "asetpts=PTS-STARTPTS" in graph
     assert ["-c", "copy"] not in [args[i : i + 2] for i in range(len(args) - 1)]
 
