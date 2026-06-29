@@ -27,7 +27,7 @@ def test_segments_render_via_partial_then_rename(tmp_path, monkeypatch):
     segments.render_edl(edl, out, tmp_path, RenderConfig())
 
     seg_dir = out.parent / (out.stem + "_segments")
-    assert (seg_dir / "0000.mp4").exists()
-    assert (seg_dir / "0001.mp4").exists()
+    assert len(list(seg_dir.glob("0000_*.mp4"))) == 1
+    assert len(list(seg_dir.glob("0001_*.mp4"))) == 1
     assert not list(seg_dir.glob("*.partial*"))  # no truncated leftovers from the rename flow
     assert out.exists()

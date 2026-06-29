@@ -16,10 +16,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eddy.config import load_config
 from eddy.edit.compiler import CompileError, compile_edl
-from eddy.edit.kernel import EditCandidate, build_edit_candidates, candidates_by_id
+from eddy.edit.kernel import (
+    EditCandidate,
+    build_edit_candidates,
+    candidates_by_id,
+    opening_hook_cluster,
+    raw_short_candidates,
+)
 from eddy.edit.retakes import filler_candidates, retake_candidates
 from eddy.edit.simulate import simulate
-from eddy.edit.schema import Cut, EditDecisions, EddyMeta, ProtectedMoment, Retake, save
+from eddy.edit.schema import Cut, EditDecisions, EddyMeta, ProtectedMoment, Retake, ShortsCandidate, save
 from eddy.host_loop import (
     append_history,
     elapsed_since_started,
@@ -81,6 +87,10 @@ class HostIntentV1(BaseModel):
     selected_candidate_ids: list[str] = Field(default_factory=list)
     rejected_candidate_ids: list[str] = Field(default_factory=list)
     candidate_annotations: dict[str, str] = Field(default_factory=dict)
+    selected_opening_hook_variant_id: str = ""
+    selected_short_candidate_ids: list[str] = Field(default_factory=list)
+    shorts_candidates: list[ShortsCandidate] = Field(default_factory=list)
+    retake_clean_policy: str = "last_clean_hook_wins"
     protected_moments: list[HostProtectedMoment] = Field(default_factory=list)
     raw_cuts: list[HostExpertOverride] = Field(default_factory=list)
     expert_overrides: list[HostExpertOverride] = Field(default_factory=list)
@@ -126,8 +136,9 @@ def _kernel_candidates(run_dir: Path) -> list[EditCandidate]:
         words=words,
         transcript_gaps=_safe_json_list(silence_map, run_dir),
         audio_silence=_safe_json_list(audio_silence_map, run_dir),
-        retakes=retake_candidates(words),
+        retakes=retake_candidates(words, limit=120),
         fillers=filler_candidates(words),
+        max_candidates=240,
     )
 
 
@@ -173,7 +184,92 @@ def _intent_visual_notes(intent: HostIntentV1) -> list[dict[str, Any]]:
     return notes
 
 
-def _intent_to_decisions(intent: HostIntentV1, candidates: list[EditCandidate]) -> EditDecisions:
+def _opening_hook_cuts(intent: HostIntentV1, cluster: dict[str, Any] | None) -> list[Cut]:
+    if not cluster or not cluster.get("variants"):
+        return []
+    variants = {variant["id"]: variant for variant in cluster.get("variants", [])}
+    selected_id = intent.selected_opening_hook_variant_id or cluster.get("default_variant_id")
+    selected = variants.get(selected_id)
+    if not selected:
+        raise ValueError(json.dumps({
+            "code": "unknown_opening_hook_variant_id",
+            "message": "The host selected an opening hook variant that is not in this packet.",
+            "fix": "Call eddy_host_packet again and choose one opening_hook_context variant id.",
+            "evidence": {"selected_opening_hook_variant_id": selected_id},
+        }))
+    if intent.retake_clean_policy.strip().lower() in {"off", "disabled", "none"}:
+        return []
+
+    cuts: list[Cut] = []
+    cluster_start = float(cluster["start_s"])
+    selected_start = float(selected["start_s"])
+    if selected_start > cluster_start + 0.05:
+        cuts.append(
+            Cut(
+                start_s=cluster_start,
+                end_s=selected_start,
+                quote=str(selected.get("text", ""))[:120],
+                reason=(
+                    "Opening Hook Cluster: keep selected hook variant and remove earlier hook "
+                    "attempts according to last-clean-hook-wins."
+                ),
+                tier="MANDATORY",
+            )
+        )
+
+    selected_end = float(selected["end_s"])
+    for variant in cluster.get("variants", []):
+        if variant["id"] == selected_id:
+            continue
+        start_s = float(variant["start_s"])
+        end_s = float(variant["end_s"])
+        if start_s > selected_end + 0.05:
+            cuts.append(
+                Cut(
+                    start_s=start_s,
+                    end_s=end_s,
+                    quote=str(variant.get("text", ""))[:120],
+                    reason="Opening Hook Cluster: remove unselected later hook attempt.",
+                    tier="MANDATORY",
+                )
+            )
+    return cuts
+
+
+def _intent_short_candidates(
+    intent: HostIntentV1,
+    short_hints: list[dict[str, Any]] | None,
+) -> list[ShortsCandidate]:
+    indexed = {str(item.get("id")): item for item in short_hints or []}
+    missing = [candidate_id for candidate_id in intent.selected_short_candidate_ids if candidate_id not in indexed]
+    if missing:
+        raise ValueError(json.dumps({
+            "code": "unknown_short_candidate_ids",
+            "message": "The host selected raw Shorts candidate IDs that are not in this packet.",
+            "fix": "Call eddy_host_packet again and choose only IDs from shorts_candidate_context.candidates.",
+            "evidence": {"unknown_ids": missing[:12]},
+        }))
+    out = list(intent.shorts_candidates)
+    for candidate_id in dict.fromkeys(intent.selected_short_candidate_ids):
+        item = indexed[candidate_id]
+        out.append(
+            ShortsCandidate(
+                start_s=float(item["start_s"]),
+                end_s=float(item["end_s"]),
+                hook=str(item.get("hook", "")),
+                reason=str(item.get("reason", "Host selected raw transcript Short candidate.")),
+            )
+        )
+    return out
+
+
+def _intent_to_decisions(
+    intent: HostIntentV1,
+    candidates: list[EditCandidate],
+    *,
+    opening_cluster: dict[str, Any] | None = None,
+    short_hints: list[dict[str, Any]] | None = None,
+) -> EditDecisions:
     indexed = candidates_by_id(candidates)
     missing = [candidate_id for candidate_id in intent.selected_candidate_ids if candidate_id not in indexed]
     if missing:
@@ -185,7 +281,7 @@ def _intent_to_decisions(intent: HostIntentV1, candidates: list[EditCandidate]) 
         }))
 
     retakes: list[Retake] = []
-    cuts: list[Cut] = []
+    cuts: list[Cut] = _opening_hook_cuts(intent, opening_cluster)
     for candidate_id in dict.fromkeys(intent.selected_candidate_ids):
         candidate = indexed[candidate_id]
         reason = intent.candidate_annotations.get(candidate_id) or candidate.reason
@@ -214,6 +310,7 @@ def _intent_to_decisions(intent: HostIntentV1, candidates: list[EditCandidate]) 
             )
         )
 
+    shorts = _intent_short_candidates(intent, short_hints)
     directives = [
         {
             "contract": "host_intent_v1",
@@ -226,6 +323,12 @@ def _intent_to_decisions(intent: HostIntentV1, candidates: list[EditCandidate]) 
             "shorts_preference": intent.shorts_preference,
             "selected_candidate_ids": intent.selected_candidate_ids,
             "rejected_candidate_ids": intent.rejected_candidate_ids,
+            "selected_opening_hook_variant_id": (
+                intent.selected_opening_hook_variant_id
+                or ((opening_cluster or {}).get("default_variant_id") if opening_cluster else "")
+            ),
+            "selected_short_candidate_ids": intent.selected_short_candidate_ids,
+            "retake_clean_policy": intent.retake_clean_policy,
             "targeted_repair_directives": [directive.model_dump() for directive in intent.targeted_repair_directives],
         }
     ]
@@ -238,6 +341,7 @@ def _intent_to_decisions(intent: HostIntentV1, candidates: list[EditCandidate]) 
             ProtectedMoment(start_s=span.start_s, end_s=span.end_s, reason=span.reason)
             for span in intent.protected_moments
         ],
+        shorts_candidates=shorts,
         visual_insert_notes=_intent_visual_notes(intent),
         x_eddy=EddyMeta(directive=directives),
     )
@@ -265,6 +369,10 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
     latest = _latest_iteration(rd)
     ensure_started(rd)
     candidates = _kernel_candidates(rd)
+    words = _safe_words(rd)
+    phrases = _safe_json_list(load_phrases, rd)
+    hook_cluster = opening_hook_cluster(words, phrases)
+    short_hints = raw_short_candidates(phrases, min_s=10.0, max_s=59.0) if phrases else []
     history = read_history(rd)
     loop_status = evaluate_repair_loop(history, elapsed_s=elapsed_since_started(rd))
     packet: dict[str, Any] = {
@@ -282,7 +390,8 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
             "type": "initial_intent" if not history else "repair_intent",
             "summary": (
                 "Choose candidate IDs to remove, set keep/drop priorities, and add targeted repair "
-                "directives for any current QA failures."
+                "directives for any current QA failures. If you do not choose an opening hook, Eddy "
+                "defaults to the last clean opening hook variant."
             ),
             "required_payload_fields": [
                 "contract",
@@ -319,6 +428,16 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
                 "content, compiler validation, and EDL generation."
             ),
         },
+        "opening_hook_context": hook_cluster.to_dict() if hook_cluster else {
+            "policy": "last_clean_hook_wins",
+            "variants": [],
+            "default_variant_id": "",
+        },
+        "shorts_candidate_context": {
+            "count": len(short_hints),
+            "candidates": short_hints,
+            "selection_rule": "Select raw Shorts candidate IDs or submit explicit shorts_candidates.",
+        },
         "repair_loop": {
             **loop_status,
             "budget": {"max_repair_passes": 10, "max_elapsed_s": 10800},
@@ -335,15 +454,24 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
     final_qa = _read_json(rd / "final" / "qa-final.json")
     if final_qa is not None:
         packet["qa_context"]["final_qa"] = final_qa
+    latest_sim = packet["qa_context"].get("sim") or packet["qa_context"].get("final_qa") or {}
+    packet["retake_clean_context"] = {
+        "failures": latest_sim.get("retake_clean", {}).get("failures", []) if isinstance(latest_sim, dict) else [],
+        "policy": "Retake-clean edits cannot contain surviving false starts, hook retakes, or reset loops.",
+    }
     receipts.log(
         "host_kernel_packet",
         status=packet["status"],
         contract=packet["contract"],
         transcript_chars=len(packet["transcript"]["excerpt"]),
         candidate_count=len(candidates),
+        opening_hook_variants=len(hook_cluster.variants) if hook_cluster else 0,
+        raw_short_candidates=len(short_hints),
         media_bytes_included=False,
         requested_host_action=packet["requested_host_action"]["type"],
     )
+    if hook_cluster:
+        receipts.log("opening_hook_cluster", **hook_cluster.to_dict())
     return packet
 
 
@@ -366,7 +494,20 @@ def _payload_to_decisions(run_dir: Path, payload: dict[str, Any]) -> tuple[EditD
     if _is_host_intent_payload(payload):
         body = _host_payload_body(payload)
         intent = HostIntentV1.model_validate(body)
-        return _intent_to_decisions(intent, _kernel_candidates(run_dir)), "host_intent_v1", intent
+        words = _safe_words(run_dir)
+        phrases = _safe_json_list(load_phrases, run_dir)
+        cluster = opening_hook_cluster(words, phrases)
+        hints = raw_short_candidates(phrases, min_s=10.0, max_s=59.0) if phrases else []
+        return (
+            _intent_to_decisions(
+                intent,
+                _kernel_candidates(run_dir),
+                opening_cluster=cluster.to_dict() if cluster else None,
+                short_hints=hints,
+            ),
+            "host_intent_v1",
+            intent,
+        )
     maybe_decisions = payload.get("decisions")
     legacy_body: Any = maybe_decisions if isinstance(maybe_decisions, dict) else payload
     return EditDecisions.model_validate(legacy_body), "EditDecisions", None
@@ -408,10 +549,11 @@ def _compile_host_decisions(
 
     cfg = load_config()
     phrases = load_phrases(rd)
+    words = words_flat(rd)
     try:
         edl = compile_edl(
             decisions,
-            words_flat(rd),
+            words,
             str(source_path),
             duration_s(Path(source_path)),
             cfg.render,
@@ -463,7 +605,11 @@ def _compile_host_decisions(
         phrases,
         cfg,
         decisions.target_runtime_seconds or edl.total_duration_s,
+        words=words,
     )
+    retake_failures = []
+    if isinstance(sim_report, dict):
+        retake_failures = (sim_report.get("retake_clean") or {}).get("failures", [])
     stamp = decisions_path.stem.rsplit("-", 1)[-1]
     host_dir = decisions_path.parent
     edl_path = host_dir / f"edl-{stamp}.json"
@@ -493,6 +639,7 @@ def _compile_host_decisions(
         ranges=len(edl.ranges),
         duration_s=edl.total_duration_s,
         sim_pass=sim_report.get("pass"),
+        retake_clean_failures=len(retake_failures),
         repair_loop=loop,
     )
     return {

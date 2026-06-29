@@ -129,17 +129,17 @@ class RenderConfig(BaseModel):
     proxy_height: int = 480
     proxy_preset: str = "ultrafast"
     final_crf: int = 18
-    # Tight spoken-word handles. Dogfood footage with Whisper-stretched word timings proved that
-    # 120/160ms pads can reintroduce >0.6s rendered silence at every splice after audio-truth cuts.
-    cut_pad_before_ms: int = 40
-    cut_pad_after_ms: int = 60
+    # Practical spoken-word handles. Whisper word starts are approximate; dogfood proved tiny
+    # 40/60ms pads can shave first syllables even when text-level gates are green.
+    cut_pad_before_ms: int = 160
+    cut_pad_after_ms: int = 220
     # Numbers and metrics are high-cost mistakes: "104 clicks" must never become "100 clicks".
     # These wider handles apply only when an edit boundary touches a number/metric phrase.
     numeric_pad_before_ms: int = 220
     numeric_pad_after_ms: int = 320
     boundary_fade_ms: int = 30
     long_camera_size: int = 260
-    long_camera_radius: int = 100
+    long_camera_radius: int = 30
     long_camera_margin: int = 0
 
 
@@ -214,7 +214,7 @@ class GatesConfig(BaseModel):
     # audio-truth silence handling (kills "mouth moving, no sound")
     silence_noise_db: float = -34.0  # silencedetect noise floor
     silence_min_cut_s: float = 0.40  # audio-silent span >= this (and no words) gets removed
-    silence_handle_s: float = 0.04  # silence left each side of a removed silent span
+    silence_handle_s: float = 0.12  # silence left each side of a removed silent span
     max_output_silence_s: float = 0.6  # output gate: non-protected silence above this fails
     allow_redaction: bool = False  # default is no blur/redaction; use explicit opt-in for privacy edits
     # v1.6 extract continuity (only applied when compile_edl runs with extract=True): consolidate the

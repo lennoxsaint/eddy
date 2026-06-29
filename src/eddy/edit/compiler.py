@@ -24,7 +24,7 @@ from eddy.edit.schema import EditDecisions, Edl, EdlRange
 # good edit from ever shipping. Cut the center of any transcript-visible pause above the packer's
 # gap-record threshold, then leave audible handles on both sides.
 GAP_TIGHTEN_THRESHOLD_S = 0.35
-GAP_LEAVE_HANDLE_S = 0.05  # silence left on each side of a tightened gap
+GAP_LEAVE_HANDLE_S = 0.12  # silence left on each side of a tightened gap
 
 
 class CompileError(ValueError):
@@ -75,16 +75,25 @@ def silence_cut_intervals(
         if re_ - rs <= 0.05:
             continue
         # safety: allow one stretched Whisper token, but never remove a normal multi-word phrase
-        # just because silencedetect saw a low-energy pocket.
-        word_centers_inside = [
-            (idx, (float(w["start"]) + float(w["end"])) / 2)
+        # just because silencedetect saw a low-energy pocket. Use interval overlap, not only centers:
+        # dogfood proved a silence span can touch the first syllable while missing the center.
+        word_overlaps = [
+            (idx, float(w["start"]), float(w["end"]))
             for idx, w in enumerate(words)
-            if rs <= (float(w["start"]) + float(w["end"])) / 2 <= re_
+            if min(re_, float(w["end"])) - max(rs, float(w["start"])) > 0.01
         ]
-        if len(word_centers_inside) > 1:
+        if len(word_overlaps) > 1:
             continue
-        if len(word_centers_inside) == 1:
-            idx, center = word_centers_inside[0]
+        if len(word_overlaps) == 1:
+            idx, word_start, word_end = word_overlaps[0]
+            if (
+                word_end - word_start >= 1.0
+                and rs >= word_start + handle_s
+                and re_ <= word_end - handle_s
+            ):
+                out.append((rs, re_))
+                continue
+            center = (word_start + word_end) / 2
             prev_center = (
                 (float(words[idx - 1]["start"]) + float(words[idx - 1]["end"])) / 2
                 if idx > 0 else None
@@ -96,7 +105,7 @@ def silence_cut_intervals(
             attach_right = prev_center is None or (
                 next_center is not None and next_center - center <= center - prev_center
             )
-            ps, pe = (rs, center - handle_s) if attach_right else (center + handle_s, re_)
+            ps, pe = (rs, word_start - handle_s) if attach_right else (word_end + handle_s, re_)
             if pe - ps > 0.05:
                 out.append((ps, pe))
             continue
@@ -245,6 +254,7 @@ def compile_edl(
             merged[-1].end_handle_s = r.end_handle_s
         else:
             merged.append(r)
+    merged = _bridge_unsafe_boundary_handles(merged, gates_cfg)
 
     # v1.6 extract continuity: a topical extract drops the off-topic majority and so leaves many
     # small keep ranges with short gaps between them — which read as explanations severed mid-thought.
@@ -341,6 +351,27 @@ def _finalize_extract_blocks(
     return [r for r in blocks if r.end - r.start >= gates_cfg.extract_min_block_s]
 
 
+def _bridge_unsafe_boundary_handles(ranges: list[EdlRange], gates_cfg: GatesConfig) -> list[EdlRange]:
+    """Re-admit a tiny cut when the resulting splice cannot preserve word-onset handles."""
+    if len(ranges) < 2:
+        return ranges
+    out: list[EdlRange] = [ranges[0]]
+    floor = float(gates_cfg.min_boundary_handle_s)
+    for current in ranges[1:]:
+        previous = out[-1]
+        gap = current.start - previous.end
+        unsafe_start = 0 < current.start_handle_s < floor
+        unsafe_end = 0 < previous.end_handle_s < floor
+        if 0 <= gap < 2.0 and (unsafe_start or unsafe_end):
+            previous.end = current.end
+            previous.end_handle_s = current.end_handle_s
+            if not previous.beat:
+                previous.beat = current.beat
+            continue
+        out.append(current)
+    return out
+
+
 def _snap_to_words(
     s: float,
     e: float,
@@ -351,10 +382,20 @@ def _snap_to_words(
     numeric_pad_before: float = 0.0,
     numeric_pad_after: float = 0.0,
 ) -> tuple[float, float, float, float] | None:
-    """Snap [s,e] so it starts pad_before ahead of the first word fully inside and
-    ends pad_after past the last word fully inside. Pads never reach a neighbor word.
+    """Snap [s,e] so it starts pad_before ahead of the first word inside or overlapping and
+    ends pad_after past the last word inside or overlapping. Pads never reach a neighbor word.
     Returns (start, end, start_handle, end_handle) or None when no word is inside."""
-    inside = [w for w in words if w["start"] >= s - 0.02 and w["end"] <= e + 0.02]
+    inside = []
+    for w in words:
+        ws = float(w["start"])
+        we = float(w["end"])
+        overlap = min(e, we) - max(s, ws)
+        if overlap <= 0.015:
+            continue
+        center = (ws + we) / 2
+        duration = max(0.05, we - ws)
+        if s <= center <= e or overlap / duration >= 0.45:
+            inside.append(w)
     if not inside:
         return None
     first, last = inside[0], inside[-1]

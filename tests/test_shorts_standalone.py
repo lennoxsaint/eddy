@@ -95,6 +95,15 @@ def test_select_short_candidates_filters_weak_hooks_with_playbook():
     assert [c.hook for c in selected] == ["Stop making this creator mistake"]
 
 
+def test_short_attempt_queue_tries_playbook_winners_then_remaining_candidates():
+    winner = ShortsCandidate(start_s=20, end_s=50, hook="Stop making this creator mistake")
+    fallback = ShortsCandidate(start_s=10, end_s=40, hook="and then I went over here")
+
+    queue = shorts_mod._short_attempt_queue([winner], [fallback, winner])
+
+    assert queue == [winner, fallback]
+
+
 def test_short_silence_threshold_uses_shorts_dead_air_standard():
     cfg = shorts_mod.load_config()
     cfg.gates.max_output_silence_s = 0.6
@@ -117,6 +126,47 @@ def test_quarantine_rejected_short_moves_failed_candidate_out_of_production_fold
     assert rejected == stale
     assert rejected.read_bytes() == b"failed-render"
     assert not final.exists()
+
+
+def test_mined_short_candidates_use_raw_transcript_when_host_omits_shorts(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    phrases = [
+        {"start": 0.0, "end": 6.0, "text": "Here is how to duplicate Codex and run any model inside it"},
+        {"start": 6.2, "end": 13.0, "text": "You copy the app route and change the model provider"},
+        {"start": 13.3, "end": 22.0, "text": "That means you can test local models and subscription agents"},
+    ]
+    monkeypatch.setattr(shorts_mod, "load_phrases", lambda rd: phrases)
+
+    mined = shorts_mod._mined_short_candidates(run_dir, min_s=10, max_s=59, limit=5)
+
+    assert mined
+    assert mined[0].start_s == 0.0
+    assert mined[0].end_s >= 13.0
+    assert "duplicate Codex" in mined[0].hook
+
+
+def test_write_short_blocker_creates_ledger_and_receipt(tmp_path):
+    out_root = tmp_path / "shorts"
+    out_root.mkdir()
+    seen = {}
+
+    class Receipts:
+        def log(self, event, **payload):
+            seen["event"] = event
+            seen["payload"] = payload
+
+    ledger = shorts_mod._write_short_blocker(
+        out_root,
+        Receipts(),
+        "no_standalone_short_candidates",
+        "No standalone moments.",
+        {"candidate_count": 0},
+    )
+
+    assert ledger[0]["status"] == "blocked"
+    assert ledger[0]["blocker"] == "no_standalone_short_candidates"
+    assert (out_root / "shorts-ledger.json").exists()
+    assert seen["event"] == "shorts_blocked"
 
 
 def test_sub_segments_keep_positive_boundary_handles():

@@ -68,9 +68,7 @@ def _render_profile_candidate(
     click_gate_pass = clicks <= before_clicks or clicks <= max(8, int(before_clicks * 0.35))
     reference_echo_score = _echo_artifact_score(raw)
     echo_score = _echo_artifact_score(out)
-    echo_gate_pass = (not cfg.require_echo_artifact_gate) or (
-        echo_score <= cfg.echo_artifact_max_score and echo_score <= reference_echo_score + 0.015
-    )
+    echo_gate_pass = _echo_gate_pass(echo_score, reference_echo_score, cfg)
     return {
         "profile": profile.name,
         "path": str(out),
@@ -130,6 +128,40 @@ def _loudness_gate_pass(candidate: dict, cfg: AudioConfig, tolerance: float = 2.
     return abs(lufs - float(cfg.target_lufs)) <= tolerance
 
 
+def _echo_gate_pass(echo_score: float, reference_echo_score: float, cfg: AudioConfig) -> bool:
+    """Block material echo regressions without making already-echoey source impossible.
+
+    The absolute floor catches obviously hollow/echoey processing on clean source audio. When the
+    source itself scores above that floor, the honest gate is source-relative: a heavy cleanup
+    candidate can pass only if it is effectively no worse than the source measurement.
+    """
+    if not cfg.require_echo_artifact_gate:
+        return True
+    if reference_echo_score <= cfg.echo_artifact_max_score:
+        return echo_score <= cfg.echo_artifact_max_score and echo_score <= reference_echo_score + 0.015
+    return echo_score <= reference_echo_score + 0.006
+
+
+def _strong_cleanup_gate_pass(candidate: dict, cfg: AudioConfig) -> bool:
+    """A passing Strong Studio Sound result must include real heavy/wet cleanup.
+
+    `source_reference` is still useful as a do-no-harm comparison or an explicitly lowered policy,
+    but it cannot satisfy the default product promise: actual studio-quality voice cleanup.
+    """
+    if not cfg.require_heavy_backend:
+        return True
+    profile = str(candidate.get("profile", ""))
+    source_mode = str(candidate.get("source_mode", ""))
+    if profile == "source_reference" or source_mode == "reference":
+        return False
+    wet = candidate.get("wet_dry_mix", {}).get("wet", 0.0)
+    try:
+        wet_amount = float(wet)
+    except (TypeError, ValueError):
+        wet_amount = 0.0
+    return source_mode == "heavy" and wet_amount > 0.0
+
+
 def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: AudioConfig) -> dict:
     scored = []
     for candidate in candidates:
@@ -141,6 +173,20 @@ def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: Audi
         c for c in scored
         if c.get("click_gate_pass") and c.get("echo_gate_pass") and c.get("loudness_gate_pass")
     ]
+    strong_passing = [c for c in passing if _strong_cleanup_gate_pass(c, cfg)]
+    if cfg.require_heavy_backend and strong_passing:
+        return min(strong_passing, key=lambda c: c["selection_score"])
+    if cfg.require_heavy_backend:
+        heavy_pool = [
+            c for c in scored
+            if c.get("profile") != "source_reference" and c.get("source_mode") == "heavy"
+        ]
+        if heavy_pool:
+            heavy_gate_passes = [
+                c for c in heavy_pool
+                if c.get("click_gate_pass") and c.get("echo_gate_pass") and c.get("loudness_gate_pass")
+            ]
+            return min(heavy_gate_passes or heavy_pool, key=lambda c: c["selection_score"])
     reference = next((c for c in passing if c.get("profile") == "source_reference"), None)
     if reference:
         ref_echo = float(reference.get("echo_artifact_score") or 0.0)

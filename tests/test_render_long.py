@@ -9,6 +9,7 @@ from eddy.render.long import latest_iteration_dir
 from eddy.render import segments
 from eddy.render.segments import (
     _concat_segments_filtergraph,
+    _render_cache_fingerprint,
     _segment_args,
     _segment_args_dual,
     _visual_insert_filtergraph,
@@ -65,6 +66,48 @@ def test_dual_segment_args_puts_camera_bottom_right_and_trims_after_preroll(tmp_
     assert "atrim=start=2.000:duration=2.000" in graph
     assert args.count("-ss") == 2
     assert args.index(str(tmp_path / "mask.png")) > args.index(str(tmp_path / "camera.mp4"))
+
+
+def test_default_long_camera_radius_is_modest_rounded_square():
+    cfg = RenderConfig()
+
+    assert cfg.long_camera_size == 260
+    assert cfg.long_camera_radius == 30
+
+
+def test_render_cache_fingerprint_changes_when_edl_or_style_changes(tmp_path):
+    edl_a = Edl(sources={"camera": str(tmp_path / "camera.mp4")}, ranges=[EdlRange(start=0, end=1)])
+    edl_b = Edl(sources={"camera": str(tmp_path / "camera.mp4")}, ranges=[EdlRange(start=0, end=2)])
+    cfg_a = RenderConfig(long_camera_radius=30)
+    cfg_b = RenderConfig(long_camera_radius=100)
+
+    fp_a = _render_cache_fingerprint(
+        edl_a,
+        render_cfg=cfg_a,
+        source=tmp_path / "camera.mp4",
+        screen=None,
+        proxy=True,
+        proxy_height=cfg_a.proxy_height,
+    )
+    fp_b = _render_cache_fingerprint(
+        edl_b,
+        render_cfg=cfg_a,
+        source=tmp_path / "camera.mp4",
+        screen=None,
+        proxy=True,
+        proxy_height=cfg_a.proxy_height,
+    )
+    fp_c = _render_cache_fingerprint(
+        edl_a,
+        render_cfg=cfg_b,
+        source=tmp_path / "camera.mp4",
+        screen=None,
+        proxy=True,
+        proxy_height=cfg_b.proxy_height,
+    )
+
+    assert fp_a != fp_b
+    assert fp_a != fp_c
 
 
 def test_long_concat_uses_filtergraph_reencode(monkeypatch, tmp_path):

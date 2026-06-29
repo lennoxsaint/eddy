@@ -15,7 +15,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from eddy.config import load_config
-from eddy.edit.schema import load_decisions
+from eddy.edit.kernel import raw_short_candidates
+from eddy.edit.schema import ShortsCandidate, load_decisions
 from eddy.loop.receipts import Receipts
 from eddy.media.ffmpeg import run_ffmpeg, video_encoder_args
 from eddy.media.probe import stream_summary
@@ -23,6 +24,7 @@ from eddy.render import layout as L
 from eddy.render.captions import burn_captions, caption_events
 from eddy.render.long import latest_iteration_dir
 from eddy.runs import SourceError, manifest
+from eddy.transcribe.pack import phrases as load_phrases
 from eddy.transcribe.whisper import words_flat
 from eddy.qa.deterministic import loudness_gate, silent_motion_gate
 from eddy.hooks.playbook import load_playbook, require_hook_playbook, resolve_playbook_path, score_candidate_hook
@@ -236,6 +238,27 @@ def select_short_candidates(candidates: list, count: int, playbook_records: list
     return [c for _score, _neg_start, c in scored[: count * 2]]
 
 
+def _short_candidate_key(candidate) -> tuple[float, float, str]:
+    return (
+        round(float(candidate.start_s), 3),
+        round(float(candidate.end_s), 3),
+        str(getattr(candidate, "hook", "")),
+    )
+
+
+def _short_attempt_queue(selected: list, all_candidates: list) -> list:
+    """Try taste-selected Shorts first, then remaining standalone candidates if QA rejects them."""
+    queue = list(selected)
+    seen = {_short_candidate_key(c) for c in queue}
+    for candidate in all_candidates:
+        key = _short_candidate_key(candidate)
+        if key in seen:
+            continue
+        queue.append(candidate)
+        seen.add(key)
+    return queue
+
+
 def _short_silence_threshold(cfg) -> float:
     """Shorts allow natural visual micro-pauses; the QA standard hard-fails true dead air."""
     return max(float(cfg.gates.max_output_silence_s), float(cfg.shorts.max_silent_motion_s))
@@ -249,6 +272,44 @@ def _quarantine_rejected_short(final: Path, out_root: Path) -> Path:
         rejected.unlink()
     final.replace(rejected)
     return rejected
+
+
+def _mined_short_candidates(run_dir: Path, min_s: float, max_s: float, limit: int) -> list[ShortsCandidate]:
+    try:
+        hints = raw_short_candidates(load_phrases(run_dir), min_s=min_s, max_s=max_s, limit=limit)
+    except Exception:
+        return []
+    return [
+        ShortsCandidate(
+            start_s=float(item["start_s"]),
+            end_s=float(item["end_s"]),
+            hook=str(item.get("hook", "")),
+            reason=str(item.get("reason", "Raw transcript miner found a complete standalone span.")),
+        )
+        for item in hints
+    ]
+
+
+def _write_short_blocker(out_root: Path, receipts: Receipts, code: str, message: str, evidence: dict) -> list[dict]:
+    ledger = [
+        {
+            "slug": code,
+            "hook": "",
+            "path": "",
+            "duration_s": 0.0,
+            "qa_pass": False,
+            "status": "blocked",
+            "blocker": code,
+            "message": message,
+            "evidence": evidence,
+        }
+    ]
+    (out_root / "shorts-ledger.json").write_text(json.dumps(ledger, indent=1))
+    receipts.log("shorts_blocked", code=code, message=message, evidence=evidence)
+    from eddy.ui import console as ui
+
+    ui.json_output([{k: e.get(k) for k in ("slug", "status", "duration_s", "qa_pass", "blocker")} for e in ledger])
+    return ledger
 
 
 def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict]:
@@ -288,7 +349,49 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
     out_root = run_dir / "final" / "shorts"
     out_root.mkdir(parents=True, exist_ok=True)
 
-    candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count, playbook_records)
+    if not decisions.shorts_candidates:
+        mined = _mined_short_candidates(
+            run_dir,
+            min_s=float(cfg.shorts.min_s),
+            max_s=float(cfg.shorts.max_s),
+            limit=max(cfg.shorts.count * 3, cfg.shorts.count),
+        )
+        decisions.shorts_candidates = mined
+        receipts.log(
+            "shorts_mined_from_raw_transcript",
+            candidate_count=len(mined),
+            reason="Host-kernel decisions had no Shorts candidates.",
+        )
+        if not mined:
+            return _write_short_blocker(
+                out_root,
+                receipts,
+                "no_standalone_short_candidates",
+                "No host or raw-transcript Shorts candidates were available.",
+                {"source": "raw_transcript_miner", "min_s": cfg.shorts.min_s, "max_s": cfg.shorts.max_s},
+            )
+
+    selected_candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count, playbook_records)
+    if not selected_candidates:
+        return _write_short_blocker(
+            out_root,
+            receipts,
+            "no_green_short_candidates",
+            "Shorts candidates existed, but none passed the hook/playbook selection gate.",
+            {
+                "candidate_count": len(decisions.shorts_candidates),
+                "require_hook_playbook": cfg.shorts.require_hook_playbook,
+                "hook_playbook_records": len(playbook_records),
+            },
+        )
+    candidates = _short_attempt_queue(selected_candidates, decisions.shorts_candidates)
+    if len(candidates) > len(selected_candidates):
+        receipts.log(
+            "shorts_selection_fallback_queue",
+            selected_count=len(selected_candidates),
+            fallback_count=len(candidates) - len(selected_candidates),
+            reason="Taste-selected Shorts did not exhaust standalone raw candidates; QA may reject the first choices.",
+        )
     ledger: list[dict] = []
     rendered = 0
 
@@ -455,6 +558,13 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
                 loudness_qa=loudness_qa,
             )
 
+    if rendered == 0:
+        receipts.log(
+            "shorts_blocked",
+            code="no_green_rendered_shorts",
+            message="Shorts candidates were attempted, but none passed render/QA gates.",
+            evidence={"attempted": len(ledger), "candidate_count": len(candidates)},
+        )
     (out_root / "shorts-ledger.json").write_text(json.dumps(ledger, indent=1))
     from eddy.ui import console as ui
 

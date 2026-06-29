@@ -7,7 +7,9 @@ to kill pops, no double-encode at concat."""
 from __future__ import annotations
 
 import concurrent.futures
+import hashlib
 import importlib
+import json
 import os
 import textwrap
 from pathlib import Path
@@ -29,6 +31,64 @@ except Exception:  # pragma: no cover - pillow is a runtime dependency, but keep
 SEEK_PREROLL_S = 2.0
 _FONT_REGULAR = Path("/System/Library/Fonts/Supplemental/Arial.ttf")
 _FONT_BOLD = Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+
+
+def _segment_cache_fingerprint(
+    r: EdlRange,
+    *,
+    render_cfg: RenderConfig,
+    source: Path,
+    screen: Path | None,
+    proxy: bool,
+    proxy_height: int | None,
+) -> str:
+    payload = {
+        "start": round(float(r.start), 3),
+        "end": round(float(r.end), 3),
+        "speed": round(float(getattr(r, "speed", 1.0) or 1.0), 6),
+        "source": str(source),
+        "screen": str(screen) if screen else "",
+        "proxy": proxy,
+        "proxy_height": proxy_height,
+        "long_camera_size": render_cfg.long_camera_size,
+        "long_camera_radius": render_cfg.long_camera_radius,
+        "long_camera_margin": render_cfg.long_camera_margin,
+        "boundary_fade_ms": render_cfg.boundary_fade_ms,
+        "final_crf": render_cfg.final_crf,
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(blob).hexdigest()[:12]
+
+
+def _render_cache_fingerprint(
+    edl: Edl,
+    *,
+    render_cfg: RenderConfig,
+    source: Path,
+    screen: Path | None,
+    proxy: bool,
+    proxy_height: int | None,
+) -> str:
+    payload = {
+        "ranges": [
+            {
+                "start": round(float(r.start), 3),
+                "end": round(float(r.end), 3),
+                "speed": round(float(getattr(r, "speed", 1.0) or 1.0), 6),
+            }
+            for r in edl.ranges
+        ],
+        "source": str(source),
+        "screen": str(screen) if screen else "",
+        "proxy": proxy,
+        "proxy_height": proxy_height,
+        "long_camera_size": render_cfg.long_camera_size,
+        "long_camera_radius": render_cfg.long_camera_radius,
+        "long_camera_margin": render_cfg.long_camera_margin,
+        "boundary_fade_ms": render_cfg.boundary_fade_ms,
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(blob).hexdigest()[:12]
 
 
 def _filter_escape(value: str) -> str:
@@ -352,6 +412,20 @@ def render_edl(
         cam_size = max(80, int(round(render_cfg.long_camera_size * proxy_h / 1080)))
         radius = max(10, int(round(render_cfg.long_camera_radius * proxy_h / 1080)))
         mask = _rounded_mask(seg_dir / f"camera-mask-{cam_size}-r{radius}.png", (cam_size, cam_size), radius)
+        if receipts is not None:
+            receipts.log(
+                "long_style_lock",
+                layout="screen_with_bottom_right_camera",
+                camera_square={"size": cam_size, "radius": radius, "margin": render_cfg.long_camera_margin},
+            )
+    render_fingerprint = _render_cache_fingerprint(
+        edl,
+        render_cfg=render_cfg,
+        source=source,
+        screen=screen,
+        proxy=proxy,
+        proxy_height=render_cfg.proxy_height if proxy else None,
+    )
 
     def one(job: tuple[int, EdlRange]) -> Path:
         idx, r = job
@@ -359,7 +433,19 @@ def render_edl(
         # re-renders instead of reusing a stale un-sped segment. 1.0x keeps the old byte-identical
         # name (no churn for the default-off path).
         sp = getattr(r, "speed", 1.0) or 1.0
-        seg_out = seg_dir / (f"{idx:04d}.mp4" if abs(sp - 1.0) < 1e-6 else f"{idx:04d}_s{int(round(sp * 1000)):04d}.mp4")
+        fingerprint = _segment_cache_fingerprint(
+            r,
+            render_cfg=render_cfg,
+            source=source,
+            screen=screen,
+            proxy=proxy,
+            proxy_height=render_cfg.proxy_height if proxy else None,
+        )
+        seg_out = seg_dir / (
+            f"{idx:04d}_{fingerprint}.mp4"
+            if abs(sp - 1.0) < 1e-6
+            else f"{idx:04d}_s{int(round(sp * 1000)):04d}_{fingerprint}.mp4"
+        )
         if seg_out.exists() and seg_out.stat().st_size > 1024:
             return seg_out
         # render to a .partial sibling, then os.replace on success: a SIGKILL/Ctrl-C mid-render
@@ -405,6 +491,7 @@ def render_edl(
             edl_duration_s=edl.total_duration_s,
             layout="screen_with_bottom_right_camera" if screen is not None else "single_source",
             join_strategy=join_qa["strategy"],
+            segment_cache_fingerprint=render_fingerprint,
             visual_inserts=visual_insert_count,
         )
     return out_path

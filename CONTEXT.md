@@ -25,6 +25,18 @@ _Avoid_: Provider only, model choice
 An edit path where the current assistant session supplies structured editorial decisions from an Eddy packet, and Eddy compiles, renders, and gates the result.
 _Avoid_: Codex-only mode, manual editor
 
+**Retake-Clean Edit**:
+An edit where failed hook attempts, false starts, repeated takes, and reset loops do not survive the final timeline.
+_Avoid_: Media-valid edit, best visible take somewhere in the file
+
+**Opening Hook Cluster**:
+Multiple opening attempts before the first real body section. Eddy keeps one variant, defaulting to the last clean hook unless the host explicitly protects an earlier stronger hook.
+_Avoid_: Keeping every intro attempt, model-decided first hook by accident
+
+**Word-Onset Safety**:
+Cut mechanics that preserve audible first syllables and natural lead-in handles, not only transcript word centers.
+_Avoid_: Text-green but clipped speech, tiny boundary pads
+
 **Route Fallback**:
 A recorded switch from a stalled or failing edit path to the next allowed path without discarding source hashes, transcript cache, run directory, or receipts.
 _Avoid_: Silent retry, hidden downgrade
@@ -41,6 +53,10 @@ _Avoid_: Aspect-ratio-only check, loose layout
 Eddy's local heavy voice-enhancement quality gate for speech cleanup.
 _Avoid_: FFmpeg-only loudness pass, basic EQ
 
+**Strong Studio Sound**:
+A Studio Sound result whose selected profile used a heavy/wet cleanup path and passed click, echo, loudness, and strong-cleanup gates.
+_Avoid_: `source_reference` selected, loudness-only normalization
+
 **HyperFrames Frame Contract**:
 The project-local `frame.md` motion design system that governs overlays before animation.
 _Avoid_: Ad hoc ffmpeg boxes, one-off overlay
@@ -55,8 +71,11 @@ _Avoid_: Trusting the animated render first
 - A **Final Short** must have exactly one **Source Lock** and one **Style Lock** receipt.
 - A **Proof-Gated Edit** may use one or more **Edit Path** attempts, but the edit is not complete until gates pass.
 - A **Host-Agent Edit** is an **Edit Path**, not a replacement for Eddy's deterministic compiler or QA.
+- A **Retake-Clean Edit** depends on **Opening Hook Cluster** handling plus repeated-take simulation gates.
+- **Word-Onset Safety** is required for every **Retake-Clean Edit**; a transcript-valid cut can still fail if audio starts are clipped.
 - A **Route Fallback** keeps one run history; it must not hide which **Edit Path** produced each decision.
 - **Studio Sound** is an audio gate for both long-form videos and **Final Shorts** unless explicitly disabled for tests.
+- **Strong Studio Sound** is the default passing Studio Sound state when heavy cleanup is required.
 - A **HyperFrames Frame Contract** produces a **Storyboard Proof** before any motion graphic is composited.
 
 ## Example Dialogue
@@ -70,8 +89,15 @@ _Avoid_: Trusting the animated render first
 > **Dev:** "The model got stuck but the proxy is watchable. Is that a perfect edit?"
 > **Domain expert:** "No. A **Proof-Gated Edit** is either gate-green or it returns exact blockers and route history."
 
+> **Dev:** "The intro has three hook attempts, but the final file plays fine."
+> **Domain expert:** "No. A **Retake-Clean Edit** keeps one **Opening Hook Cluster** variant and removes the failed attempts."
+
+> **Dev:** "The transcript starts on the right word, but the first syllable sounds shaved."
+> **Domain expert:** "No. **Word-Onset Safety** is an audio-boundary gate, not a transcript-only gate."
+
 ## Flagged Ambiguities
 
 - "Hook corpus" and "hook playbook" are the same concept; use **Hook Playbook**.
 - "Studio Sound" means Eddy's local heavy speech enhancement gate unless a Descript project path is explicitly used.
+- "`source_reference` is a do-no-harm audio comparison, not **Strong Studio Sound** when heavy cleanup is required."
 - "Perfectly edited" means **Proof-Gated Edit**, not universal subjective perfection or a weak best-attempt proxy.

@@ -2,6 +2,26 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-29 — Retake-clean dogfood repair gates are required
+
+1. **Retake-clean is a product gate:** A media-valid long video is still a failed Eddy edit if failed
+   hooks, false starts, repeated takes, or reset loops survive. The host-kernel path must now compile
+   opening-hook cluster decisions and run a retake-clean simulation gate before claiming green.
+2. **Last clean opening hook wins by default:** When the opening contains multiple hook variants before
+   the first real body section, Eddy keeps the last complete hook unless the host explicitly protects
+   an earlier stronger hook variant.
+3. **Word starts need audio-safe handles:** Long-form cuts use practical spoken-word handles, audio
+   silence tightening clips away from overlapping words, and boundary QA treats sub-floor handles as
+   failure evidence instead of text-only success.
+4. **Shorts are mined independently:** If host-kernel decisions omit Shorts, Eddy must mine the raw
+   transcript for standalone candidates. Zero production Shorts is allowed only with a ledger/blocker
+   proving no candidate passed the required gates.
+5. **Strong Studio Sound cannot be loudness-only:** `source_reference` remains a do-no-harm comparison,
+   but it cannot satisfy the Strong Studio Sound gate when heavy cleanup is required. If heavy/wet
+   cleanup candidates fail, Eddy blocks packaging with receipt evidence instead of overclaiming.
+6. **Repair renders need fresh segment identity:** Rendered segment cache keys include the EDL and
+   long-form style config so a repair cannot reuse stale segment files after cut/layout changes.
+
 ## 2026-06-29 — Host-kernel editing becomes the default
 
 1. **Default path:** `@Eddy edit this` should auto-select `host_kernel` when the current assistant can

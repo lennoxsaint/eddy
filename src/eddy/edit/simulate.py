@@ -9,7 +9,8 @@ import json
 from pathlib import Path
 
 from eddy.config import EddyConfig
-from eddy.edit.compiler import cut_transcript
+from eddy.edit.compiler import cut_transcript, cut_word_transcript
+from eddy.edit.kernel import retake_clean_failures
 from eddy.edit.schema import EditDecisions, Edl
 
 
@@ -80,16 +81,20 @@ def simulate(
     phrases: list[dict],
     cfg: EddyConfig,
     target_s: float,
+    words: list[dict] | None = None,
 ) -> dict:
     kept = cut_transcript(edl, phrases)
+    word_kept = cut_word_transcript(edl, words) if words else []
+    kept_for_gates = word_kept or kept
     cards = boundary_cards(edl, phrases)
+    retake_failures = retake_clean_failures(kept_for_gates)
 
     # dead air remaining inside keep ranges — silence inside a protected moment is
     # a deliberate visual beat (demo footage), not a defect. The exception is NARROW:
     # the protected span must explicitly cover the silence, not merely sit within ~1s,
     # so "mouth moving, no sound" can no longer hide behind a nearby protection.
     dead_air = []
-    for a, b in zip(kept, kept[1:]):
+    for a, b in zip(kept_for_gates, kept_for_gates[1:]):
         gap = b["out_start"] - a["out_end"]
         if gap > cfg.gates.max_dead_air_s:
             src = a["end"]  # raw-timeline end of the phrase before the gap
@@ -97,8 +102,8 @@ def simulate(
             if not protected:
                 dead_air.append({"after_out_s": a["out_end"], "gap_s": round(gap, 2), "before": a["text"][-60:]})
 
-    # the 30ms boundary fade absorbs glued-word bleed: hard-fail only handles below
-    # the fade floor; sub-min_boundary_handle handles are reported as warnings
+    # Word-onset safety is an editorial gate, not just a render nicety. A 30ms fade can hide a pop,
+    # but it cannot restore a shaved first syllable, so sub-floor handles now fail the sim.
     FADE_FLOOR_S = 0.03
     thin_handles = [
         c for c in cards
@@ -134,7 +139,8 @@ def simulate(
     # run). under_ceiling is advisory — it drives the compression directive, not pass/fail.
     verdicts = {
         "no_dead_air": not dead_air,
-        "handles_safe": not thin_handles,
+        "handles_safe": not thin_handles and not handle_warnings,
+        "retake_clean": not retake_failures,
         "has_content": len(kept) > 0,
     }
 
@@ -153,6 +159,16 @@ def simulate(
         "dead_air": dead_air,
         "thin_handles": thin_handles,
         "handle_warnings": len(handle_warnings),
+        "word_onset_safety": {
+            "pass": not thin_handles and not handle_warnings,
+            "thin_handles": thin_handles,
+            "handle_warnings": handle_warnings,
+            "minimum_handle_s": cfg.gates.min_boundary_handle_s,
+        },
+        "retake_clean": {
+            "pass": not retake_failures,
+            "failures": retake_failures,
+        },
         "verdicts": verdicts,
         "pass": all(verdicts.values()),
     }

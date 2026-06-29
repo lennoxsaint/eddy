@@ -233,27 +233,117 @@ def no_unauthorized_redaction_gate(metadata: dict | None, allow_redaction: bool 
     return {"gate": "no_unauthorized_redaction", "pass": not hits, "hits": hits[:10]}
 
 
-def silence_gate(video: Path, run_dir: Path, max_dead_air_s: float) -> dict:
+def _parse_silencedetect_spans(lines: list[str]) -> list[dict]:
+    spans: list[dict] = []
+    current_start: float | None = None
+    for ln in lines:
+        start = re.search(r"silence_start: ([\d.]+)", ln)
+        if start:
+            current_start = float(start.group(1))
+            continue
+        end = re.search(r"silence_end: ([\d.]+).*silence_duration: ([\d.]+)", ln)
+        if end:
+            finish = float(end.group(1))
+            duration = float(end.group(2))
+            spans.append({
+                "start": current_start if current_start is not None else finish - duration,
+                "end": finish,
+                "duration": duration,
+            })
+            current_start = None
+            continue
+        duration_only = re.search(r"silence_duration: ([\d.]+)", ln)
+        if duration_only:
+            spans.append({"start": None, "end": None, "duration": float(duration_only.group(1))})
+    return spans
+
+
+def _subtract_speech_from_silence(spans: list[dict], speech_spans: list[tuple[float, float]]) -> list[dict]:
+    """Return silent residual pieces after expected word audio is removed.
+
+    Studio-quality cleanup can make quiet syllables fall below ffmpeg's `silencedetect` threshold.
+    A rendered-output silence gate should fail actual dead air, not low-energy words that the EDL and
+    transcript say are meant to be audible.
+    """
+    if not speech_spans:
+        return spans
+    residual: list[dict] = []
+    expanded_speech = [(max(0.0, s - 0.08), e + 0.08) for s, e in speech_spans]
+    for sp in spans:
+        start, end = sp.get("start"), sp.get("end")
+        if start is None or end is None:
+            residual.append(sp)
+            continue
+        pieces = [(float(start), float(end))]
+        for ss, se in expanded_speech:
+            if not pieces or se <= pieces[0][0] or ss >= pieces[-1][1]:
+                continue
+            next_pieces: list[tuple[float, float]] = []
+            for ps, pe in pieces:
+                if se <= ps or ss >= pe:
+                    next_pieces.append((ps, pe))
+                    continue
+                if ss - ps > 0.02:
+                    next_pieces.append((ps, ss))
+                if pe - se > 0.02:
+                    next_pieces.append((se, pe))
+            pieces = next_pieces
+        residual.extend({"start": ps, "end": pe, "duration": pe - ps} for ps, pe in pieces)
+    return residual
+
+
+def _rendered_word_spans(edl: Edl, run_dir: Path) -> list[tuple[float, float]]:
+    from eddy.transcribe.whisper import words_flat
+
+    try:
+        words = words_flat(run_dir)
+    except FileNotFoundError:
+        return []
+    out: list[tuple[float, float]] = []
+    cursor = 0.0
+    for r in edl.ranges:
+        sp = r.speed or 1.0
+        for w in words:
+            start = float(w["start"])
+            end = float(w["end"])
+            center = (start + end) / 2
+            if r.start <= center <= r.end:
+                out.append((cursor + (start - r.start) / sp, cursor + (end - r.start) / sp))
+        cursor += (r.end - r.start) / sp
+    return out
+
+
+def silence_gate(
+    video: Path, run_dir: Path, max_dead_air_s: float, speech_spans: list[tuple[float, float]] | None = None
+) -> dict:
     from eddy.media.ffmpeg import FfmpegError
 
     try:
-        lines = _detect(video, run_dir, f"silencedetect=noise=-35dB:d={max_dead_air_s}", "silence_duration", audio=True)
+        lines = _detect(video, run_dir, f"silencedetect=noise=-35dB:d={max_dead_air_s}", "silence_", audio=True)
     except FfmpegError as e:
         return {"gate": "no_dead_air", "pass": False, "error": str(e)[:300]}
-    spans = []
-    for ln in lines:
-        m = re.search(r"silence_duration: ([\d.]+)", ln)
-        if m:
-            spans.append(float(m.group(1)))
+    raw_spans = _parse_silencedetect_spans(lines)
+    residual = _subtract_speech_from_silence(raw_spans, speech_spans or [])
+    spans = [float(sp["duration"]) for sp in residual]
     # the natural end of a video can trail off; ignore one trailing span < 2x threshold
     bad = [s for s in spans if s > max_dead_air_s]
     if bad and len(bad) == 1 and bad[0] < 2 * max_dead_air_s:
         bad = []
-    return {"gate": "no_dead_air", "pass": not bad, "spans_s": spans[:10]}
+    return {
+        "gate": "no_dead_air",
+        "pass": not bad,
+        "spans_s": [round(s, 3) for s in spans[:10]],
+        "raw_spans_s": [round(float(sp["duration"]), 3) for sp in raw_spans[:10]],
+    }
 
 
 def silent_motion_gate(
-    video: Path, run_dir: Path, noise_db: float, max_silence_s: float, protected_allow: int
+    video: Path,
+    run_dir: Path,
+    noise_db: float,
+    max_silence_s: float,
+    protected_allow: int,
+    speech_spans: list[tuple[float, float]] | None = None,
 ) -> dict:
     """The 'mouth moving, no sound' guard. Run on the RENDERED output: any silent span
     longer than max_silence_s is a retained dead/false-start moment. Deliberate beats
@@ -263,20 +353,19 @@ def silent_motion_gate(
     from eddy.media.ffmpeg import FfmpegError
 
     try:
-        lines = _detect(video, run_dir, f"silencedetect=noise={noise_db}dB:d={max_silence_s}", "silence_duration", audio=True)
+        lines = _detect(video, run_dir, f"silencedetect=noise={noise_db}dB:d={max_silence_s}", "silence_", audio=True)
     except FfmpegError as e:
         return {"gate": "silent_motion", "pass": False, "error": str(e)[:300]}
-    spans = []
-    for ln in lines:
-        m = re.search(r"silence_duration: ([\d.]+)", ln)
-        if m:
-            spans.append(round(float(m.group(1)), 2))
+    raw_spans = _parse_silencedetect_spans(lines)
+    residual = _subtract_speech_from_silence(raw_spans, speech_spans or [])
+    spans = [round(float(sp["duration"]), 2) for sp in residual]
     over = [s for s in spans if s > max_silence_s]
     allowed = protected_allow + 1  # protected beats + one trailing-pause grace
     return {
         "gate": "silent_motion",
         "pass": len(over) <= allowed,
         "spans_s": spans[:15],
+        "raw_spans_s": [round(float(sp["duration"]), 2) for sp in raw_spans[:15]],
         "over_count": len(over),
         "allowed": allowed,
     }
@@ -303,13 +392,19 @@ def run_deterministic(
     camera_roi: tuple[int, int, int, int] | None = None,
     render_metadata: dict | None = None,
 ) -> dict:
+    speech_spans = _rendered_word_spans(edl, run_dir)
     gates = [
         probe_clean(video),
         av_drift(video, edl, cfg.gates.max_av_drift_s),
         black_or_frozen(video, run_dir),
-        silence_gate(video, run_dir, cfg.gates.max_dead_air_s),
+        silence_gate(video, run_dir, cfg.gates.max_dead_air_s, speech_spans=speech_spans),
         silent_motion_gate(
-            video, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, protected_count
+            video,
+            run_dir,
+            cfg.gates.silence_noise_db,
+            cfg.gates.max_output_silence_s,
+            protected_count,
+            speech_spans=speech_spans,
         ),
     ]
     if check_loudness:

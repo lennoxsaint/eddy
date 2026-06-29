@@ -77,7 +77,12 @@ def test_single_range_no_splice_passes_clean():
     assert rep["boundary_cards"] == []
     assert rep["kept_phrases"] == 2
     assert rep["pass"] is True
-    assert rep["verdicts"] == {"no_dead_air": True, "handles_safe": True, "has_content": True}
+    assert rep["verdicts"] == {
+        "no_dead_air": True,
+        "handles_safe": True,
+        "has_content": True,
+        "retake_clean": True,
+    }
 
 
 def test_two_ranges_emit_one_boundary_card_and_removed_total():
@@ -160,9 +165,9 @@ def test_thin_handle_fails_handles_safe_verdict():
     assert rep["pass"] is False
 
 
-def test_handle_between_fade_floor_and_min_is_a_warning_not_a_fail():
+def test_handle_between_fade_floor_and_min_fails_word_onset_safety():
     # 0.05s handle is >= FADE_FLOOR (0.03) but < min_boundary_handle_s (0.10):
-    # reported as a handle_warning, NOT a thin_handle, and does not fail the gate
+    # reported as a handle_warning and now fails the word-onset safety gate.
     edl = mk_edl([
         EdlRange(start=0.0, end=10.0, start_handle_s=0.2, end_handle_s=0.2),
         EdlRange(start=14.0, end=24.0, start_handle_s=0.05, end_handle_s=0.2),
@@ -175,9 +180,24 @@ def test_handle_between_fade_floor_and_min_is_a_warning_not_a_fail():
 
     assert rep["thin_handles"] == []
     assert rep["handle_warnings"] == 1
-    assert rep["verdicts"]["handles_safe"] is True
+    assert rep["verdicts"]["handles_safe"] is False
+    assert rep["word_onset_safety"]["pass"] is False
     assert rep["verdicts"]["no_dead_air"] is True
-    assert rep["pass"] is True
+    assert rep["pass"] is False
+
+
+def test_retake_clean_gate_fails_repeated_surviving_takes():
+    edl = mk_edl([EdlRange(start=0.0, end=20.0, start_handle_s=0.2, end_handle_s=0.2)])
+    phrases = [
+        phrase(1.0, 3.0, "so today so today this is the real take"),
+        phrase(5.0, 7.0, "I've even got I've even got the screen open"),
+    ]
+    d = EditDecisions()
+    rep = simulate(edl, d, phrases, CFG, TARGET_S)
+
+    assert rep["verdicts"]["retake_clean"] is False
+    assert rep["retake_clean"]["failures"]
+    assert rep["pass"] is False
 
 
 def test_beat_density_heaviest_first_with_wpm():

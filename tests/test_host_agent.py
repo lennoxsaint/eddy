@@ -55,6 +55,38 @@ def _run_dir(tmp_path):
     return rd
 
 
+def _host_kernel_run_dir(tmp_path):
+    rd = _run_dir(tmp_path)
+    phrases = [
+        {"start": 0.2, "end": 7.0, "text": "If you use Codex the normal way you are stuck with one route"},
+        {"start": 9.0, "end": 18.0, "text": "If you are renting AI models the normal way this is better"},
+        {"start": 20.0, "end": 31.0, "text": "You can duplicate Codex and run any model inside it"},
+        {"start": 34.0, "end": 42.0, "text": "The post has the whole breakdown and scripts"},
+    ]
+    words: list[dict] = []
+    for phrase in phrases:
+        parts = phrase["text"].split()
+        step = (phrase["end"] - phrase["start"]) / len(parts)
+        cursor = phrase["start"]
+        for part in parts:
+            words.append(
+                {
+                    "start": round(cursor, 3),
+                    "end": round(cursor + step * 0.72, 3),
+                    "word": f" {part}",
+                    "probability": 0.99,
+                }
+            )
+            cursor += step
+    (rd / "transcript" / "phrases.json").write_text(json.dumps(phrases))
+    (rd / "transcript" / "takes_packed.md").write_text(
+        "\n".join(f"[{p['start']:.2f}-{p['end']:.2f}] {p['text']}" for p in phrases) + "\n"
+    )
+    (rd / "transcript" / "words.json").write_text(json.dumps({"segments": [{"words": words}]}))
+    (rd / "transcript" / "silence-map.json").write_text("[]")
+    return rd
+
+
 def test_host_packet_includes_context_but_never_media_bytes(tmp_path):
     rd = _run_dir(tmp_path)
     packet = host_packet(rd)
@@ -67,6 +99,8 @@ def test_host_packet_includes_context_but_never_media_bytes(tmp_path):
     assert packet["candidate_context"]["count"] >= 1
     assert packet["candidate_context"]["candidates"][0]["id"]
     assert packet["candidate_context"]["candidates"][0]["reason"]
+    assert "opening_hook_context" in packet
+    assert "shorts_candidate_context" in packet
 
 
 def test_host_submit_compiles_valid_decisions(monkeypatch, tmp_path):
@@ -132,6 +166,62 @@ def test_host_intent_rejects_unknown_candidate_id(tmp_path):
     out = submit_host_decisions(rd, {"contract": "host_intent_v1", "selected_candidate_ids": ["missing_001"]})
     assert out["status"] == "blocked"
     assert out["blockers"][0]["code"] == "unknown_host_candidate_ids"
+
+
+def test_host_packet_includes_opening_cluster_and_raw_shorts(tmp_path):
+    rd = _host_kernel_run_dir(tmp_path)
+
+    packet = host_packet(rd)
+
+    opening = packet["opening_hook_context"]
+    shorts = packet["shorts_candidate_context"]
+    assert opening["policy"] == "last_clean_hook_wins"
+    assert len(opening["variants"]) == 3
+    assert opening["default_variant_id"] == opening["variants"][-1]["id"]
+    assert shorts["count"] >= 1
+    assert shorts["candidates"][0]["id"].startswith("raw_short_")
+
+
+def test_host_intent_defaults_to_last_opening_hook_and_compiles_shorts(monkeypatch, tmp_path):
+    rd = _host_kernel_run_dir(tmp_path)
+    monkeypatch.setattr("eddy.host_agent.duration_s", lambda path: 45.0)
+    monkeypatch.setattr("eddy.host_agent.load_config", lambda: EddyConfig())
+    packet = host_packet(rd)
+    short_id = packet["shorts_candidate_context"]["candidates"][0]["id"]
+
+    out = submit_host_decisions(
+        rd,
+        {
+            "contract": "host_intent_v1",
+            "edit_goal": "keep one clean hook and make a short",
+            "selected_short_candidate_ids": [short_id],
+        },
+    )
+
+    assert out["status"] == "compiled"
+    decisions = json.loads((rd / "iterations" / "01" / "edit-decisions.json").read_text())
+    directive = decisions["x_eddy"]["directive"][0]
+    assert directive["selected_opening_hook_variant_id"] == packet["opening_hook_context"]["default_variant_id"]
+    assert decisions["cuts"][0]["reason"].startswith("Opening Hook Cluster")
+    assert decisions["shorts_candidates"]
+
+
+def test_host_intent_rejects_unknown_opening_and_short_ids(tmp_path):
+    rd = _host_kernel_run_dir(tmp_path)
+
+    hook_out = submit_host_decisions(
+        rd,
+        {"contract": "host_intent_v1", "selected_opening_hook_variant_id": "missing_hook"},
+    )
+    short_out = submit_host_decisions(
+        rd,
+        {"contract": "host_intent_v1", "selected_short_candidate_ids": ["missing_short"]},
+    )
+
+    assert hook_out["status"] == "blocked"
+    assert hook_out["blockers"][0]["code"] == "unknown_opening_hook_variant_id"
+    assert short_out["status"] == "blocked"
+    assert short_out["blockers"][0]["code"] == "unknown_short_candidate_ids"
 
 
 def test_host_intent_rejects_raw_timestamps_without_expert_override(tmp_path):

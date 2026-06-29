@@ -3,7 +3,14 @@
 import pytest
 
 from eddy.config import GatesConfig, RenderConfig
-from eddy.edit.compiler import CompileError, compile_edl, cut_transcript, cut_word_transcript, gap_tighten_intervals
+from eddy.edit.compiler import (
+    CompileError,
+    compile_edl,
+    cut_transcript,
+    cut_word_transcript,
+    gap_tighten_intervals,
+    silence_cut_intervals,
+)
 from eddy.edit.schema import Cut, EditDecisions, Edl, EdlRange, ProtectedMoment, Retake
 
 RENDER = RenderConfig()
@@ -266,6 +273,48 @@ def test_silence_removal_never_cuts_a_word():
     for w in words:
         mid = (w["start"] + w["end"]) / 2
         assert any(r.start <= mid <= r.end for r in edl.ranges), f"word at {mid} dropped"
+
+
+def test_audio_silence_overlapping_first_word_clips_before_word_onset():
+    words = [
+        {"start": 0.0, "end": 0.4, "word": "before", "probability": 0.9},
+        {"start": 1.0, "end": 1.3, "word": " You", "probability": 0.9},
+        {"start": 1.42, "end": 1.7, "word": " are", "probability": 0.9},
+    ]
+
+    intervals = silence_cut_intervals(
+        [{"start": 0.5, "end": 1.2, "dur": 0.7}],
+        words,
+        min_cut_s=0.4,
+        handle_s=0.12,
+    )
+
+    assert intervals == pytest.approx([(0.62, 0.88)])
+    assert intervals[0][1] < words[1]["start"]
+
+
+def test_you_are_renting_hook_keeps_opening_word_when_silence_touches_onset():
+    words = [
+        {"start": 58.8, "end": 59.1, "word": " You", "probability": 0.99},
+        {"start": 59.18, "end": 59.4, "word": " are", "probability": 0.99},
+        {"start": 59.5, "end": 59.82, "word": " renting", "probability": 0.99},
+        {"start": 59.9, "end": 60.1, "word": " AI", "probability": 0.99},
+        {"start": 60.2, "end": 60.55, "word": " models", "probability": 0.99},
+    ]
+    edl = compile_edl(
+        EditDecisions(),
+        words,
+        "cam.mp4",
+        61.0,
+        RENDER,
+        GATES,
+        tighten_gaps=False,
+        silence_spans=[{"start": 58.4, "end": 58.95, "dur": 0.55}],
+    )
+    kept = cut_word_transcript(edl, words)
+
+    assert kept[0]["text"].startswith("You are renting")
+    assert edl.ranges[0].start < words[0]["start"]
 
 
 def test_audio_truth_can_cut_single_stretched_whisper_word():

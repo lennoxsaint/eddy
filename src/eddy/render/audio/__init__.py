@@ -28,9 +28,11 @@ from ._backends import (
 from ._candidates import (
     _audio_sample_args,
     _candidate_score,
+    _echo_gate_pass,
     _loudness_gate_pass,
     _render_profile_candidate,
     _select_best_candidate,
+    _strong_cleanup_gate_pass,
 )
 from ._filters import (
     _available_audio_filters,
@@ -63,9 +65,11 @@ __all__ = [
     "_which_binary",
     "_audio_sample_args",
     "_candidate_score",
+    "_echo_gate_pass",
     "_loudness_gate_pass",
     "_render_profile_candidate",
     "_select_best_candidate",
+    "_strong_cleanup_gate_pass",
     "_available_audio_filters",
     "_profile_polish_chain",
     "_speech_eq",
@@ -96,6 +100,8 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             result = {
                 "applied": False,
                 "quality_gate_pass": False,
+                "strong_cleanup_gate_pass": False,
+                "strong_studio_sound": False,
                 "mode": "local_studio_mic",
                 "enhancement_backend": backend,
                 "backend_attempts": backend_attempts,
@@ -117,7 +123,17 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
         click_gate_pass = bool(selected.get("click_gate_pass"))
         echo_gate_pass = bool(selected.get("echo_gate_pass"))
         selected_loudness_gate_pass = _loudness_gate_pass(selected, cfg)
-        quality_gate_pass = click_gate_pass and echo_gate_pass and selected_loudness_gate_pass
+        strong_cleanup_gate_pass = _strong_cleanup_gate_pass(selected, cfg)
+        quality_gate_pass = (
+            click_gate_pass
+            and echo_gate_pass
+            and selected_loudness_gate_pass
+            and strong_cleanup_gate_pass
+        )
+        gate_error = "" if strong_cleanup_gate_pass else (
+            "Strong Studio Sound requires a heavy cleanup candidate; source_reference/loudness-only "
+            "cannot satisfy the gate."
+        )
 
         samples = {}
         if cfg.write_ab_samples:
@@ -158,12 +174,15 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
                 click_gate_pass=click_gate_pass,
                 echo_gate_pass=echo_gate_pass,
                 loudness_gate_pass=selected_loudness_gate_pass,
+                strong_cleanup_gate_pass=strong_cleanup_gate_pass,
+                strong_studio_sound=quality_gate_pass,
                 echo_artifact_score=selected.get("echo_artifact_score"),
                 mouth_click_cleanup=cfg.mouth_click_cleanup,
                 filter_chain=selected.get("filter_chain"),
                 wet_dry_mix=selected.get("wet_dry_mix"),
                 studio_sound_candidates=candidates,
                 ab_samples=samples,
+                error=gate_error,
                 public_reference="Descript-style voice enhancement, denoise/echo reduction, room-tone smoothing at edits",
             )
         return {
@@ -180,8 +199,11 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             "click_gate_pass": click_gate_pass,
             "echo_gate_pass": echo_gate_pass,
             "loudness_gate_pass": selected_loudness_gate_pass,
+            "strong_cleanup_gate_pass": strong_cleanup_gate_pass,
+            "strong_studio_sound": quality_gate_pass,
             "echo_artifact_score": selected.get("echo_artifact_score"),
             "ab_samples": samples,
+            "error": gate_error,
             "mouth_click_cleanup": cfg.mouth_click_cleanup,
             "filter_chain": selected.get("filter_chain"),
             "wet_dry_mix": selected.get("wet_dry_mix"),
@@ -190,6 +212,12 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
     except Exception as e:
         if receipts is not None:
             receipts.log("studio_sound", applied=False, error=str(e)[:300])
-        return {"applied": False, "error": str(e)[:300]}
+        return {
+            "applied": False,
+            "quality_gate_pass": False,
+            "strong_cleanup_gate_pass": False,
+            "strong_studio_sound": False,
+            "error": str(e)[:300],
+        }
     finally:
         shutil.rmtree(work, ignore_errors=True)

@@ -220,7 +220,7 @@ def test_echo_non_regression_blocks_more_echoey_candidate():
 
 
 def test_source_reference_wins_without_material_cleanup_improvement():
-    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    cfg = AudioConfig(echo_artifact_max_score=0.42, require_heavy_backend=False)
     candidates = [
         {
             "profile": "source_reference",
@@ -245,6 +245,94 @@ def test_source_reference_wins_without_material_cleanup_improvement():
     selected = audio._select_best_candidate(candidates, before_clicks=4, cfg=cfg)
 
     assert selected["profile"] == "source_reference"
+
+
+def test_source_reference_cannot_satisfy_strong_cleanup_by_default():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    candidate = {
+        "profile": "source_reference",
+        "source_mode": "reference",
+        "click_events_after": 0,
+        "click_gate_pass": True,
+        "echo_artifact_score": 0.2,
+        "echo_gate_pass": True,
+        "lufs_after": -14.0,
+    }
+
+    assert audio._strong_cleanup_gate_pass(candidate, cfg) is False
+
+
+def test_high_echo_source_uses_source_relative_echo_gate():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+
+    assert audio._echo_gate_pass(0.5797, 0.5792, cfg) is True
+    assert audio._echo_gate_pass(0.5903, 0.5792, cfg) is False
+
+
+def test_default_selector_prefers_passing_heavy_cleanup_over_source_reference():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    candidates = [
+        {
+            "profile": "source_reference",
+            "source_mode": "reference",
+            "wet_dry_mix": {"dry": 1.0, "wet": 0.0},
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.18,
+            "echo_artifact_score": 0.18,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+        {
+            "profile": "natural_voice",
+            "source_mode": "heavy",
+            "wet_dry_mix": {"dry": 0.28, "wet": 0.72},
+            "click_events_after": 2,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.18,
+            "echo_artifact_score": 0.19,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+    ]
+
+    selected = audio._select_best_candidate(candidates, before_clicks=2, cfg=cfg)
+
+    assert selected["profile"] == "natural_voice"
+    assert audio._strong_cleanup_gate_pass(selected, cfg) is True
+
+
+def test_heavy_required_selector_never_outputs_source_reference():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    candidates = [
+        {
+            "profile": "source_reference",
+            "source_mode": "reference",
+            "wet_dry_mix": {"dry": 1.0, "wet": 0.0},
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.58,
+            "echo_artifact_score": 0.58,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+        {
+            "profile": "warm_model_10",
+            "source_mode": "heavy",
+            "wet_dry_mix": {"dry": 0.65, "wet": 0.35},
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "reference_echo_artifact_score": 0.58,
+            "echo_artifact_score": 0.60,
+            "echo_gate_pass": False,
+            "lufs_after": -14.0,
+        },
+    ]
+
+    selected = audio._select_best_candidate(candidates, before_clicks=0, cfg=cfg)
+
+    assert selected["profile"] == "warm_model_10"
+    assert selected["source_mode"] == "heavy"
 
 
 def test_source_reference_cannot_win_when_it_misses_loudness_target():

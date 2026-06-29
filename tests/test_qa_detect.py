@@ -92,6 +92,46 @@ def test_silence_gate_catches_real_dead_air(monkeypatch):
     assert r["pass"] is False  # a real 9s dead-air span now actually fails the gate
 
 
+def test_silence_gate_subtracts_expected_words(monkeypatch):
+    stderr = "\n".join([
+        "silence_start: 10.0",
+        "silence_end: 13.0 | silence_duration: 3.0",
+    ])
+    monkeypatch.setattr(subprocess, "run", lambda argv, **k: _proc(stderr=stderr))
+
+    r = deterministic.silence_gate(
+        Path("v.mp4"),
+        Path("."),
+        2.0,
+        speech_spans=[(10.3, 12.8)],
+    )
+
+    assert r["pass"] is True
+    assert r["raw_spans_s"] == [3.0]
+
+
+def test_silent_motion_gate_keeps_real_residual_dead_air(monkeypatch):
+    stderr = "\n".join([
+        "silence_start: 10.0",
+        "silence_end: 13.0 | silence_duration: 3.0",
+        "silence_start: 20.0",
+        "silence_end: 22.0 | silence_duration: 2.0",
+    ])
+    monkeypatch.setattr(subprocess, "run", lambda argv, **k: _proc(stderr=stderr))
+
+    r = deterministic.silent_motion_gate(
+        Path("v.mp4"),
+        Path("."),
+        -34.0,
+        0.6,
+        0,
+        speech_spans=[(10.0, 11.0)],
+    )
+
+    assert r["pass"] is False
+    assert r["over_count"] == 2
+
+
 def test_visual_blink_luma_signature():
     assert deterministic._blink_flag_from_luma(90.0, 0.5, 88.0) is True
     assert deterministic._blink_flag_from_luma(90.0, 87.0, 88.0) is False
