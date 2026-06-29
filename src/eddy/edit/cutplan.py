@@ -395,7 +395,7 @@ def plan_run(run_dir: Path, target_minutes: float | None = None):
     iter_dir.mkdir(parents=True, exist_ok=True)
     save(decisions, iter_dir / "edit-decisions.json")
     save(edl, iter_dir / "edl.json")
-    report = simulate(edl, decisions, load_phrases(run_dir), cfg, target_s)
+    report = simulate(edl, decisions, load_phrases(run_dir), cfg, target_s, words=words)
     save_report(report, iter_dir)
     receipts.log("plan", iteration=1, duration_s=edl.total_duration_s, sim_pass=report["pass"])
     print(json.dumps({k: report[k] for k in ("duration_s", "target_s", "ranges", "verdicts", "pass")}, indent=1))

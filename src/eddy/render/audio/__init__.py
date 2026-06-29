@@ -11,6 +11,7 @@ models are used only when their backend/wrapper is installed and receipt-proven.
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -40,7 +41,7 @@ from ._filters import (
     _speech_eq,
     _spectral_repair_chain,
 )
-from ._measurement import _click_event_count, _echo_artifact_score, _mouth_click_score, measure_lufs
+from ._measurement import _click_event_count, _echo_artifact_score, _mouth_click_hotspot, _mouth_click_score, measure_lufs
 from ._profiles import (
     STUDIO_SOUND_PROFILES,
     StudioSoundProfile,
@@ -75,10 +76,82 @@ __all__ = [
     "_speech_eq",
     "_spectral_repair_chain",
     "_click_event_count",
+    "_mouth_click_hotspot",
     "_mouth_click_score",
     "_echo_artifact_score",
     "_studio_sound_profile_names",
 ]
+
+
+def _write_audition_matrix(
+    raw: Path,
+    clean: Path,
+    samples_dir: Path,
+    run_dir: Path,
+    selected: dict,
+    candidates: list[dict],
+    cfg: AudioConfig,
+    receipts=None,
+) -> dict:
+    samples_dir.mkdir(parents=True, exist_ok=True)
+    hotspot = _mouth_click_hotspot(raw)
+    windows = [
+        {"id": "hook", "start_s": 0.0, "duration_s": 12.0, "reason": "Opening hook A/B sample."},
+        {
+            "id": "worst_click",
+            "start_s": float(hotspot.get("start_s", 0.0) or 0.0),
+            "duration_s": float(hotspot.get("duration_s", 12.0) or 12.0),
+            "reason": "Densest local mouth-click/transient window.",
+            "hotspot": hotspot,
+        },
+    ]
+    for window in windows:
+        before = samples_dir / f"before-{window['id']}.wav"
+        after = samples_dir / f"after-{window['id']}.wav"
+        window_start = float(str(window.get("start_s", 0.0)))
+        window_duration = float(str(window.get("duration_s", 12.0)))
+        run_ffmpeg(
+            _audio_sample_args(raw, window_start, window_duration, before),
+            run_dir=run_dir,
+            receipts=receipts,
+        )
+        run_ffmpeg(
+            _audio_sample_args(clean, window_start, window_duration, after),
+            run_dir=run_dir,
+            receipts=receipts,
+        )
+        window["before_sample"] = str(before)
+        window["after_sample"] = str(after)
+        before_score = _mouth_click_score(before, max_seconds=window_duration)
+        after_score = _mouth_click_score(after, max_seconds=window_duration)
+        window["before_mouth_click_score"] = before_score
+        window["after_mouth_click_score"] = after_score
+        window["after_mouth_click_gate_pass"] = after_score <= cfg.mouth_click_score_max
+    matrix = {
+        "status": "pass" if all(w["after_mouth_click_gate_pass"] for w in windows) else "blocked",
+        "selected_profile": selected.get("profile"),
+        "selected_path": selected.get("path"),
+        "windows": windows,
+        "candidate_rows": [
+            {
+                "profile": candidate.get("profile"),
+                "source_mode": candidate.get("source_mode"),
+                "wet_dry_mix": candidate.get("wet_dry_mix"),
+                "selection_score": candidate.get("selection_score"),
+                "click_gate_pass": candidate.get("click_gate_pass"),
+                "mouth_click_gate_pass": candidate.get("mouth_click_gate_pass"),
+                "echo_gate_pass": candidate.get("echo_gate_pass"),
+                "loudness_gate_pass": candidate.get("loudness_gate_pass", _loudness_gate_pass(candidate, cfg)),
+                "strong_cleanup_gate_pass": _strong_cleanup_gate_pass(candidate, cfg),
+            }
+            for candidate in candidates
+        ],
+        "policy": "source_reference is A/B reference only; passing default Studio Sound requires local heavy/wet cleanup.",
+    }
+    matrix_path = samples_dir / "studio-sound-audition-matrix.json"
+    matrix_path.write_text(json.dumps(matrix, indent=2))
+    matrix["path"] = str(matrix_path)
+    return matrix
 
 
 def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) -> dict:
@@ -141,6 +214,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
         )
 
         samples = {}
+        audition_matrix = {}
         if cfg.write_ab_samples:
             samples_dir = Path(video).parent / "audio-qa-samples"
             samples_dir.mkdir(exist_ok=True)
@@ -149,6 +223,10 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             run_ffmpeg(_audio_sample_args(raw, 0.0, 12.0, raw_sample), run_dir=run_dir, receipts=receipts)
             run_ffmpeg(_audio_sample_args(clean, 0.0, 12.0, clean_sample), run_dir=run_dir, receipts=receipts)
             samples = {"before": str(raw_sample), "after": str(clean_sample)}
+            audition_matrix = _write_audition_matrix(raw, clean, samples_dir, run_dir, selected, candidates, cfg, receipts=receipts)
+            if audition_matrix.get("status") != "pass":
+                quality_gate_pass = False
+                gate_error = "Local Studio Sound audition matrix failed hook/worst-click sample gates."
 
         # remux cleaned audio over the untouched video. -shortest bounds the output to the
         # video stream: the loudnorm/EQ filter chain emits ~1s of trailing tail past the video
@@ -190,6 +268,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
                 wet_dry_mix=selected.get("wet_dry_mix"),
                 studio_sound_candidates=candidates,
                 ab_samples=samples,
+                audition_matrix=audition_matrix,
                 error=gate_error,
                 public_reference="Descript-style voice enhancement, denoise/echo reduction, room-tone smoothing at edits",
             )
@@ -214,6 +293,7 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             "strong_studio_sound": quality_gate_pass,
             "echo_artifact_score": selected.get("echo_artifact_score"),
             "ab_samples": samples,
+            "audition_matrix": audition_matrix,
             "error": gate_error,
             "mouth_click_cleanup": cfg.mouth_click_cleanup,
             "filter_chain": selected.get("filter_chain"),

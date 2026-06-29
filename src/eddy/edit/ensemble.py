@@ -25,6 +25,7 @@ from eddy.edit.simulate import simulate
 from eddy.loop.receipts import Receipts
 from eddy.qa.quality import quality_score
 from eddy.transcribe.pack import phrases as load_phrases
+from eddy.transcribe.whisper import words_flat
 
 
 def _selector_key(objective: float, over_ceiling_s: float, n_ranges: int) -> tuple:
@@ -50,7 +51,7 @@ def score_draft(run_dir, decisions: EditDecisions, provider, receipts: Receipts,
     render. `quality_score` is passed `judge={}` — its `objective` half never reads the judge, so the
     selector stays 100% deterministic (no LLM critic in the loop)."""
     decisions, edl = compile_with_repair(run_dir, decisions, provider, receipts, cfg)
-    sim = simulate(edl, decisions, phrases, cfg, target_s)
+    sim = simulate(edl, decisions, phrases, cfg, target_s, words=words_flat(run_dir))
     kept = cut_transcript(edl, phrases)
     qs = quality_score(sim, {}, kept, decisions, phrases, cfg)
     key = _selector_key(qs["objective"], qs["over_ceiling_s"], len(edl.ranges))

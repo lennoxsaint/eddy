@@ -145,6 +145,58 @@ def _kernel_candidates(run_dir: Path) -> list[EditCandidate]:
     )
 
 
+def _gap_pacing_context(run_dir: Path) -> dict[str, Any]:
+    cfg = load_config()
+    gaps = _safe_json_list(silence_map, run_dir)
+    values = sorted(float(item.get("gap_s", 0.0) or 0.0) for item in gaps if float(item.get("gap_s", 0.0) or 0.0) > 0)
+    if values:
+        p95_idx = min(len(values) - 1, int(round((len(values) - 1) * 0.95)))
+        summary = {
+            "count": len(values),
+            "median_s": round(values[len(values) // 2], 3),
+            "p95_s": round(values[p95_idx], 3),
+            "max_s": round(values[-1], 3),
+        }
+    else:
+        summary = {"count": 0, "median_s": 0.0, "p95_s": 0.0, "max_s": 0.0}
+    draggy = [
+        item
+        for item in gaps
+        if float(item.get("gap_s", 0.0) or 0.0) > float(cfg.gates.gap_pacing_max_s)
+    ]
+    return {
+        "target_s": [cfg.gates.gap_pacing_min_s, cfg.gates.gap_pacing_max_s],
+        "summary": summary,
+        "draggy_gap_examples": draggy[:20],
+        "policy": (
+            "Ordinary spoken-word gaps should land around 0.35s-0.55s. Longer pauses need "
+            "explicit protection/intent; dead-air pass alone is not enough."
+        ),
+    }
+
+
+def _first_60_motion_context() -> dict[str, Any]:
+    cfg = load_config()
+    cache = Path(cfg.motion.cache_dir) / "hyperframes-pin.json"
+    return {
+        "mode": cfg.motion.mode,
+        "required": cfg.motion.mode.strip().lower() != "off",
+        "duration_s": cfg.motion.first_60_seconds,
+        "cache_dir": cfg.motion.cache_dir,
+        "cache_ready": cache.exists(),
+        "required_artifacts": [
+            "frame.md",
+            "storyboard.md",
+            "storyboard.html",
+            "copied-assets-manifest.json",
+            "overlay-first-60.ffprobe.json",
+            "motion-collision-proof.json",
+            "first-60-motion-result.json",
+        ],
+        "policy": "Default YouTube edits require first-30-to-60-second HyperFrames motion or an exact blocker.",
+    }
+
+
 def _host_payload_body(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(payload.get("intent"), dict):
         return payload["intent"]
@@ -414,7 +466,7 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
             "summary": (
                 "Choose candidate IDs to remove, set keep/drop priorities, and add targeted repair "
                 "directives for any current QA failures. If you do not choose an opening hook, Eddy "
-                "defaults to the last clean opening hook variant."
+                "defaults to the best clean hook, falling back to the latest complete clean hook."
             ),
             "required_payload_fields": [
                 "contract",
@@ -468,11 +520,13 @@ def host_packet(run_dir: Path | str) -> dict[str, Any]:
                 "The host may set selected_retake_group_variants when a non-default variant is stronger."
             ),
         },
+        "gap_pacing_context": _gap_pacing_context(rd),
         "shorts_candidate_context": {
             "count": len(short_hints),
             "candidates": short_hints,
             "selection_rule": "Select raw Shorts candidate IDs or submit explicit shorts_candidates.",
         },
+        "first_60_motion_context": _first_60_motion_context(),
         "repair_loop": {
             **loop_status,
             "budget": {"max_repair_passes": 10, "max_elapsed_s": 10800},

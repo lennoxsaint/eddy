@@ -158,7 +158,14 @@ def autonomous_run(
         # cached pre-backstop sim-report would feed the panel stale evidence. No-op cost when neither
         # backstop ran (re-simulate is deterministic, no model calls).
         cached_sim = json.loads((chosen / "sim-report.json").read_text())
-        sim = simulate(edl, chosen_decisions, load_phrases(run_dir), cfg, cached_sim.get("target_s", edl.total_duration_s))
+        sim = simulate(
+            edl,
+            chosen_decisions,
+            load_phrases(run_dir),
+            cfg,
+            cached_sim.get("target_s", edl.total_duration_s),
+            words=words_flat(run_dir),
+        )
         kept = cut_transcript(edl, load_phrases(run_dir))
         try:
             panel = run_ship_panel(

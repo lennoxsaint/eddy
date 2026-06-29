@@ -155,11 +155,16 @@ def trim_to_fit(
     from eddy.qa.deterministic import run_deterministic
     from eddy.qa.judge import run_judge, run_ship_panel
     from eddy.render.segments import render_edl
+    from eddy.transcribe.whisper import words_flat
 
     target_s = sim_report.get("target_s", loop.default_target_minutes * 60)
     base_w, base_majors, base_unstable = _baseline(chosen)
     try:
-        t_sim = simulate(trimmed, decisions, phrases, cfg, target_s)
+        try:
+            validation_words = words_flat(run_dir)
+        except FileNotFoundError:
+            validation_words = []
+        t_sim = simulate(trimmed, decisions, phrases, cfg, target_s, words=validation_words)
         # render the validation proxy under iterations/ (internal scratch), never into the
         # deliverables final/ folder
         proxy = run_dir / "iterations" / "trim-proxy.mp4"

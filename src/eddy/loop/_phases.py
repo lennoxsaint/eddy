@@ -171,7 +171,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         save(decisions, iter_dir / "edit-decisions.json")
         save(edl, iter_dir / "edl.json")
 
-        sim = simulate(edl, decisions, phrases, cfg, target_s)
+        sim = simulate(edl, decisions, phrases, cfg, target_s, words=words)
         save_report(sim, iter_dir)
 
         proxy = iter_dir / "proxy.mp4"

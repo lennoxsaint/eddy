@@ -1,5 +1,8 @@
 """v0.3 loop: best() ranking on gate-fail, gate-pass maximizes quality, judge no-auto-pass."""
 
+from eddy.config import EddyConfig
+from eddy.edit.schema import EditDecisions, Edl, EdlRange
+from eddy.loop import _phases
 from eddy.loop.state import RunState
 from eddy.providers.base import ProviderError
 from eddy.qa.judge import run_judge
@@ -100,3 +103,71 @@ def test_run_judge_unavailable_does_not_auto_pass(tmp_path):
     assert res["judge_unstable"] is True
     assert res["weighted"] == 0.0
     assert "advisory_only" not in res  # the auto-pass key is gone
+
+
+def test_edit_loop_passes_words_to_creator_good_simulation(monkeypatch, tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    cfg = EddyConfig()
+    cfg.loop.max_iterations = 1
+    cfg.loop.require_gate_pass = True
+    cfg.loop.judge_threshold = 8.0
+    cfg.loop.length_ceiling_minutes = 5.0
+    words = [
+        {"start": 0.0, "end": 0.3, "word": " hello", "probability": 0.99},
+        {"start": 0.4, "end": 0.7, "word": " world", "probability": 0.99},
+    ]
+    phrases = [{"start": 0.0, "end": 0.7, "text": "hello world"}]
+    decisions = EditDecisions()
+    edl = Edl(sources={"camera": "camera.mp4"}, ranges=[EdlRange(start=0.0, end=1.0)], total_duration_s=1.0)
+    captured = {}
+
+    monkeypatch.setattr(_phases, "load_config", lambda: cfg)
+    monkeypatch.setattr(_phases, "get_editorial_provider", lambda cfg, receipts: object())
+    monkeypatch.setattr(_phases, "_record_model_pin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(_phases, "manifest", lambda rd: {"run_settings": {}})
+    monkeypatch.setattr(_phases, "words_flat", lambda rd: words)
+    monkeypatch.setattr(_phases, "load_phrases", lambda rd: phrases)
+    monkeypatch.setattr(_phases, "beat_map", lambda *args, **kwargs: [])
+    monkeypatch.setattr(_phases, "initial_decisions", lambda *args, **kwargs: decisions)
+    monkeypatch.setattr(_phases, "compile_with_repair", lambda *args, **kwargs: (decisions, edl))
+
+    def fake_simulate(_edl, _decisions, _phrases, _cfg, _target_s, words=None):
+        captured["words"] = words
+        return {
+            "duration_s": 1.0,
+            "target_s": 60.0,
+            "ranges": 1,
+            "removed_total_s": 0.0,
+            "boundary_cards": [],
+            "verdicts": {
+                "no_dead_air": True,
+                "handles_safe": True,
+                "retake_clean": True,
+                "gap_pacing": True,
+                "has_content": True,
+            },
+            "pass": True,
+        }
+
+    monkeypatch.setattr(_phases, "simulate", fake_simulate)
+    monkeypatch.setattr(_phases, "render_edl", lambda edl, out, *args, **kwargs: out.write_text("proxy") or out)
+    monkeypatch.setattr(_phases, "boundary_contact_sheet", lambda *args, **kwargs: run_dir / "contact.jpg")
+    monkeypatch.setattr(_phases, "run_deterministic", lambda *args, **kwargs: {"pass": True})
+    monkeypatch.setattr(_phases, "save_qa", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        _phases,
+        "run_judge",
+        lambda *args, **kwargs: {
+            "weighted": 10.0,
+            "judge_unstable": False,
+            "defects": [],
+            "scores": {},
+        },
+    )
+    monkeypatch.setattr(_phases, "quality_score", lambda *args, **kwargs: {"quality": 10.0, "components": {}})
+
+    chosen = _phases.edit_loop(run_dir)
+
+    assert captured["words"] is words
+    assert chosen == run_dir / "iterations" / "01"

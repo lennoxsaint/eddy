@@ -475,6 +475,72 @@ def test_mouth_click_score_catches_smaller_transient_clicks(tmp_path):
     assert audio._mouth_click_score(wav) > AudioConfig().mouth_click_score_max
 
 
+def test_mouth_click_hotspot_finds_click_window(tmp_path):
+    import struct
+    import wave
+
+    wav = tmp_path / "mouth-click-hotspot.wav"
+    rate = 48000
+    samples = [0] * (rate * 24)
+    for offset in range(rate * 15, rate * 18, 4000):
+        samples[offset] = 14000
+        samples[offset + 1] = -12000
+    with wave.open(str(wav), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
+
+    hotspot = audio._mouth_click_hotspot(wav, window_s=12.0)
+
+    assert hotspot["measurable"] is True
+    assert hotspot["start_s"] == 12.0
+    assert hotspot["event_count"] > 0
+
+
+def test_studio_sound_audition_matrix_writes_hook_and_worst_click_windows(monkeypatch, tmp_path):
+    import struct
+    import wave
+
+    raw = tmp_path / "raw.wav"
+    clean = tmp_path / "clean.wav"
+    rate = 48000
+    samples = [0] * rate
+    with wave.open(str(raw), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
+    clean.write_bytes(raw.read_bytes())
+
+    def fake_run_ffmpeg(argv, **kwargs):
+        Path(argv[-1]).write_bytes(raw.read_bytes())
+
+    monkeypatch.setattr(audio, "run_ffmpeg", fake_run_ffmpeg)
+    monkeypatch.setattr(audio, "_mouth_click_score", lambda *_args, **_kwargs: 0.0)
+    selected = {
+        "profile": "broadcast_clean",
+        "path": str(clean),
+        "source_mode": "heavy",
+        "wet_dry_mix": {"wet": 0.8},
+    }
+
+    matrix = audio._write_audition_matrix(
+        raw,
+        clean,
+        tmp_path / "samples",
+        tmp_path,
+        selected,
+        [selected],
+        AudioConfig(),
+    )
+
+    assert matrix["status"] == "pass"
+    assert [window["id"] for window in matrix["windows"]] == ["hook", "worst_click"]
+    assert Path(matrix["path"]).exists()
+    assert matrix["candidate_rows"][0]["strong_cleanup_gate_pass"] is True
+
+
 def test_resemble_enhance_uses_mps_on_apple_silicon(monkeypatch, tmp_path):
     raw = tmp_path / "raw.wav"
     raw.write_bytes(b"RIFF0000WAVE")

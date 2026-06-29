@@ -172,6 +172,68 @@ def _mouth_click_score(wav_path: Path, max_seconds: float = 120.0) -> float:
     return round(min(1.0, density * 0.035 + total_excess * 0.08), 5)
 
 
+def _mouth_click_hotspot(wav_path: Path, *, window_s: float = 12.0, max_seconds: float = 120.0) -> dict:
+    """Find a local audition window with the densest mouth-click transients."""
+    if not wav_path.exists():
+        return {"measurable": False, "start_s": 0.0, "duration_s": window_s, "event_count": 0, "score": 1.0}
+    try:
+        with wave.open(str(wav_path), "rb") as wf:
+            channels = max(1, wf.getnchannels())
+            width = wf.getsampwidth()
+            rate = wf.getframerate() or 48000
+            frames_to_read = min(wf.getnframes(), int(max_seconds * rate))
+            raw = wf.readframes(frames_to_read)
+    except Exception as exc:
+        log.debug("mouth-click hotspot WAV read failed for %s: %s", wav_path, exc)
+        return {"measurable": False, "start_s": 0.0, "duration_s": window_s, "event_count": 0, "score": 1.0}
+    if width not in (2, 4) or not raw:
+        return {"measurable": False, "start_s": 0.0, "duration_s": window_s, "event_count": 0, "score": 1.0}
+    import statistics
+    import struct
+
+    fmt = "<" + ("h" if width == 2 else "i") * (len(raw) // width)
+    try:
+        vals = struct.unpack(fmt, raw)
+    except struct.error:
+        return {"measurable": False, "start_s": 0.0, "duration_s": window_s, "event_count": 0, "score": 1.0}
+    max_amp = float((2 ** (8 * width - 1)) - 1)
+    mono = [sum(float(v) for v in vals[i:i + channels]) / channels / max_amp for i in range(0, len(vals), channels)]
+    if len(mono) < 4:
+        return {"measurable": True, "start_s": 0.0, "duration_s": window_s, "event_count": 0, "score": 0.0}
+    jumps = [abs(mono[i] - mono[i - 1]) for i in range(1, len(mono))]
+    if not jumps:
+        return {"measurable": True, "start_s": 0.0, "duration_s": window_s, "event_count": 0, "score": 0.0}
+    ordered = sorted(jumps)
+    median = statistics.median(ordered)
+    p99 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.99))]
+    adaptive = max(0.025, median * 12.0, p99 * 0.62)
+    bucket_s = max(1.0, min(window_s, 12.0))
+    bucket_count = max(1, int((len(mono) / rate) // bucket_s) + 1)
+    buckets = [{"event_count": 0, "excess": 0.0} for _ in range(bucket_count)]
+    refractory = int(rate * 0.010)
+    last = -refractory
+    for idx, jump in enumerate(jumps):
+        if jump < adaptive or idx - last < refractory:
+            continue
+        if abs(mono[idx]) > 0.92:
+            continue
+        bucket_idx = min(bucket_count - 1, int((idx / rate) // bucket_s))
+        buckets[bucket_idx]["event_count"] += 1
+        buckets[bucket_idx]["excess"] += jump - adaptive
+        last = idx
+    best_idx, best = max(enumerate(buckets), key=lambda item: (item[1]["event_count"], item[1]["excess"]))
+    start_s = max(0.0, best_idx * bucket_s)
+    density = best["event_count"] / max(0.001, bucket_s)
+    score = round(min(1.0, density * 0.035 + best["excess"] * 0.08), 5)
+    return {
+        "measurable": True,
+        "start_s": round(start_s, 3),
+        "duration_s": window_s,
+        "event_count": int(best["event_count"]),
+        "score": score,
+    }
+
+
 def measure_lufs(media: Path) -> float | None:
     """Integrated loudness (LUFS) via loudnorm measurement pass. None on failure."""
     import subprocess

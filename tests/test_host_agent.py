@@ -100,7 +100,12 @@ def test_host_packet_includes_context_but_never_media_bytes(tmp_path):
     assert packet["candidate_context"]["candidates"][0]["id"]
     assert packet["candidate_context"]["candidates"][0]["reason"]
     assert "opening_hook_context" in packet
+    assert "retake_group_context" in packet
+    assert "gap_pacing_context" in packet
     assert "shorts_candidate_context" in packet
+    assert "first_60_motion_context" in packet
+    assert packet["gap_pacing_context"]["target_s"] == [0.35, 0.55]
+    assert packet["first_60_motion_context"]["required"] is True
 
 
 def test_host_submit_compiles_valid_decisions(monkeypatch, tmp_path):
