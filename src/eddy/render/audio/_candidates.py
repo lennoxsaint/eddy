@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from eddy.config import AudioConfig
@@ -24,13 +23,18 @@ def _render_profile_candidate(
 ) -> dict:
     out = work / f"candidate-{profile.name}.wav"
     if profile.source_mode == "reference":
-        shutil.copy2(raw, out)
+        ln = f"loudnorm=I={cfg.target_lufs}:TP={cfg.true_peak_db}:LRA={cfg.lra}"
+        run_ffmpeg(
+            ["-i", str(raw), "-af", ln, "-ar", "48000", str(out)],
+            run_dir=run_dir,
+            receipts=receipts,
+        )
         clicks = _click_event_count(out, cfg.click_threshold)
         echo_score = _echo_artifact_score(out)
         return {
             "profile": profile.name,
             "path": str(out),
-            "filter_chain": "anull",
+            "filter_chain": ln,
             "wet_dry_mix": {"dry": 1.0, "wet": 0.0},
             "source_mode": profile.source_mode,
             "notes": profile.notes,

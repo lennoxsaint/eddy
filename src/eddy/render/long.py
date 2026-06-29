@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from eddy.config import load_config
-from eddy.edit.schema import load_edl
+from eddy.edit.schema import load_decisions, load_edl
 from eddy.loop.receipts import Receipts
 from eddy.media.frames import boundary_contact_sheet
 from eddy.render.segments import render_edl
@@ -28,15 +28,24 @@ def render_run(run_dir: Path, proxy: bool = False, iteration: int | None = None)
         run_dir / "iterations" / f"{iteration:02d}" if iteration else latest_iteration_dir(run_dir)
     )
     edl = load_edl(iter_dir / "edl.json")
+    visual_insert_notes = []
+    if (iter_dir / "edit-decisions.json").exists():
+        visual_insert_notes = load_decisions(iter_dir / "edit-decisions.json").visual_insert_notes
 
     if proxy:
         out = iter_dir / "proxy.mp4"
-        render_edl(edl, out, run_dir, cfg.render, receipts=receipts, proxy=True)
+        render_edl(
+            edl, out, run_dir, cfg.render, receipts=receipts, proxy=True,
+            visual_insert_notes=visual_insert_notes,
+        )
         sheet = boundary_contact_sheet(out, edl, iter_dir / "contact-sheet.jpg", run_dir)
         receipts.log("contact_sheet", path=str(sheet))
     else:
         out = run_dir / "final" / "video.mp4"
-        render_edl(edl, out, run_dir, cfg.render, receipts=receipts, proxy=False)
+        render_edl(
+            edl, out, run_dir, cfg.render, receipts=receipts, proxy=False,
+            visual_insert_notes=visual_insert_notes,
+        )
         (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
     print(out)
     return out

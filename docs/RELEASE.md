@@ -1,6 +1,6 @@
 # Release process
 
-Eddy is versioned from git tags (`v0.4`...`v1.10.4`); the runtime version resolves via
+Eddy is versioned from git tags (`v0.4`...`v1.10.5`); the runtime version resolves via
 `importlib.metadata` / git-describe and is stamped into run receipts. The canonical repo is
 `https://github.com/lennoxsaint/eddy`.
 
@@ -96,7 +96,7 @@ plugin-install proof.
 Recommended non-plugin source install command for a green tagged release:
 
 ```bash
-pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.4"
+pipx install "eddy[mcp] @ git+https://github.com/lennoxsaint/eddy.git@v1.10.5"
 ```
 
 Before a fresh tag exists, smoke-test the live branch with:

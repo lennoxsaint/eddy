@@ -175,7 +175,10 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
         save_report(sim, iter_dir)
 
         proxy = iter_dir / "proxy.mp4"
-        render_edl(edl, proxy, run_dir, cfg.render, receipts=receipts, proxy=True)
+        render_edl(
+            edl, proxy, run_dir, cfg.render, receipts=receipts, proxy=True,
+            visual_insert_notes=decisions.visual_insert_notes,
+        )
         try:
             boundary_contact_sheet(proxy, edl, iter_dir / "contact-sheet.jpg", run_dir)
         except Exception as e:

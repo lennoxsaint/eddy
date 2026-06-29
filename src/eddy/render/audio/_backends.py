@@ -93,24 +93,52 @@ def _resemble_enhance(in_wav: Path, out_wav: Path, cfg: AudioConfig, run_dir: Pa
     env = None
     if device == "mps":
         env = {**dict(os.environ), "PYTORCH_ENABLE_MPS_FALLBACK": "1"}
-    proc = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=7200,
-        env=env,
-    )
     failure_log = Path(run_dir) / "resemble-enhance-failure.log"
+    stdout_log = out_wav.parent / "resemble-stdout.log"
+    stderr_log = out_wav.parent / "resemble-stderr.log"
+    stalled = False
+    with stdout_log.open("w") as stdout_f, stderr_log.open("w") as stderr_f:
+        proc = subprocess.Popen(cmd, stdout=stdout_f, stderr=stderr_f, text=True, env=env)
+        deadline = time.monotonic() + 7200
+        last_progress = time.monotonic()
+        last_seen: tuple[Path, int] | None = None
+        while proc.poll() is None and time.monotonic() < deadline:
+            produced = next(output_dir.rglob("*.wav"), None)
+            if produced and produced.exists():
+                size = produced.stat().st_size
+                if size > 44:
+                    if last_seen == (produced, size):
+                        proc.terminate()
+                        break
+                    last_seen = (produced, size)
+                    last_progress = time.monotonic()
+            if time.monotonic() - last_progress > cfg.heavy_backend_stall_timeout_s:
+                stalled = True
+                proc.kill()
+                break
+            time.sleep(0.5)
+        if proc.poll() is None:
+            stalled = True
+            proc.kill()
+        proc.wait(timeout=10)
+    stdout = stdout_log.read_text(errors="replace") if stdout_log.exists() else ""
+    stderr = stderr_log.read_text(errors="replace") if stderr_log.exists() else ""
     if receipts is not None:
-        receipts.log("resemble_enhance", exit_code=proc.returncode, device=device, stderr_tail=proc.stderr[-700:])
-    if proc.returncode != 0:
-        failure_log.write_text(" ".join(cmd) + "\n\nSTDOUT\n" + proc.stdout + "\n\nSTDERR\n" + proc.stderr)
+        receipts.log(
+            "resemble_enhance",
+            exit_code=proc.returncode,
+            device=device,
+            stalled=stalled,
+            stderr_tail=stderr[-700:],
+        )
+    if proc.returncode != 0 and not next(output_dir.rglob("*.wav"), None):
+        failure_log.write_text(" ".join(cmd) + "\n\nSTDOUT\n" + stdout + "\n\nSTDERR\n" + stderr)
         return False
     produced = next(output_dir.rglob("*.wav"), None)
     if produced:
         produced.replace(out_wav)
-    elif proc.stdout or proc.stderr:
-        failure_log.write_text(" ".join(cmd) + "\n\nSTDOUT\n" + proc.stdout + "\n\nSTDERR\n" + proc.stderr)
+    elif stdout or stderr:
+        failure_log.write_text(" ".join(cmd) + "\n\nSTDOUT\n" + stdout + "\n\nSTDERR\n" + stderr)
     return out_wav.exists()
 
 

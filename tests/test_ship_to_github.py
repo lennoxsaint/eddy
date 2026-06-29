@@ -12,9 +12,9 @@ SPEC.loader.exec_module(ship)
 
 
 def test_tag_must_match_project_version():
-    assert ship.tag_matches_version("v1.10.4", "1.10.4") is True
-    assert ship.tag_matches_version("1.10.4", "1.10.4") is False
-    assert ship.tag_matches_version("v1.10.2", "1.10.4") is False
+    assert ship.tag_matches_version("v1.10.5", "1.10.5") is True
+    assert ship.tag_matches_version("1.10.5", "1.10.5") is False
+    assert ship.tag_matches_version("v1.10.2", "1.10.5") is False
 
 
 def test_run_artifact_detection_is_conservative():

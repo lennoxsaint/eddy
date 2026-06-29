@@ -172,7 +172,10 @@ def autonomous_run(
 
     state.set_phase("final_render")
     final = run_dir / "final" / "video.mp4"
-    render_edl(edl, final, run_dir, cfg.render, receipts=receipts, proxy=False)
+    render_edl(
+        edl, final, run_dir, cfg.render, receipts=receipts, proxy=False,
+        visual_insert_notes=chosen_decisions.visual_insert_notes,
+    )
     (run_dir / "final" / "edl.json").write_text(json.dumps(edl.model_dump(), indent=1))
 
     # Studio Sound: full-track audio enhancement on the rendered output. This used to be non-fatal,

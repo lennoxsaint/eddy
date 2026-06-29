@@ -101,9 +101,22 @@ def evidence_packet(sim_report: dict, decisions: EditDecisions, edl: Edl, kept_p
         f"  OUT {c['after_text']}…"
         for c in sim_report["boundary_cards"]
     ]
+    visual_inserts = []
+    for note in getattr(decisions, "visual_insert_notes", []) or []:
+        if not isinstance(note, dict):
+            continue
+        text = str(note.get("text") or note.get("note") or note.get("title") or "").strip()
+        if not text:
+            continue
+        start = note.get("out_start_s", note.get("start_s", note.get("at_s", "?")))
+        end = note.get("out_end_s", note.get("end_s", "?"))
+        visual_inserts.append(f"[{start}–{end}] {text[:220]}")
     return (
         f"STATS:\n{json.dumps(stats, indent=1)}\n\n"
         f"BOUNDARY CARDS ({len(cards)}):\n" + "\n".join(cards) + "\n\n"
+        f"VISUAL INSERTS ({len(visual_inserts)}):\n"
+        + ("\n".join(f"- {v}" for v in visual_inserts) if visual_inserts else "- none")
+        + "\n\n"
         "WHAT WAS LOST (chunks >20s):\n" + "\n".join(f"- {r}" for r in removed_big[:20]) + "\n\n"
         + fence("CUT TRANSCRIPT", "\n".join(lines))
     )

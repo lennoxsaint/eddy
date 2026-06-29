@@ -1,5 +1,11 @@
+from pathlib import Path
+
 from eddy.config import AudioConfig
 from eddy.render import audio
+
+
+def test_audio_config_prefers_deepfilternet_default():
+    assert AudioConfig().heavy_model_preference[:2] == ["deepfilternet", "resemble-enhance"]
 
 
 def test_speech_eq_includes_local_studio_sound_cleanup_when_filters_exist(monkeypatch):
@@ -62,6 +68,35 @@ def test_source_reference_profile_is_do_no_harm():
 
     assert profile.source_mode == "reference"
     assert audio._profile_polish_chain(profile, AudioConfig()) == "anull"
+
+
+def test_source_reference_candidate_normalizes_loudness_without_cleanup(monkeypatch, tmp_path):
+    raw = tmp_path / "raw.wav"
+    raw.write_bytes(b"RIFF0000WAVE")
+    seen = {}
+
+    def fake_run_ffmpeg(argv, **kwargs):
+        seen["argv"] = argv
+        Path(argv[-1]).write_bytes(b"RIFF0000WAVE")
+
+    monkeypatch.setattr(audio._candidates, "run_ffmpeg", fake_run_ffmpeg)
+    monkeypatch.setattr(audio._candidates, "measure_lufs", lambda _path: -14.0)
+    monkeypatch.setattr(audio._candidates, "_click_event_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(audio._candidates, "_echo_artifact_score", lambda _path: 0.2)
+
+    candidate = audio._render_profile_candidate(
+        raw,
+        raw,
+        audio.STUDIO_SOUND_PROFILES["source_reference"],
+        AudioConfig(),
+        tmp_path,
+        tmp_path,
+    )
+
+    assert "-af" in seen["argv"]
+    assert "loudnorm=I=-14.0" in seen["argv"][seen["argv"].index("-af") + 1]
+    assert candidate["lufs_after"] == -14.0
+    assert candidate["echo_gate_pass"] is True
 
 
 def test_natural_profile_avoids_echo_prone_filters(monkeypatch):
@@ -342,14 +377,24 @@ def test_resemble_enhance_uses_mps_on_apple_silicon(monkeypatch, tmp_path):
 
     class Proc:
         returncode = 1
-        stdout = ""
-        stderr = "no output"
 
-    def fake_run(cmd, **kwargs):
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+        def terminate(self):
+            self.returncode = -15
+
+    def fake_popen(cmd, **kwargs):
         seen["cmd"] = cmd
         return Proc()
 
-    monkeypatch.setattr(audio._backends.subprocess, "run", fake_run)
+    monkeypatch.setattr(audio._backends.subprocess, "Popen", fake_popen)
 
     assert audio._resemble_enhance(raw, out, AudioConfig(heavy_model_device="auto"), tmp_path) is False
     assert "--device" in seen["cmd"]

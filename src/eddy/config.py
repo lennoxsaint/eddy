@@ -145,8 +145,9 @@ class RenderConfig(BaseModel):
 
 class ShortsConfig(BaseModel):
     count: int = 5
-    min_s: float = 20.0
+    min_s: float = 10.0
     max_s: float = 59.0
+    max_silent_motion_s: float = 1.2
     require_hook_playbook: bool = True
     hook_playbook_min_records: int = 1000
     hook_playbook_path: str = "docs/references/short-form-hook-playbook.jsonl"
@@ -174,9 +175,10 @@ class AudioConfig(BaseModel):
     studio_sound_env: str = "~/.cache/eddy/studio-sound/resemble-enhance-py311"
     heavy_model_device: str = "auto"  # auto | cuda | mps | cpu
     deep_filter_binary: str = "deepFilter"  # DeepFilterNet CLI if present; else blocked/ffmpeg fallback
+    heavy_backend_stall_timeout_s: int = 300
     # Ordered heavy-model backends. Eddy attempts these before ffmpeg-only polish when installed.
     heavy_model_preference: list[str] = Field(
-        default_factory=lambda: ["resemble-enhance", "deepfilternet"]
+        default_factory=lambda: ["deepfilternet", "resemble-enhance"]
     )
     write_ab_samples: bool = True
     click_threshold: float = 0.68

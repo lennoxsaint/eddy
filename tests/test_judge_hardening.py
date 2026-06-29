@@ -3,7 +3,7 @@ missing dimensions, or malformed defects. None may crash the run or sail past th
 """
 
 from eddy.edit.schema import Edl, EditDecisions
-from eddy.qa.judge import _consistent, run_judge, weighted_score
+from eddy.qa.judge import _consistent, evidence_packet, run_judge, weighted_score
 
 
 class _Receipts:
@@ -66,3 +66,20 @@ def test_run_judge_non_dict_payload_degrades_to_unstable():
     r = _run(["not", "an", "object"])
     assert r["judge_unstable"] is True
     assert r["weighted"] == 0.0
+
+
+def test_evidence_packet_includes_visual_insert_notes():
+    decisions = EditDecisions(
+        visual_insert_notes=[
+            {
+                "out_start_s": 91.1,
+                "out_end_s": 95.0,
+                "text": "Local route: Ollama runs on your machine.",
+            }
+        ]
+    )
+
+    packet = evidence_packet(SIM, decisions, Edl(sources={}, ranges=[]), [])
+
+    assert "VISUAL INSERTS (1)" in packet
+    assert "Local route: Ollama runs on your machine." in packet

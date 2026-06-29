@@ -95,6 +95,30 @@ def test_select_short_candidates_filters_weak_hooks_with_playbook():
     assert [c.hook for c in selected] == ["Stop making this creator mistake"]
 
 
+def test_short_silence_threshold_uses_shorts_dead_air_standard():
+    cfg = shorts_mod.load_config()
+    cfg.gates.max_output_silence_s = 0.6
+    cfg.shorts.max_silent_motion_s = 1.2
+
+    assert shorts_mod._short_silence_threshold(cfg) == 1.2
+
+
+def test_quarantine_rejected_short_moves_failed_candidate_out_of_production_folder(tmp_path):
+    out_root = tmp_path / "shorts"
+    final = out_root / "failed-hook.mp4"
+    final.parent.mkdir()
+    final.write_bytes(b"failed-render")
+    stale = out_root / "_rejected" / final.name
+    stale.parent.mkdir()
+    stale.write_bytes(b"stale-render")
+
+    rejected = shorts_mod._quarantine_rejected_short(final, out_root)
+
+    assert rejected == stale
+    assert rejected.read_bytes() == b"failed-render"
+    assert not final.exists()
+
+
 def test_sub_segments_keep_positive_boundary_handles():
     words = [
         {"start": 1.0, "end": 1.3, "word": "Stop"},

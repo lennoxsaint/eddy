@@ -3,9 +3,16 @@
 import pytest
 
 from eddy.config import RenderConfig
+from eddy.edit.schema import Edl, EdlRange, EditDecisions, save
+from eddy.render import long as render_long
 from eddy.render.long import latest_iteration_dir
 from eddy.render import segments
-from eddy.render.segments import _concat_segments_filtergraph, _segment_args, _segment_args_dual
+from eddy.render.segments import (
+    _concat_segments_filtergraph,
+    _segment_args,
+    _segment_args_dual,
+    _visual_insert_filtergraph,
+)
 
 
 def test_latest_iteration_dir_picks_highest(tmp_path):
@@ -79,3 +86,55 @@ def test_long_concat_uses_filtergraph_reencode(monkeypatch, tmp_path):
     assert graph.count("setsar=1") == 2
     assert "-f" not in argv[:4]
     assert result["concat_demuxer_copy"] is False
+
+
+def test_visual_insert_filtergraph_writes_timed_text_files(tmp_path):
+    graph, count = _visual_insert_filtergraph(
+        [
+            {
+                "out_start_s": 1.2,
+                "out_end_s": 5.5,
+                "text": "Local route: Ollama runs on your machine. Nothing leaves the laptop.",
+            }
+        ],
+        tmp_path,
+        proxy=True,
+    )
+
+    assert count == 1
+    assert "drawbox" in graph
+    assert "drawtext" in graph
+    assert "between(t\\,1.200\\,5.500)" in graph
+    assert (tmp_path / "visual-insert-00.txt").read_text().startswith("Local route: Ollama")
+
+
+def test_render_run_passes_visual_insert_notes(monkeypatch, tmp_path):
+    iter_dir = tmp_path / "iterations" / "01"
+    iter_dir.mkdir(parents=True)
+    edl = Edl(
+        sources={"camera": str(tmp_path / "camera.mp4")},
+        ranges=[EdlRange(start=0, end=2)],
+        total_duration_s=2,
+    )
+    decisions = EditDecisions(
+        visual_insert_notes=[
+            {"out_start_s": 0.5, "out_end_s": 1.5, "text": "Codex Club: repo plus commands"}
+        ]
+    )
+    save(edl, iter_dir / "edl.json")
+    save(decisions, iter_dir / "edit-decisions.json")
+    seen = {}
+
+    def fake_render_edl(*args, **kwargs):
+        seen["visual_insert_notes"] = kwargs["visual_insert_notes"]
+        out = args[1]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("rendered")
+        return out
+
+    monkeypatch.setattr(render_long, "render_edl", fake_render_edl)
+    monkeypatch.setattr(render_long, "boundary_contact_sheet", lambda *a, **k: tmp_path / "sheet.jpg")
+
+    render_long.render_run(tmp_path, proxy=True, iteration=1)
+
+    assert seen["visual_insert_notes"] == decisions.visual_insert_notes

@@ -11,6 +11,7 @@ You receive:
 - BOUNDARY CARDS: for every splice, the text running into the cut, a summary of what was removed,
   and the text coming out. A good splice reads as ONE natural utterance.
 - STATS: duration vs target, per-beat durations, words-per-minute by section, removed chunks
+- VISUAL INSERTS: timed on-screen cards that will be rendered in the edit
 - WHAT WAS LOST: one-line summaries of every removed chunk over 20 seconds
 
 Score 1-10 on each dimension (10 = ship it):
@@ -32,6 +33,10 @@ Context limits you must respect:
   in a transcript - that is NOT a bad splice. Only flag boundary_continuity when the
   creator's own narration grammar breaks ACROSS a splice point (check the boundary cards).
 - Silent stretches during demos are deliberate visual beats, already policed elsewhere.
+- VISUAL INSERTS are real viewer-facing evidence for screen-share context, transitions, privacy/cost
+  contrast, and CTA clarity. Do not penalize missing spoken setup when a timed visual card plainly
+  supplies that context. But a visual card does NOT repair broken spoken grammar, an obviously glued
+  audio splice, or slow/repetitive pacing; flag those normally.
 
 When a FOCUS CONTEXT block appears between this rubric and the evidence, it OVERRIDES the
 standalone-video assumptions for hook_integrity, completeness, and ending_cta — follow its scoring

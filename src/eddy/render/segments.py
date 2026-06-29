@@ -9,6 +9,7 @@ from __future__ import annotations
 import concurrent.futures
 import importlib
 import os
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,128 @@ except Exception:  # pragma: no cover - pillow is a runtime dependency, but keep
     PILImageDraw = None
 
 SEEK_PREROLL_S = 2.0
+_FONT_REGULAR = Path("/System/Library/Fonts/Supplemental/Arial.ttf")
+_FONT_BOLD = Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+
+
+def _filter_escape(value: str) -> str:
+    """Escape a string for use as a single ffmpeg filter option value."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
+        .replace(",", "\\,")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+    )
+
+
+def _normalise_visual_insert_notes(notes: list[dict] | None) -> list[dict]:
+    out: list[dict] = []
+    for note in notes or []:
+        if not isinstance(note, dict):
+            continue
+        text = str(note.get("text") or note.get("note") or note.get("title") or "").strip()
+        if not text:
+            continue
+        start_value = note.get("out_start_s", note.get("start_s", note.get("at_s")))
+        if start_value is None:
+            continue
+        try:
+            start = float(start_value)
+        except (TypeError, ValueError):
+            continue
+        try:
+            end = float(note.get("out_end_s", note.get("end_s", start + float(note.get("duration_s", 4.0)))))
+        except (TypeError, ValueError):
+            end = start + 4.0
+        start = max(0.0, start)
+        end = max(start + 0.5, end)
+        out.append({"out_start_s": start, "out_end_s": end, "text": text})
+    return out
+
+
+def _visual_insert_filtergraph(
+    notes: list[dict] | None,
+    work_dir: Path,
+    proxy: bool = False,
+) -> tuple[str, int]:
+    """Build a drawtext chain for timed proof/context cards.
+
+    The cards are intentionally visual-only: they can clarify a screen-share or CTA, but they do
+    not alter source audio or EDL timing.
+    """
+    normalised = _normalise_visual_insert_notes(notes)
+    if not normalised:
+        return "[0:v]setpts=PTS-STARTPTS[v]", 0
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    font = _FONT_REGULAR if _FONT_REGULAR.exists() else _FONT_BOLD
+    fontfile = _filter_escape(str(font)) if font.exists() else ""
+    fontsize = 22 if proxy else 44
+    line_spacing = 4 if proxy else 8
+    wrap_cols = 58 if proxy else 68
+    filters: list[str] = ["[0:v]setpts=PTS-STARTPTS[v0]"]
+    current = "v0"
+    for idx, note in enumerate(normalised):
+        wrapped = "\n".join(textwrap.wrap(note["text"], width=wrap_cols, break_long_words=False))
+        text_path = work_dir / f"visual-insert-{idx:02d}.txt"
+        text_path.write_text(wrapped + "\n")
+        enable = f"between(t\\,{note['out_start_s']:.3f}\\,{note['out_end_s']:.3f})"
+        box_label = f"vb{idx}"
+        out_label = "v" if idx == len(normalised) - 1 else f"v{idx + 1}"
+        filters.append(
+            f"[{current}]drawbox=x=0:y=ih*0.780:w=iw:h=ih*0.160:"
+            f"color=black@0.72:t=fill:enable='{enable}'[{box_label}]"
+        )
+        drawtext_options = [
+            f"textfile={_filter_escape(str(text_path))}",
+            "x=(w-text_w)/2",
+            "y=h*0.780+(h*0.160-text_h)/2",
+            f"fontsize={fontsize}",
+            "fontcolor=white",
+            f"line_spacing={line_spacing}",
+            f"enable='{enable}'",
+        ]
+        if fontfile:
+            drawtext_options.insert(0, f"fontfile={fontfile}")
+        filters.append(f"[{box_label}]drawtext=" + ":".join(drawtext_options) + f"[{out_label}]")
+        current = out_label
+    return ";".join(filters), len(normalised)
+
+
+def _apply_visual_insert_notes(
+    source_path: Path,
+    out_path: Path,
+    run_dir: Path,
+    render_cfg: RenderConfig,
+    notes: list[dict] | None,
+    receipts=None,
+    proxy: bool = False,
+) -> int:
+    graph, count = _visual_insert_filtergraph(notes, out_path.parent / f"{out_path.stem}_visual_insert_text", proxy)
+    if not count:
+        if source_path != out_path:
+            os.replace(source_path, out_path)
+        return 0
+    if proxy:
+        video_args = ["-c:v", "libx264", "-preset", render_cfg.proxy_preset, "-crf", "28", "-pix_fmt", "yuv420p"]
+    else:
+        video_args = [*video_encoder_args("7000k")]
+    run_ffmpeg(
+        [
+            "-i", str(source_path),
+            "-filter_complex", graph,
+            "-map", "[v]", "-map", "0:a?",
+            *video_args,
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            str(out_path),
+        ],
+        run_dir=run_dir,
+        receipts=receipts,
+    )
+    return count
 
 
 def _segment_args(
@@ -216,6 +339,7 @@ def render_edl(
     receipts=None,
     proxy: bool = False,
     workers: int = 4,
+    visual_insert_notes: list[dict] | None = None,
 ) -> Path:
     source = Path(edl.sources.get("camera") or next(iter(edl.sources.values())))
     screen = Path(edl.sources["screen"]) if edl.sources.get("screen") else None
@@ -264,7 +388,14 @@ def render_edl(
 
     list_path = seg_dir / "concat.txt"
     list_path.write_text("\n".join(f"file {concat_quote(p.resolve())}" for p in paths) + "\n")
-    join_qa = _concat_segments_filtergraph(paths, out_path, run_dir, render_cfg, receipts=receipts, proxy=proxy)
+    notes = _normalise_visual_insert_notes(visual_insert_notes)
+    concat_out = out_path if not notes else out_path.with_name(f"{out_path.stem}.base{out_path.suffix}")
+    join_qa = _concat_segments_filtergraph(paths, concat_out, run_dir, render_cfg, receipts=receipts, proxy=proxy)
+    visual_insert_count = _apply_visual_insert_notes(
+        concat_out, out_path, run_dir, render_cfg, notes, receipts=receipts, proxy=proxy,
+    )
+    if concat_out != out_path and concat_out.exists():
+        concat_out.unlink()
     if receipts is not None:
         receipts.log(
             "render",
@@ -274,5 +405,6 @@ def render_edl(
             edl_duration_s=edl.total_duration_s,
             layout="screen_with_bottom_right_camera" if screen is not None else "single_source",
             join_strategy=join_qa["strategy"],
+            visual_inserts=visual_insert_count,
         )
     return out_path

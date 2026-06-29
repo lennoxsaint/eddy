@@ -236,6 +236,21 @@ def select_short_candidates(candidates: list, count: int, playbook_records: list
     return [c for _score, _neg_start, c in scored[: count * 2]]
 
 
+def _short_silence_threshold(cfg) -> float:
+    """Shorts allow natural visual micro-pauses; the QA standard hard-fails true dead air."""
+    return max(float(cfg.gates.max_output_silence_s), float(cfg.shorts.max_silent_motion_s))
+
+
+def _quarantine_rejected_short(final: Path, out_root: Path) -> Path:
+    """Move a QA-failed candidate out of the production Shorts folder."""
+    rejected = out_root / "_rejected" / final.name
+    rejected.parent.mkdir(parents=True, exist_ok=True)
+    if rejected.exists():
+        rejected.unlink()
+    final.replace(rejected)
+    return rejected
+
+
 def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict]:
     run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
@@ -333,15 +348,24 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
 
         # Studio Sound on the assembled short. Fail loud if the heavy backend is missing; Shorts
         # with plain EQ/loudnorm are not Eddy-quality exports.
+        audio_quality_pass = True
+        audio_result = {}
         if cfg.audio.studio_sound:
             from eddy.render.audio import studio_sound
 
             audio_result = studio_sound(final, run_dir, cfg.audio, receipts=receipts)
             if not audio_result.get("quality_gate_pass", False):
-                raise RuntimeError(audio_result.get("error") or f"Studio Sound quality gate failed for {slug}")
+                audio_quality_pass = False
+                receipts.log(
+                    "short_audio_qa_failed",
+                    slug=slug,
+                    error=audio_result.get("error") or "Studio Sound quality gate failed",
+                    profile=audio_result.get("profile"),
+                    enhancement_backend=audio_result.get("enhancement_backend"),
+                )
 
         final_summary = stream_summary(final)
-        silence_qa = silent_motion_gate(final, run_dir, cfg.gates.silence_noise_db, cfg.gates.max_output_silence_s, 0)
+        silence_qa = silent_motion_gate(final, run_dir, cfg.gates.silence_noise_db, _short_silence_threshold(cfg), 0)
         loudness_qa = loudness_gate(final, cfg.audio.target_lufs) if cfg.audio.studio_sound else {"pass": True}
         boundary_pairs = []
         for s, e in segs:
@@ -351,10 +375,25 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
         min_pre = min((pre for pre, _post in boundary_pairs), default=0.0)
         min_post = min((post for _pre, post in boundary_pairs), default=0.0)
         fv = final_summary["video"]  # None only if our own render produced no video stream — QA-fail it
+        qa_pass = (
+            fv is not None
+            and fv["width"] == L.W
+            and fv["height"] == L.H
+            and (not screen_declared or dual)
+            and len(events) > 0
+            and final_summary["audio"] is not None
+            and ends_on_complete_sentence(words)
+            and audio_quality_pass
+            and silence_qa["pass"]
+            and loudness_qa["pass"]
+            and join_qa["strategy"] == "filtergraph_reencode_concat"
+            and not join_qa["concat_demuxer_copy"]
+        )
+        publish_path = final if qa_pass else _quarantine_rejected_short(final, out_root)
         entry = {
             "slug": slug,
             "hook": cand.hook,
-            "path": str(final),
+            "path": str(publish_path),
             "duration_s": round(final_summary["duration_s"], 1),
             "resolution": f"{fv['width']}x{fv['height']}" if fv else "unknown",
             "segments": len(segs),
@@ -363,6 +402,7 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             "sentence_final": ends_on_complete_sentence(words),
             "silence_qa": silence_qa,
             "loudness_qa": loudness_qa,
+            "studio_sound_qa": audio_result if cfg.audio.studio_sound else {"quality_gate_pass": True},
             "boundary_qa": {"min_pre_handle_s": round(min_pre, 3), "min_post_handle_s": round(min_post, 3)},
             "layout": "dual" if dual else "talking_head_916",
             "source_provenance": {
@@ -400,24 +440,20 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
                     "highlight": L.HIGHLIGHT_BLUE,
                 }
             ),
-            "qa_pass": (
-                fv is not None
-                and fv["width"] == L.W
-                and fv["height"] == L.H
-                and (not screen_declared or dual)
-                and len(events) > 0
-                and final_summary["audio"] is not None
-                and ends_on_complete_sentence(words)
-                and silence_qa["pass"]
-                and loudness_qa["pass"]
-                and join_qa["strategy"] == "filtergraph_reencode_concat"
-                and not join_qa["concat_demuxer_copy"]
-            ),
-            "status": "rendered",
+            "qa_pass": qa_pass,
+            "status": "rendered" if qa_pass else "qa_failed",
         }
         ledger.append(entry)
-        rendered += 1
-        receipts.log("short_rendered", **{k: entry[k] for k in ("slug", "duration_s", "qa_pass", "layout")})
+        if qa_pass:
+            rendered += 1
+            receipts.log("short_rendered", **{k: entry[k] for k in ("slug", "duration_s", "qa_pass", "layout")})
+        else:
+            receipts.log(
+                "short_qa_failed",
+                **{k: entry[k] for k in ("slug", "duration_s", "qa_pass", "layout")},
+                silence_qa=silence_qa,
+                loudness_qa=loudness_qa,
+            )
 
     (out_root / "shorts-ledger.json").write_text(json.dumps(ledger, indent=1))
     from eddy.ui import console as ui

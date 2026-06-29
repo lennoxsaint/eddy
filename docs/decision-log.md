@@ -2,6 +2,29 @@
 
 Durable product/architecture decisions. Newest first. Format: date · decision · why.
 
+## 2026-06-29 — Studio Sound backend fallback must be automatic
+
+1. **DeepFilterNet is the default heavy backend:** The product promise in `docs/PRD.md` names
+   DeepFilterNet as Eddy's default local Studio Sound backend. Resemble Enhance remains optional and
+   experimental, so it may not run before DeepFilterNet by default.
+2. **No indefinite audio stalls:** If an optional heavy backend makes no output progress within the
+   stall window, Eddy kills that backend attempt, records the receipt, and falls through to the next
+   configured heavy backend instead of leaving the edit hung.
+3. **No silent downgrade:** Falling through to ffmpeg-only polish is still not Studio Sound quality
+   when `require_heavy_backend=true`; it remains a hard blocker unless Lennox explicitly lowers the
+   audio policy for that run.
+
+## 2026-06-29 — Shorts QA should reject padding, not shortness
+
+1. **Shorter clean Shorts are valid:** The baked hook corpus includes proven public Shorts below
+   20 seconds, and the rendering standard requires standalone value, complete thought, captions, and
+   QA, not an arbitrary 20-second minimum. Eddy's default minimum is now 10 seconds so it does not pad
+   strong 10-18s beats into weaker, silent clips.
+2. **Shorts silence threshold follows the Shorts standard:** Final Shorts still run silence/decode
+   QA, but use the Shorts dead-air threshold (1.2s) instead of the stricter long-form
+   silent-motion splice threshold. QA-failing Shorts are marked `qa_failed` and do not count toward
+   the rendered target.
+
 ## 2026-06-28 — Proof-gated edit paths and host-agent fallback
 
 1. **Perfect means proof-gated:** Eddy may not describe a weak best-attempt proxy as a perfect edit. A finished edit is complete only when required Eddy gates pass; otherwise Eddy returns exact blockers, support evidence, and route history.
