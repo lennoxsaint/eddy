@@ -70,6 +70,34 @@ def _run_plan(cfg: EddyConfig, skip_shorts: bool, skip_package: bool) -> list[st
     return plan
 
 
+NO_STANDALONE_SHORTS_BLOCKERS = {"no_standalone_short_candidates", "short_candidates_all_retakes"}
+
+
+def _shorts_requirement_status(ledger: list[dict]) -> dict:
+    green = [item for item in ledger if item.get("status") == "rendered" and item.get("qa_pass")]
+    if green:
+        return {"pass": True, "green_count": len(green), "proof": "green_shorts"}
+    blockers = [
+        str(item.get("blocker") or item.get("code") or "")
+        for item in ledger
+        if item.get("status") == "blocked" or item.get("blocker") or item.get("code")
+    ]
+    if blockers and all(code in NO_STANDALONE_SHORTS_BLOCKERS for code in blockers):
+        return {
+            "pass": True,
+            "green_count": 0,
+            "proof": "no_standalone_non_retake_shorts",
+            "blockers": blockers,
+        }
+    return {
+        "pass": False,
+        "green_count": 0,
+        "proof": "no_green_shorts",
+        "blockers": blockers,
+        "attempted": len(ledger),
+    }
+
+
 def autonomous_run(
     source: Path,
     target_minutes: float | None = None,
@@ -238,10 +266,17 @@ def autonomous_run(
         try:
             from eddy.render.shorts import render_shorts
 
-            render_shorts(run_dir, iteration_dir=chosen)
+            shorts_ledger = render_shorts(run_dir, iteration_dir=chosen)
+            shorts_status = _shorts_requirement_status(shorts_ledger)
+            receipts.log("shorts_requirement", **shorts_status)
+            if not shorts_status["pass"]:
+                raise RuntimeError(
+                    "Shorts QA failed: Eddy produced no green Shorts and did not prove that "
+                    "no standalone non-retake Shorts exist."
+                )
         except Exception as e:
             receipts.log("shorts_failed", error=str(e)[:400])
-            ui.warn(f"shorts failed (continuing): {e}")
+            raise RuntimeError(f"Shorts failed: {e}") from e
 
     if not skip_package:
         state.set_phase("package")
