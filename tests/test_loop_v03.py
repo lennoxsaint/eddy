@@ -171,3 +171,54 @@ def test_edit_loop_passes_words_to_creator_good_simulation(monkeypatch, tmp_path
 
     assert captured["words"] is words
     assert chosen == run_dir / "iterations" / "01"
+
+
+def test_edit_loop_forwards_resolved_ceiling_to_ensemble(monkeypatch, tmp_path):
+    # v1.7.3 follow-up: when the ensemble path is taken (ensemble_n>1 + focus_mode="extract"), the
+    # loop's own resolved per-run ceiling (brief-parsed / format, not the static config default)
+    # must reach best_of_n_decisions, so its selector agrees with the loop's under_ceiling gate.
+    import eddy.edit.ensemble as ensemble_mod
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    cfg = EddyConfig()
+    cfg.loop.max_iterations = 1
+    cfg.loop.require_gate_pass = True
+    cfg.loop.judge_threshold = 8.0
+    cfg.loop.length_ceiling_minutes = 14.0  # static default; the per-run ceiling below must win
+    cfg.loop.ensemble_n = 2
+    decisions = EditDecisions()
+    edl = Edl(sources={"camera": "camera.mp4"}, ranges=[EdlRange(start=0.0, end=1.0)], total_duration_s=1.0)
+    captured = {}
+
+    monkeypatch.setattr(_phases, "load_config", lambda: cfg)
+    monkeypatch.setattr(_phases, "get_editorial_provider", lambda cfg, receipts: object())
+    monkeypatch.setattr(_phases, "_record_model_pin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(_phases, "manifest", lambda rd: {"run_settings": {}})
+    monkeypatch.setattr(_phases, "words_flat", lambda rd: [])
+    monkeypatch.setattr(_phases, "load_phrases", lambda rd: [])
+    monkeypatch.setattr(_phases, "beat_map", lambda *args, **kwargs: [])
+    monkeypatch.setattr(_phases, "compile_with_repair", lambda *args, **kwargs: (decisions, edl))
+
+    def fake_best_of_n(*args, **kwargs):
+        captured["ceiling_minutes"] = kwargs.get("ceiling_minutes")
+        return decisions
+
+    monkeypatch.setattr(ensemble_mod, "best_of_n_decisions", fake_best_of_n)
+    monkeypatch.setattr(_phases, "simulate", lambda *a, **k: {
+        "duration_s": 1.0, "target_s": 60.0, "ranges": 1, "removed_total_s": 0.0, "boundary_cards": [],
+        "verdicts": {}, "pass": True,
+    })
+    monkeypatch.setattr(_phases, "render_edl", lambda edl, out, *a, **k: out.write_text("proxy") or out)
+    monkeypatch.setattr(_phases, "boundary_contact_sheet", lambda *a, **k: run_dir / "contact.jpg")
+    monkeypatch.setattr(_phases, "run_deterministic", lambda *a, **k: {"pass": True})
+    monkeypatch.setattr(_phases, "save_qa", lambda *a, **k: None)
+    monkeypatch.setattr(
+        _phases, "run_judge",
+        lambda *a, **k: {"weighted": 10.0, "judge_unstable": False, "defects": [], "scores": {}},
+    )
+    monkeypatch.setattr(_phases, "quality_score", lambda *a, **k: {"quality": 10.0, "components": {}})
+
+    _phases.edit_loop(run_dir, ceiling_minutes=6.0, focus="explain X", focus_mode="extract")
+
+    assert captured["ceiling_minutes"] == 6.0

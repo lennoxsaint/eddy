@@ -109,8 +109,13 @@ def _signal_closure(kept: list[dict], decisions: EditDecisions) -> float:
 
 
 def quality_score(sim: dict, judge: dict, kept: list[dict], decisions: EditDecisions,
-                  phrases: list[dict], cfg) -> dict:
+                  phrases: list[dict], cfg, ceiling_minutes: float | None = None) -> dict:
     """Hybrid EDIT-quality score: 0.6*objective + 0.4*critic on 0-10 (locked decision #2).
+
+    `ceiling_minutes` is the per-run resolved ceiling (e.g. from a parsed focus brief or a named
+    format) — pass it so `over_ceiling_s` agrees with the loop's own ceiling. Defaults to the
+    static `cfg.loop.length_ceiling_minutes` when the caller has no per-run ceiling on hand
+    (matches every behavior before this parameter existed).
 
     Length is NOT part of this score — it is a separate CONSTRAINT enforced by the loop
     (the under_ceiling clean-ship requirement + the over_ceiling_s ranking tiebreak) and pushed
@@ -135,7 +140,7 @@ def quality_score(sim: dict, judge: dict, kept: list[dict], decisions: EditDecis
 
     wo, wc = cfg.loop.quality_weight_objective, cfg.loop.quality_weight_critic
     quality = max(0.0, min(10.0, wo * objective + wc * critic))
-    ceiling_s = cfg.loop.length_ceiling_minutes * 60
+    ceiling_s = (ceiling_minutes if ceiling_minutes is not None else cfg.loop.length_ceiling_minutes) * 60
     return {
         "quality": round(quality, 3),
         "objective": round(objective, 3),

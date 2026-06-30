@@ -135,6 +135,7 @@ def edit_loop(run_dir: Path, target_minutes: float | None = None, resume: bool =
                         run_dir, provider, receipts, target_s,
                         retake_candidates(words), filler_candidates(words), beats, cfg,
                         focus=focus, focus_mode=focus_mode, n=cfg.loop.ensemble_n,
+                        ceiling_minutes=ceiling_minutes,
                     )
                 else:
                     decisions = initial_decisions(

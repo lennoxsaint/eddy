@@ -107,6 +107,41 @@ def test_best_of_n_all_fail_falls_back_to_single_draft(monkeypatch):
     assert any(e[0] == "ensemble_all_failed" for e in r.events)
 
 
+def test_best_of_n_forwards_ceiling_minutes_to_score_draft(monkeypatch):
+    # v1.7.3 follow-up: the per-run resolved ceiling must reach score_draft (and from there
+    # quality_score), not silently fall back to the static config ceiling.
+    _patch_phrases(monkeypatch)
+    monkeypatch.setattr(ens, "initial_decisions", lambda *a, **k: SimpleNamespace(idx=0))
+    seen = {}
+
+    def fake_score(run_dir, d, provider, receipts, cfg, target_s, phrases, ceiling_minutes=None):
+        seen["ceiling_minutes"] = ceiling_minutes
+        return d, _edl(1), {}, {"objective": 5.0, "over_ceiling_s": 0.0}, (0, 5.0, -1)
+
+    monkeypatch.setattr(ens, "score_draft", fake_score)
+    ens.best_of_n_decisions(
+        "rd", object(), FakeReceipts(), 120.0, [], [], [], object(), n=1, ceiling_minutes=6.5,
+    )
+    assert seen["ceiling_minutes"] == 6.5
+
+
+def test_score_draft_forwards_ceiling_minutes_to_quality_score(monkeypatch):
+    decisions = SimpleNamespace()
+    monkeypatch.setattr(ens, "compile_with_repair", lambda *a, **k: (decisions, _edl(1)))
+    monkeypatch.setattr(ens, "simulate", lambda *a, **k: {"duration_s": 600.0})
+    monkeypatch.setattr(ens, "cut_transcript", lambda *a, **k: [])
+    monkeypatch.setattr(ens, "words_flat", lambda *a, **k: [])
+    seen = {}
+
+    def fake_quality_score(sim, judge, kept, decisions, phrases, cfg, ceiling_minutes=None):
+        seen["ceiling_minutes"] = ceiling_minutes
+        return {"objective": 5.0, "over_ceiling_s": 0.0}
+
+    monkeypatch.setattr(ens, "quality_score", fake_quality_score)
+    ens.score_draft("rd", decisions, object(), FakeReceipts(), object(), 120.0, [], ceiling_minutes=7.0)
+    assert seen["ceiling_minutes"] == 7.0
+
+
 def test_n_le_1_samples_exactly_one_draft(monkeypatch):
     _patch_phrases(monkeypatch)
     calls = {"n": 0}

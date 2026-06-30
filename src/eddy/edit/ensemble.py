@@ -44,16 +44,20 @@ def _selector_key(objective: float, over_ceiling_s: float, n_ranges: int) -> tup
 
 
 def score_draft(run_dir, decisions: EditDecisions, provider, receipts: Receipts,
-                cfg: EddyConfig, target_s: float, phrases: list[dict]):
+                cfg: EddyConfig, target_s: float, phrases: list[dict],
+                ceiling_minutes: float | None = None):
     """Compile + simulate one draft and return (decisions, edl, sim, score, key). Render-free, $0.
 
     Uses the SAME `compile_with_repair` the loop uses, so a draft is scored exactly as it would
     render. `quality_score` is passed `judge={}` — its `objective` half never reads the judge, so the
-    selector stays 100% deterministic (no LLM critic in the loop)."""
+    selector stays 100% deterministic (no LLM critic in the loop). `ceiling_minutes` is the per-run
+    resolved ceiling (parsed brief / named format); without it the selector's feasibility band would
+    silently fall back to the static config ceiling, disagreeing with the loop's own under_ceiling
+    check (v1.7.3 follow-up)."""
     decisions, edl = compile_with_repair(run_dir, decisions, provider, receipts, cfg)
     sim = simulate(edl, decisions, phrases, cfg, target_s, words=words_flat(run_dir))
     kept = cut_transcript(edl, phrases)
-    qs = quality_score(sim, {}, kept, decisions, phrases, cfg)
+    qs = quality_score(sim, {}, kept, decisions, phrases, cfg, ceiling_minutes=ceiling_minutes)
     key = _selector_key(qs["objective"], qs["over_ceiling_s"], len(edl.ranges))
     return decisions, edl, sim, qs, key
 
@@ -62,11 +66,15 @@ def best_of_n_decisions(
     run_dir, provider, receipts: Receipts, target_s: float,
     retake_hints: list[dict], filler_hints: list[dict], beats: list[dict],
     cfg: EddyConfig, focus: str | None = None, focus_mode: str | None = None, n: int = 3,
+    ceiling_minutes: float | None = None,
 ) -> EditDecisions:
     """Sample N iteration-1 drafts; return the decisions of the best by the deterministic selector.
 
     Falls back to a single plain draft if every draft fails to compile, so the loop always proceeds.
-    n<=1 degenerates to a single ordinary draft (no extra cost) — the off switch."""
+    n<=1 degenerates to a single ordinary draft (no extra cost) — the off switch. `ceiling_minutes`
+    should be the SAME per-run ceiling the calling loop resolved (brief-parsed or format-derived),
+    so the selector's feasibility band ranks drafts against the ceiling the run will actually be
+    gated on, not the static config default."""
     n = max(1, int(n))
     phrases = load_phrases(run_dir)
     best: tuple | None = None  # (key, draft_idx, decisions)
@@ -77,7 +85,10 @@ def best_of_n_decisions(
             focus=focus, focus_mode=focus_mode,
         )
         try:
-            draft, edl, _sim, qs, key = score_draft(run_dir, draft, provider, receipts, cfg, target_s, phrases)
+            draft, edl, _sim, qs, key = score_draft(
+                run_dir, draft, provider, receipts, cfg, target_s, phrases,
+                ceiling_minutes=ceiling_minutes,
+            )
         except CompileError as e:
             receipts.log("ensemble_draft_failed", draft=i, problems=getattr(e, "problems", [])[:5])
             continue

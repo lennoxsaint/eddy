@@ -234,3 +234,15 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   rendered to completion this turn.
 - Human-gate batch (signing certs, publish channel, legal sign-off, real-footage dogfood + capped API
   spend) remains open by design — none are coding-agent tasks.
+- **v1.7.5 "Ensemble honors the per-run ceiling"** (2026-06-30) — closes the v1.7.3 follow-up: the
+  best-of-N selector (`ensemble.py`) ranked `over_ceiling_s` against the **static config** ceiling
+  (`cfg.loop.length_ceiling_minutes`) even when the run resolved a different per-run ceiling (a
+  parsed focus brief or a named format), so the ensemble's feasibility band could disagree with the
+  loop's own `under_ceiling` gate immediately after iteration 1. **Fix:** `quality_score()` takes an
+  optional `ceiling_minutes` (falls back to the config default — byte-identical for every existing
+  caller that omits it); `score_draft()`/`best_of_n_decisions()` (`ensemble.py`) thread it through;
+  `edit_loop()` (`_phases.py`) passes its already-resolved `ceiling_minutes` param into the
+  `best_of_n_decisions` call. +6 tests (`test_quality.py`, `test_ensemble.py`, `test_loop_v03.py`)
+  pin the override and the forwarding chain. Suite 883 green (2 pre-existing `test_version.py`
+  failures are a checkout artifact — this clone has no reachable git tags, unrelated to this change),
+  cov 76.9%, ruff+mypy clean, public scrub clean.
