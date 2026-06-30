@@ -207,9 +207,22 @@ def autonomous_run(
         if not motion_result.get("quality_gate_pass", False):
             raise RuntimeError(motion_result.get("error") or "First-60 motion quality gate failed")
 
+    final_sim = None
+    if (chosen / "sim-report.json").exists():
+        cached_sim = json.loads((chosen / "sim-report.json").read_text())
+        final_sim = simulate(
+            edl,
+            chosen_decisions,
+            load_phrases(run_dir),
+            cfg,
+            cached_sim.get("target_s", edl.total_duration_s),
+            words=words_flat(run_dir),
+        )
+        (run_dir / "final" / "sim-report.json").write_text(json.dumps(final_sim, indent=1))
+
     final_qa = run_deterministic(
         final, edl, run_dir, cfg, protected_count=len(chosen_decisions.protected_moments),
-        check_loudness=cfg.audio.studio_sound,
+        sim_report=final_sim, check_loudness=cfg.audio.studio_sound,
         check_visual_blink=True,
     )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")

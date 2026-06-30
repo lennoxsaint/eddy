@@ -35,6 +35,16 @@ def _raise_if_final_qa_failed(report: dict, *, receipts: Receipts, out: Path) ->
         raise RuntimeError(f"Final QA failed: {failed_text}")
 
 
+def _load_sim_report(iter_dir: Path) -> dict | None:
+    path = Path(iter_dir) / "sim-report.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def render_run(run_dir: Path, proxy: bool = False, iteration: int | None = None) -> Path:
     run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
@@ -84,6 +94,7 @@ def render_run(run_dir: Path, proxy: bool = False, iteration: int | None = None)
             edl,
             run_dir,
             cfg,
+            sim_report=_load_sim_report(iter_dir),
             protected_count=len(decisions.protected_moments) if decisions else 0,
             check_loudness=cfg.audio.studio_sound,
             check_visual_blink=True,

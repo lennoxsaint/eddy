@@ -338,7 +338,7 @@ def edit(
         "run_dir": str(run_dir),
         "final_qa": final_qa,
         "outputs": {
-            "long_form": str(run_dir / "final" / "long" / "video.mp4"),
+            "long_form": str(run_dir / "final" / "video.mp4"),
             "shorts_dir": str(run_dir / "final" / "shorts"),
             "package_dir": str(run_dir / "final" / "package"),
         },

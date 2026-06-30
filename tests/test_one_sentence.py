@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from eddy.one_sentence import prepare_edit
+from eddy.one_sentence import edit, prepare_edit
 from eddy.routing import choose_route
 from eddy.templates import select_template, template_registry
 
@@ -143,3 +143,29 @@ def test_prepare_edit_ready_when_route_and_preflight_pass(monkeypatch, tmp_path)
     assert result["edit_options"]["requires_choice"] is False
     assert result["template"]["id"] == "single_camera_course"
     assert json.loads((run_dir / "one-sentence-state.json").read_text())["status"] == "ready"
+
+
+def test_edit_completed_reports_actual_final_video_path(monkeypatch, tmp_path):
+    run_dir = tmp_path / "runs" / "demo"
+    (run_dir / "final").mkdir(parents=True)
+    (run_dir / "final" / "qa-final.json").write_text(json.dumps({"pass": True, "gates": []}))
+    source = tmp_path / "camera.mp4"
+    source.write_bytes(b"source")
+
+    monkeypatch.setattr(
+        "eddy.one_sentence.prepare_edit",
+        lambda *args, **kwargs: {
+            "status": "ready",
+            "run_dir": str(run_dir),
+            "selected_edit_path": "legacy_autonomous",
+            "blockers": [],
+        },
+    )
+    monkeypatch.setattr("eddy.one_sentence.resolve_format", lambda _name: {"ceiling_minutes": 30.0})
+    monkeypatch.setattr("eddy.one_sentence.provider_for_edit_path", lambda _path: None)
+    monkeypatch.setattr("eddy.one_sentence.autonomous_run", lambda *args, **kwargs: run_dir)
+
+    result = edit(source)
+
+    assert result["status"] == "completed"
+    assert result["outputs"]["long_form"] == str(run_dir / "final" / "video.mp4")

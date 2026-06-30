@@ -415,8 +415,31 @@ def run_deterministic(
         gates.append(pip_blink_gate(video, edl, run_dir, camera_roi))
     gates.append(no_unauthorized_redaction_gate(render_metadata, allow_redaction=cfg.gates.allow_redaction))
     if sim_report is not None:
-        gates.append({"gate": "sim_pass", "pass": sim_report.get("pass", False)})
+        gates.extend(_sim_report_gates(sim_report))
     return {"gates": gates, "pass": all(g["pass"] for g in gates)}
+
+
+def _sim_report_gates(sim_report: dict) -> list[dict]:
+    """Expose creator-good simulation gates in final deterministic QA.
+
+    The edit loop already uses the sim report to decide whether an iteration is shippable. Final QA
+    should carry the same proof forward so a rendered artifact can be blocked with exact editorial
+    evidence, not merely a generic "media valid" verdict.
+    """
+    gates: list[dict[str, object]] = [{"gate": "sim_pass", "pass": bool(sim_report.get("pass", False))}]
+    for gate_name in ("retake_clean_v2", "gap_pacing", "word_onset_safety", "retake_clean"):
+        gate_report = sim_report.get(gate_name)
+        if isinstance(gate_report, dict) and "pass" in gate_report:
+            gate: dict[str, object] = {"gate": gate_name, "pass": bool(gate_report.get("pass", False))}
+            for key in ("failures", "summary", "target_s", "minimum_handle_s"):
+                if key in gate_report:
+                    gate[key] = gate_report[key]
+            gates.append(gate)
+            continue
+        verdicts = sim_report.get("verdicts")
+        if isinstance(verdicts, dict) and gate_name in verdicts:
+            gates.append({"gate": gate_name, "pass": bool(verdicts[gate_name])})
+    return gates
 
 
 def save(report: dict, iter_dir: Path, name: str = "qa-deterministic.json") -> Path:

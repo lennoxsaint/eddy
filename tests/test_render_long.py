@@ -1,9 +1,11 @@
 """v1.0: small pure-logic coverage for the long-render iteration resolver."""
 
+import json
 import pytest
 
 from eddy.config import RenderConfig
 from eddy.edit.schema import Edl, EdlRange, EditDecisions, save
+from eddy.qa import deterministic
 from eddy.render import long as render_long
 from eddy.render.long import latest_iteration_dir
 from eddy.render import segments
@@ -58,6 +60,67 @@ def test_final_qa_failure_blocks_with_failed_gate_receipt(tmp_path):
             },
         )
     ]
+
+
+def test_sim_report_gates_expand_creator_good_final_qa():
+    report = {
+        "pass": False,
+        "retake_clean_v2": {"pass": False, "failures": [{"group_id": "retake_group_1"}]},
+        "gap_pacing": {"pass": True, "summary": {"max_s": 0.48}, "target_s": [0.35, 0.55]},
+        "word_onset_safety": {"pass": True, "minimum_handle_s": 0.1},
+        "verdicts": {"retake_clean": False},
+    }
+
+    gates = deterministic._sim_report_gates(report)
+
+    by_name = {gate["gate"]: gate for gate in gates}
+    assert by_name["sim_pass"]["pass"] is False
+    assert by_name["retake_clean_v2"]["failures"][0]["group_id"] == "retake_group_1"
+    assert by_name["gap_pacing"]["summary"]["max_s"] == 0.48
+    assert by_name["word_onset_safety"]["minimum_handle_s"] == 0.1
+    assert by_name["retake_clean"]["pass"] is False
+
+
+def test_render_run_threads_selected_sim_report_into_final_qa(monkeypatch, tmp_path):
+    run_dir = tmp_path / "run"
+    iter_dir = run_dir / "iterations" / "01"
+    iter_dir.mkdir(parents=True)
+    (run_dir / "final").mkdir()
+    edl = Edl(sources={"camera": str(tmp_path / "camera.mp4")}, ranges=[EdlRange(start=0, end=2)])
+    decisions = EditDecisions()
+    save(edl, iter_dir / "edl.json")
+    save(decisions, iter_dir / "edit-decisions.json")
+    sim_report = {
+        "pass": True,
+        "retake_clean_v2": {"pass": True, "failures": []},
+        "gap_pacing": {"pass": True, "summary": {"max_s": 0.45}},
+    }
+    (iter_dir / "sim-report.json").write_text(json.dumps(sim_report))
+    captured = {}
+
+    cfg = type(
+        "Cfg",
+        (),
+        {
+            "render": RenderConfig(),
+            "audio": type("Audio", (), {"studio_sound": False, "target_lufs": -14.0})(),
+            "motion": type("Motion", (), {"mode": "off"})(),
+            "gates": type("Gates", (), {})(),
+        },
+    )()
+
+    monkeypatch.setattr(render_long, "load_config", lambda: cfg)
+    monkeypatch.setattr(render_long, "render_edl", lambda edl, out, *args, **kwargs: out.write_text("video") or out)
+
+    def fake_run_deterministic(*args, **kwargs):
+        captured["sim_report"] = kwargs.get("sim_report")
+        return {"pass": True, "gates": [{"gate": "sim_pass", "pass": True}]}
+
+    monkeypatch.setattr("eddy.qa.deterministic.run_deterministic", fake_run_deterministic)
+
+    render_long.render_run(run_dir, iteration=1)
+
+    assert captured["sim_report"] == sim_report
 
 
 def test_single_segment_args_filter_trim_preroll_without_output_seek(tmp_path):
