@@ -95,6 +95,27 @@ def test_select_short_candidates_filters_weak_hooks_with_playbook():
     assert [c.hook for c in selected] == ["Stop making this creator mistake"]
 
 
+def test_playbook_fallback_repairs_obvious_tutorial_hooks():
+    records = [
+        {
+            "opening_3s_text": "How to duplicate Codex and run any model inside it",
+            "hook_pattern": "how to tutorial",
+        }
+    ]
+    candidates = [
+        ShortsCandidate(
+            start_s=10,
+            end_s=40,
+            hook="I found a way to duplicate Codex so you can put any model inside it.",
+        ),
+        ShortsCandidate(start_s=20, end_s=50, hook="and then I went over here"),
+    ]
+
+    selected = shorts_mod.playbook_fallback_short_candidates(candidates, count=5, playbook_records=records)
+
+    assert [c.hook for c in selected] == ["How to duplicate Codex and run any model inside it"]
+
+
 def test_short_attempt_queue_tries_playbook_winners_then_remaining_candidates():
     winner = ShortsCandidate(start_s=20, end_s=50, hook="Stop making this creator mistake")
     fallback = ShortsCandidate(start_s=10, end_s=40, hook="and then I went over here")
@@ -102,6 +123,25 @@ def test_short_attempt_queue_tries_playbook_winners_then_remaining_candidates():
     queue = shorts_mod._short_attempt_queue([winner], [fallback, winner])
 
     assert queue == [winner, fallback]
+
+
+def test_short_attempt_queue_dedupes_same_span_after_hook_repair():
+    repaired = ShortsCandidate(start_s=20, end_s=50, hook="How to duplicate Codex")
+    original = ShortsCandidate(start_s=20, end_s=50, hook="I found a way to duplicate Codex")
+
+    queue = shorts_mod._short_attempt_queue([repaired], [original, repaired])
+
+    assert queue == [repaired]
+
+
+def test_short_attempt_queue_dedupes_same_slug_from_different_spans():
+    stronger = ShortsCandidate(start_s=20, end_s=35, hook="How a copied Codex app keeps its own isolated home")
+    weaker_duplicate = ShortsCandidate(start_s=45, end_s=66, hook="How a copied Codex app keeps its own isolated home")
+    distinct = ShortsCandidate(start_s=70, end_s=84, hook="How local models keep your work on your laptop")
+
+    queue = shorts_mod._short_attempt_queue([stronger], [weaker_duplicate, distinct])
+
+    assert queue == [stronger, distinct]
 
 
 def test_short_silence_threshold_uses_shorts_dead_air_standard():

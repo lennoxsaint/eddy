@@ -146,7 +146,10 @@ def _write_audition_matrix(
             }
             for candidate in candidates
         ],
-        "policy": "source_reference is A/B reference only; passing default Studio Sound requires local heavy/wet cleanup.",
+        "policy": (
+            "source_reference is A/B reference only; passing default Studio Sound requires local "
+            "cleanup that applies real processing and clears click/echo/loudness gates."
+        ),
     }
     matrix_path = samples_dir / "studio-sound-audition-matrix.json"
     matrix_path.write_text(json.dumps(matrix, indent=2))
@@ -209,8 +212,8 @@ def studio_sound(video: Path, run_dir: Path, cfg: AudioConfig, receipts=None) ->
             and strong_cleanup_gate_pass
         )
         gate_error = "" if strong_cleanup_gate_pass else (
-            "Strong Studio Sound requires a heavy cleanup candidate; source_reference/loudness-only "
-            "cannot satisfy the gate."
+            "Strong Studio Sound requires a local cleanup candidate with real processing; "
+            "source_reference/loudness-only cannot satisfy the gate."
         )
 
         samples = {}

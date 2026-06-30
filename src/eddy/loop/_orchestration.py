@@ -22,6 +22,7 @@ from eddy.providers.base import get_editorial_provider
 from eddy.qa.deterministic import run_deterministic
 from eddy.qa.deterministic import save as save_qa
 from eddy.qa.judge import run_ship_panel
+from eddy.render.long import _failed_qa_gate_names
 from eddy.render.segments import render_edl
 from eddy.runs import assert_sources_decodable, manifest, open_run, verify_sources_unmutated
 from eddy.transcribe.pack import phrases as load_phrases
@@ -213,6 +214,11 @@ def autonomous_run(
     )
     save_qa(final_qa, run_dir / "final", name="qa-final.json")
     receipts.log("final_render", path=str(final), qa_pass=final_qa["pass"])
+    if not final_qa.get("pass", False):
+        failed = _failed_qa_gate_names(final_qa)
+        receipts.log("final_render_blocked", path=str(final), failed_gates=failed)
+        failed_text = ", ".join(failed) if failed else "unknown"
+        raise RuntimeError(f"Final QA failed: {failed_text}")
 
     if not skip_shorts:
         state.set_phase("shorts")

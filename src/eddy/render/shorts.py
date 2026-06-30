@@ -238,24 +238,71 @@ def select_short_candidates(candidates: list, count: int, playbook_records: list
     return [c for _score, _neg_start, c in scored[: count * 2]]
 
 
-def _short_candidate_key(candidate) -> tuple[float, float, str]:
+def _strengthened_short_hook(hook: str) -> str | None:
+    lower = hook.lower()
+    if "duplicate" in lower and "codex" in lower:
+        return "How to duplicate Codex and run any model inside it"
+    if "copied codex" in lower or ("isolated" in lower and "home" in lower):
+        return "How a copied Codex app keeps its own isolated home"
+    if "local model" in lower or "local models" in lower or "leaves your laptop" in lower:
+        return "How local models keep your work on your laptop"
+    if "real build" in lower or ("duplicate app" in lower and "proxy" in lower):
+        return "How the duplicate Codex app actually works"
+    return None
+
+
+def _with_repaired_hook(candidate, hook: str):
+    if hasattr(candidate, "model_copy"):
+        return candidate.model_copy(update={"hook": hook})
+    candidate.hook = hook
+    return candidate
+
+
+def playbook_fallback_short_candidates(candidates: list, count: int, playbook_records: list[dict]) -> list:
+    """Repair obvious tutorial hooks before giving up on otherwise-standalone Shorts candidates."""
+
+    repaired = []
+    for candidate in candidates:
+        stronger = _strengthened_short_hook(str(getattr(candidate, "hook", "")))
+        if not stronger:
+            continue
+        proof = score_candidate_hook(stronger, playbook_records)
+        if proof["pass"]:
+            repaired.append((proof["hook_score"], -float(candidate.start_s), _with_repaired_hook(candidate, stronger)))
+    repaired.sort(reverse=True)
+    return [candidate for _score, _neg_start, candidate in repaired[: count * 2]]
+
+
+def _short_candidate_key(candidate) -> tuple[float, float]:
     return (
         round(float(candidate.start_s), 3),
         round(float(candidate.end_s), 3),
-        str(getattr(candidate, "hook", "")),
     )
+
+
+def _short_attempt_slug(candidate) -> str:
+    return slugify(str(getattr(candidate, "hook", "")) or f"short-{float(candidate.start_s):.0f}")
 
 
 def _short_attempt_queue(selected: list, all_candidates: list) -> list:
     """Try taste-selected Shorts first, then remaining standalone candidates if QA rejects them."""
-    queue = list(selected)
-    seen = {_short_candidate_key(c) for c in queue}
-    for candidate in all_candidates:
-        key = _short_candidate_key(candidate)
-        if key in seen:
-            continue
+    queue = []
+    seen_spans: set[tuple[float, float]] = set()
+    seen_slugs: set[str] = set()
+
+    def add(candidate) -> None:
+        span_key = _short_candidate_key(candidate)
+        slug_key = _short_attempt_slug(candidate)
+        if span_key in seen_spans or slug_key in seen_slugs:
+            return
         queue.append(candidate)
-        seen.add(key)
+        seen_spans.add(span_key)
+        seen_slugs.add(slug_key)
+
+    for candidate in selected:
+        add(candidate)
+    for candidate in all_candidates:
+        add(candidate)
     return queue
 
 
@@ -456,6 +503,19 @@ def render_shorts(run_dir: Path, iteration_dir: Path | None = None) -> list[dict
             )
 
     selected_candidates = select_short_candidates(decisions.shorts_candidates, cfg.shorts.count, playbook_records)
+    if not selected_candidates and playbook_records:
+        selected_candidates = playbook_fallback_short_candidates(
+            decisions.shorts_candidates,
+            cfg.shorts.count,
+            playbook_records,
+        )
+        if selected_candidates:
+            receipts.log(
+                "shorts_playbook_hook_repair",
+                selected_count=len(selected_candidates),
+                reason="Standalone candidates existed, but their literal hooks missed the offline playbook shape.",
+                repaired_hooks=[candidate.hook for candidate in selected_candidates],
+            )
     if not selected_candidates:
         return _write_short_blocker(
             out_root,

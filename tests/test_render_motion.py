@@ -30,6 +30,14 @@ def test_first_60_motion_missing_cache_blocks_with_receipt(tmp_path):
     assert receipts.events[-1][1]["quality_gate_pass"] is False
 
 
+def test_first_60_motion_overlay_graph_uses_transparent_background():
+    graph = motion._overlay_filter_graph("")
+
+    assert graph.startswith("format=rgba,colorchannelmixer=aa=0,")
+    assert "color=black@0.0:t=fill:replace=1" in graph
+    assert graph.count(":replace=1") >= 8
+
+
 def test_first_60_motion_writes_contract_and_preserves_audio_copy(monkeypatch, tmp_path):
     hf = tmp_path / "hyperframes"
     (hf / "skills" / "motion-graphics").mkdir(parents=True)

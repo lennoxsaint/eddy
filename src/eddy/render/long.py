@@ -19,6 +19,22 @@ def latest_iteration_dir(run_dir: Path) -> Path:
     return iters[-1]
 
 
+def _failed_qa_gate_names(report: dict) -> list[str]:
+    return [
+        str(gate.get("gate", "unknown"))
+        for gate in report.get("gates", [])
+        if not gate.get("pass", False)
+    ]
+
+
+def _raise_if_final_qa_failed(report: dict, *, receipts: Receipts, out: Path) -> None:
+    failed = _failed_qa_gate_names(report)
+    if not report.get("pass", False):
+        receipts.log("final_render_blocked", path=str(out), failed_gates=failed)
+        failed_text = ", ".join(failed) if failed else "unknown"
+        raise RuntimeError(f"Final QA failed: {failed_text}")
+
+
 def render_run(run_dir: Path, proxy: bool = False, iteration: int | None = None) -> Path:
     run_dir = Path(run_dir).expanduser().resolve()
     cfg = load_config()
@@ -74,5 +90,6 @@ def render_run(run_dir: Path, proxy: bool = False, iteration: int | None = None)
         )
         save_qa(final_qa, run_dir / "final", name="qa-final.json")
         receipts.log("final_render", path=str(out), qa_pass=final_qa["pass"])
+        _raise_if_final_qa_failed(final_qa, receipts=receipts, out=out)
     print(out)
     return out

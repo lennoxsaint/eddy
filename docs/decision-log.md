@@ -30,6 +30,20 @@ Durable product/architecture decisions. Newest first. Format: date · decision �
    overlapping non-selected retake variants are excluded. Zero production Shorts is a blocker unless
    the ledger proves no standalone non-retake clips can pass.
 
+## 2026-06-30 — Studio Sound selection follows measured quality, not backend labels
+
+1. **Backend label is not proof:** Dogfood showed DeepFilterNet could complete quickly while making
+   the hook/worst-click sample score worse. Eddy must not prefer a backend-enhanced candidate solely
+   because it is labeled heavy.
+2. **Strong still excludes reference/loudness-only:** `source_reference` remains an A/B baseline only.
+   A passing Strong Studio Sound candidate must apply local cleanup and pass mouth-click, echo,
+   loudness, and strong-cleanup gates.
+3. **Local wet cleanup may win:** If a local wet cleanup profile with real click/denoise/de-ess
+   processing beats the backend-enhanced candidates and passes the same objective gates, Eddy may
+   select it instead of forcing a worse heavy-backend output.
+4. **Slow optional backends stay bounded:** Resemble Enhance timing out or stalling on a small sample
+   is a blocker/receipt for that route, not a reason to silently spend minutes on full-track audio.
+
 ## 2026-06-29 — Retake-clean dogfood repair gates are required
 
 1. **Retake-clean is a product gate:** A media-valid long video is still a failed Eddy edit if failed

@@ -28,6 +28,38 @@ def test_latest_iteration_dir_raises_when_none(tmp_path):
         latest_iteration_dir(tmp_path)
 
 
+def test_final_qa_failure_blocks_with_failed_gate_receipt(tmp_path):
+    class FakeReceipts:
+        def __init__(self) -> None:
+            self.events = []
+
+        def log(self, event: str, **payload) -> None:
+            self.events.append((event, payload))
+
+    receipts = FakeReceipts()
+    report = {
+        "pass": False,
+        "gates": [
+            {"gate": "probe_clean", "pass": True},
+            {"gate": "black_or_frozen", "pass": False},
+            {"gate": "loudness", "pass": False},
+        ],
+    }
+
+    with pytest.raises(RuntimeError, match="Final QA failed: black_or_frozen, loudness"):
+        render_long._raise_if_final_qa_failed(report, receipts=receipts, out=tmp_path / "video.mp4")
+
+    assert receipts.events == [
+        (
+            "final_render_blocked",
+            {
+                "path": str(tmp_path / "video.mp4"),
+                "failed_gates": ["black_or_frozen", "loudness"],
+            },
+        )
+    ]
+
+
 def test_single_segment_args_filter_trim_preroll_without_output_seek(tmp_path):
     args = _segment_args(
         tmp_path / "camera.mp4",

@@ -271,6 +271,32 @@ def test_high_echo_source_uses_source_relative_echo_gate():
     assert audio._echo_gate_pass(0.5903, 0.5792, cfg) is False
 
 
+def test_high_echo_source_allows_tiny_echo_tradeoff_for_click_rescue():
+    cfg = AudioConfig(echo_artifact_max_score=0.42, mouth_click_score_max=0.045)
+
+    assert audio._candidates._echo_gate_pass_with_click_rescue(
+        echo_score=0.593,
+        reference_echo_score=0.5729,
+        before_mouth_score=0.12053,
+        mouth_score=0.04487,
+        cfg=cfg,
+    ) is True
+    assert audio._candidates._echo_gate_pass_with_click_rescue(
+        echo_score=0.593,
+        reference_echo_score=0.5729,
+        before_mouth_score=0.12053,
+        mouth_score=0.09437,
+        cfg=cfg,
+    ) is False
+    assert audio._candidates._echo_gate_pass_with_click_rescue(
+        echo_score=0.445,
+        reference_echo_score=0.41,
+        before_mouth_score=0.12053,
+        mouth_score=0.030,
+        cfg=cfg,
+    ) is False
+
+
 def test_default_selector_prefers_passing_heavy_cleanup_over_source_reference():
     cfg = AudioConfig(echo_artifact_max_score=0.42)
     candidates = [
@@ -301,6 +327,60 @@ def test_default_selector_prefers_passing_heavy_cleanup_over_source_reference():
     selected = audio._select_best_candidate(candidates, before_clicks=2, cfg=cfg)
 
     assert selected["profile"] == "natural_voice"
+    assert audio._strong_cleanup_gate_pass(selected, cfg) is True
+
+
+def test_local_wet_cleanup_can_satisfy_strong_cleanup_when_backend_is_worse():
+    cfg = AudioConfig(echo_artifact_max_score=0.42)
+    candidates = [
+        {
+            "profile": "source_reference",
+            "source_mode": "reference",
+            "wet_dry_mix": {"dry": 1.0, "wet": 0.0},
+            "filter_chain": "loudnorm=I=-14.0",
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "mouth_click_score_after": 0.12,
+            "mouth_click_gate_pass": False,
+            "reference_echo_artifact_score": 0.30,
+            "echo_artifact_score": 0.30,
+            "echo_gate_pass": True,
+            "lufs_after": -14.0,
+        },
+        {
+            "profile": "warm_click_tame",
+            "source_mode": "raw",
+            "wet_dry_mix": {"dry": 0.42, "wet": 0.58},
+            "filter_chain": "highpass=f=65,adeclick,adeclick,equalizer=f=3500",
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "mouth_click_score_after": 0.025,
+            "mouth_click_gate_pass": True,
+            "reference_echo_artifact_score": 0.30,
+            "echo_artifact_score": 0.31,
+            "echo_gate_pass": True,
+            "lufs_after": -14.1,
+        },
+        {
+            "profile": "natural_voice",
+            "source_mode": "heavy",
+            "wet_dry_mix": {"dry": 0.28, "wet": 0.72},
+            "filter_chain": "highpass=f=80,adeclick,equalizer=f=3500",
+            "click_events_after": 0,
+            "click_gate_pass": True,
+            "mouth_click_score_after": 0.11,
+            "mouth_click_gate_pass": False,
+            "reference_echo_artifact_score": 0.30,
+            "echo_artifact_score": 0.50,
+            "echo_gate_pass": False,
+            "lufs_after": -14.0,
+        },
+    ]
+
+    selected = audio._select_best_candidate(candidates, before_clicks=0, cfg=cfg)
+
+    assert selected["profile"] == "warm_click_tame"
+    assert selected["source_mode"] == "raw"
     assert audio._strong_cleanup_gate_pass(selected, cfg) is True
 
 
@@ -473,6 +553,49 @@ def test_mouth_click_score_catches_smaller_transient_clicks(tmp_path):
         wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
 
     assert audio._mouth_click_score(wav) > AudioConfig().mouth_click_score_max
+
+
+def test_mouth_click_score_does_not_flag_smooth_speech_like_audio(tmp_path):
+    import math
+    import struct
+    import wave
+
+    wav = tmp_path / "smooth-speech-like.wav"
+    rate = 48000
+    samples = []
+    for idx in range(rate * 2):
+        t = idx / rate
+        envelope = min(1.0, idx / 2400, (rate * 2 - idx) / 2400)
+        value = envelope * (0.18 * math.sin(2 * math.pi * 220 * t) + 0.08 * math.sin(2 * math.pi * 1200 * t))
+        samples.append(int(max(-0.95, min(0.95, value)) * 32767))
+    with wave.open(str(wav), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
+
+    assert audio._mouth_click_score(wav) <= AudioConfig().mouth_click_score_max
+
+
+def test_mouth_click_score_uses_worst_window_without_long_file_saturation(tmp_path):
+    import struct
+    import wave
+
+    wav = tmp_path / "long-with-local-clicks.wav"
+    rate = 48000
+    samples = [0] * (rate * 30)
+    for offset in range(rate * 16, rate * 17, 2000):
+        samples[offset] = 14000
+        samples[offset + 1] = -12000
+    with wave.open(str(wav), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(struct.pack("<" + "h" * len(samples), *samples))
+
+    score = audio._mouth_click_score(wav)
+
+    assert AudioConfig().mouth_click_score_max < score < 1.0
 
 
 def test_mouth_click_hotspot_finds_click_window(tmp_path):

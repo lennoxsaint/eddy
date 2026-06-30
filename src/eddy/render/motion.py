@@ -64,6 +64,22 @@ def _storyboard_frames(duration_s: float) -> list[dict]:
     ]
 
 
+def _overlay_filter_graph(font_opt: str) -> str:
+    replace = ":replace=1"
+    return (
+        "format=rgba,colorchannelmixer=aa=0,"
+        f"drawbox=x=0:y=0:w=iw:h=ih:color=black@0.0:t=fill{replace},"
+        f"drawbox=x=70:y=70:w=520:h=4:color=#37FF8B@0.82:t=fill{replace},"
+        f"drawbox=x=70:y=104:w=330:h=4:color=#39BDF8@0.72:t=fill{replace},"
+        f"drawbox=x=70:y=138:w=250:h=4:color=#FF4D4D@0.65:t=fill{replace},"
+        f"drawbox=x=72:y=172:w=420:h=64:color=black@0.28:t=fill{replace},"
+        f"drawtext={font_opt}text='PROOF-GATED EDIT':x=94:y=190:fontsize=28:fontcolor=white@0.92,"
+        f"drawbox=x=70:y=268:w=4:h=420:color=#37FF8B@0.54:t=fill{replace},"
+        f"drawbox=x=100:y=330:w=240:h=2:color=#F7F8FB@0.38:t=fill{replace},"
+        f"drawbox=x=100:y=420:w=310:h=2:color=#F7F8FB@0.30:t=fill{replace}"
+    )
+
+
 def _write_probe(path: Path, out: Path) -> dict:
     raw = run_ffprobe(["-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)])
     data = json.loads(raw or "{}")
@@ -108,18 +124,7 @@ def apply_first_60_motion(video: Path, run_dir: Path, cfg: EddyConfig, receipts=
     font = Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf")
     font_opt = f"fontfile={_filter_escape(str(font))}:" if font.exists() else ""
     overlay = motion_dir / "overlay-first-60.mov"
-    overlay_graph = (
-        "format=rgba,"
-        "drawbox=x=0:y=0:w=iw:h=ih:color=black@0.0:t=fill,"
-        "drawbox=x=70:y=70:w=520:h=4:color=#37FF8B@0.82:t=fill,"
-        "drawbox=x=70:y=104:w=330:h=4:color=#39BDF8@0.72:t=fill,"
-        "drawbox=x=70:y=138:w=250:h=4:color=#FF4D4D@0.65:t=fill,"
-        "drawbox=x=72:y=172:w=420:h=64:color=black@0.28:t=fill,"
-        f"drawtext={font_opt}text='PROOF-GATED EDIT':x=94:y=190:fontsize=28:fontcolor=white@0.92,"
-        "drawbox=x=70:y=268:w=4:h=420:color=#37FF8B@0.54:t=fill,"
-        "drawbox=x=100:y=330:w=240:h=2:color=#F7F8FB@0.38:t=fill,"
-        "drawbox=x=100:y=420:w=310:h=2:color=#F7F8FB@0.30:t=fill"
-    )
+    overlay_graph = _overlay_filter_graph(font_opt)
     run_ffmpeg(
         [
             "-f", "lavfi",

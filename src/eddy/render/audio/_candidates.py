@@ -77,7 +77,13 @@ def _render_profile_candidate(
         mouth_click_gate_pass = mouth_score <= cfg.mouth_click_score_max
     reference_echo_score = _echo_artifact_score(raw)
     echo_score = _echo_artifact_score(out)
-    echo_gate_pass = _echo_gate_pass(echo_score, reference_echo_score, cfg)
+    echo_gate_pass = _echo_gate_pass_with_click_rescue(
+        echo_score,
+        reference_echo_score,
+        before_mouth_score,
+        mouth_score,
+        cfg,
+    )
     return {
         "profile": profile.name,
         "path": str(out),
@@ -157,11 +163,43 @@ def _echo_gate_pass(echo_score: float, reference_echo_score: float, cfg: AudioCo
     return echo_score <= reference_echo_score + 0.006
 
 
+def _echo_gate_pass_with_click_rescue(
+    echo_score: float,
+    reference_echo_score: float,
+    before_mouth_score: float,
+    mouth_score: float,
+    cfg: AudioConfig,
+) -> bool:
+    """Permit a narrow measured tradeoff when the source is already roomy.
+
+    The normal echo gate stays strict for clean sources. On already echoey footage, a local wet
+    cleanup can pass only when it materially improves mouth clicks and keeps the room-score movement
+    tiny. This prevents a model-labeled candidate from winning while it still leaves the click issue
+    the creator actually heard.
+    """
+    if _echo_gate_pass(echo_score, reference_echo_score, cfg):
+        return True
+    if not cfg.require_echo_artifact_gate:
+        return True
+    if reference_echo_score <= cfg.echo_artifact_max_score:
+        return False
+    if before_mouth_score <= cfg.mouth_click_score_max:
+        return False
+    if mouth_score > cfg.mouth_click_score_max:
+        return False
+    if mouth_score > before_mouth_score * 0.45:
+        return False
+    return echo_score <= min(0.60, reference_echo_score + 0.025)
+
+
 def _strong_cleanup_gate_pass(candidate: dict, cfg: AudioConfig) -> bool:
-    """A passing Strong Studio Sound result must include real heavy/wet cleanup.
+    """A passing Strong Studio Sound result must include real local cleanup.
 
     `source_reference` is still useful as a do-no-harm comparison or an explicitly lowered policy,
-    but it cannot satisfy the default product promise: actual studio-quality voice cleanup.
+    but it cannot satisfy the default product promise: actual studio-quality voice cleanup. A local
+    backend-enhanced candidate is preferred; a raw wet cleanup profile can also pass when it applies
+    real click/denoise/de-ess processing and clears the objective gates. This prevents Eddy from
+    choosing a worse heavy backend merely because it is labeled "heavy."
     """
     if not cfg.require_heavy_backend:
         return True
@@ -174,7 +212,11 @@ def _strong_cleanup_gate_pass(candidate: dict, cfg: AudioConfig) -> bool:
         wet_amount = float(wet)
     except (TypeError, ValueError):
         wet_amount = 0.0
-    return source_mode == "heavy" and wet_amount > 0.0
+    if source_mode == "heavy" and wet_amount > 0.0:
+        return True
+    filter_chain = str(candidate.get("filter_chain", ""))
+    has_cleanup_filter = any(token in filter_chain for token in ("adeclick", "afftdn", "deesser", "anlmdn", "arnndn"))
+    return source_mode == "raw" and wet_amount >= 0.45 and has_cleanup_filter
 
 
 def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: AudioConfig) -> dict:
@@ -193,6 +235,16 @@ def _select_best_candidate(candidates: list[dict], before_clicks: int, cfg: Audi
     if cfg.require_heavy_backend and strong_passing:
         return min(strong_passing, key=lambda c: c["selection_score"])
     if cfg.require_heavy_backend:
+        measured_cleanup_pool = [
+            c for c in scored
+            if c.get("profile") != "source_reference"
+            and c.get("click_gate_pass")
+            and c.get("loudness_gate_pass")
+            and c.get("mouth_click_gate_pass", True)
+            and _strong_cleanup_gate_pass(c, cfg)
+        ]
+        if measured_cleanup_pool:
+            return min(measured_cleanup_pool, key=lambda c: c["selection_score"])
         heavy_pool = [
             c for c in scored
             if c.get("profile") != "source_reference" and c.get("source_mode") == "heavy"

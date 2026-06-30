@@ -66,15 +66,19 @@ Proof that the approved Shorts geometry and caption language stayed stable durin
 _Avoid_: Aspect-ratio-only check, loose layout
 
 **Studio Sound**:
-Eddy's local heavy voice-enhancement quality gate for speech cleanup.
+Eddy's local voice-enhancement quality gate for speech cleanup. Default runs require local cleanup
+proof; `source_reference` and loudness-only normalization are references, not passes.
 _Avoid_: FFmpeg-only loudness pass, basic EQ
 
 **Strong Studio Sound**:
-A Studio Sound result whose selected profile used a heavy/wet cleanup path and passed click, echo, loudness, and strong-cleanup gates.
+A Studio Sound result whose selected profile used a local heavy/wet cleanup path and passed click,
+echo, loudness, and strong-cleanup gates. A backend-enhanced candidate is preferred, but Eddy may
+select a local wet cleanup profile when the backend-enhanced track measures worse.
 _Avoid_: `source_reference` selected, loudness-only normalization
 
 **Local Studio Sound Audition**:
-The local A/B matrix Eddy writes for hook and worst-click windows before selecting a heavy cleanup profile. If clicks, echo, loudness, or voice texture cannot be measured green, packaging blocks.
+The local A/B matrix Eddy writes for hook and worst-click windows before selecting a cleanup profile.
+If clicks, echo, loudness, or voice texture cannot be measured green, packaging blocks.
 _Avoid_: Zero-signal detector pass, source-reference winner, cloud audio by accident
 
 **HyperFrames Frame Contract**:
