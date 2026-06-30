@@ -6,6 +6,7 @@ variance-reduction mechanism (max-of-N under a fixed key) is verified independen
 
 from types import SimpleNamespace
 
+from eddy.config import EddyConfig
 from eddy.edit.compiler import CompileError
 import eddy.edit.ensemble as ens
 
@@ -67,7 +68,7 @@ def test_best_of_n_picks_highest_key(monkeypatch):
 
     monkeypatch.setattr(ens, "score_draft", fake_score)
     r = FakeReceipts()
-    out = ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], object(), n=3)
+    out = ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], EddyConfig(), n=3)
     assert out.idx == 1
     assert sum(1 for e in r.events if e[0] == "ensemble_draft") == 3
     assert any(e[0] == "ensemble_pick" and e[1]["draft"] == 1 for e in r.events)
@@ -86,7 +87,7 @@ def test_best_of_n_skips_failed_drafts(monkeypatch):
 
     monkeypatch.setattr(ens, "score_draft", fake_score)
     r = FakeReceipts()
-    out = ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], object(), n=3)
+    out = ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], EddyConfig(), n=3)
     assert out.idx == 1  # only the one that compiled
     assert sum(1 for e in r.events if e[0] == "ensemble_draft_failed") == 2
 
@@ -102,7 +103,7 @@ def test_best_of_n_all_fail_falls_back_to_single_draft(monkeypatch):
 
     monkeypatch.setattr(ens, "score_draft", always_fail)
     r = FakeReceipts()
-    out = ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], object(), n=3)
+    out = ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], EddyConfig(), n=3)
     assert out.idx == 3  # the fallback draft (sampled after the 3 failed ensemble drafts)
     assert any(e[0] == "ensemble_all_failed" for e in r.events)
 
@@ -142,6 +143,94 @@ def test_score_draft_forwards_ceiling_minutes_to_quality_score(monkeypatch):
     assert seen["ceiling_minutes"] == 7.0
 
 
+# --- bad-group retry (v1.7.5) -------------------------------------------------------------------
+
+def test_bad_group_retries_when_every_draft_is_catastrophic(monkeypatch):
+    # ceiling 10min=600s. First batch of 3 drafts are all catastrophically over (>1x ceiling over).
+    # The retry batch produces one good draft -> it must win and a retry receipt must be logged.
+    _patch_phrases(monkeypatch)
+    monkeypatch.setattr(ens, "initial_decisions", lambda *a, **k: SimpleNamespace())
+    calls = {"n": 0}
+
+    def fake_score(run_dir, d, *a, **k):
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            return d, _edl(40), {}, {"objective": 5.0, "over_ceiling_s": 900.0}, (-8, -40, 5.0)
+        return d, _edl(5), {}, {"objective": 6.0, "over_ceiling_s": 0.0}, (0, -5, 6.0)
+
+    monkeypatch.setattr(ens, "score_draft", fake_score)
+    cfg = EddyConfig()
+    cfg.loop.length_ceiling_minutes = 10.0
+    r = FakeReceipts()
+    ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], cfg, n=3)
+    assert calls["n"] == 6  # 3 initial + 3 retry (one retry batch was enough)
+    assert any(e[0] == "ensemble_bad_group_retry" and e[1]["retry"] == 1 for e in r.events)
+    pick = next(e for e in r.events if e[0] == "ensemble_pick")
+    assert pick[1]["retries"] == 1
+
+
+def test_bad_group_retry_is_capped_by_ensemble_retry_max(monkeypatch):
+    # every draft in every batch (initial + all retries) is catastrophic -> stop after the
+    # configured cap instead of retrying forever, and still ship the least-bad draft.
+    _patch_phrases(monkeypatch)
+    monkeypatch.setattr(ens, "initial_decisions", lambda *a, **k: SimpleNamespace())
+
+    def always_catastrophic(run_dir, d, *a, **k):
+        return d, _edl(40), {}, {"objective": 5.0, "over_ceiling_s": 900.0}, (-8, -40, 5.0)
+
+    monkeypatch.setattr(ens, "score_draft", always_catastrophic)
+    cfg = EddyConfig()
+    cfg.loop.length_ceiling_minutes = 10.0
+    cfg.loop.ensemble_retry_max = 2
+    r = FakeReceipts()
+    ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], cfg, n=3)
+    retry_events = [e for e in r.events if e[0] == "ensemble_bad_group_retry"]
+    assert len(retry_events) == 2  # capped, not unbounded
+    pick = next(e for e in r.events if e[0] == "ensemble_pick")
+    assert pick[1]["retries"] == 2
+
+
+def test_ensemble_retry_max_zero_disables_retries(monkeypatch):
+    # pre-v1.7.5 behavior is preserved when the retry knob is off: ship the least-bad of the
+    # group, no extra draws, regardless of how catastrophic it is.
+    _patch_phrases(monkeypatch)
+    monkeypatch.setattr(ens, "initial_decisions", lambda *a, **k: SimpleNamespace())
+    calls = {"n": 0}
+
+    def always_catastrophic(run_dir, d, *a, **k):
+        calls["n"] += 1
+        return d, _edl(40), {}, {"objective": 5.0, "over_ceiling_s": 900.0}, (-8, -40, 5.0)
+
+    monkeypatch.setattr(ens, "score_draft", always_catastrophic)
+    cfg = EddyConfig()
+    cfg.loop.length_ceiling_minutes = 10.0
+    cfg.loop.ensemble_retry_max = 0
+    r = FakeReceipts()
+    ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], cfg, n=3)
+    assert calls["n"] == 3
+    assert not any(e[0] == "ensemble_bad_group_retry" for e in r.events)
+
+
+def test_not_catastrophic_does_not_retry(monkeypatch):
+    # a merely over-ceiling (not >1x-over) best draft is accepted as-is — retries are for
+    # catastrophes, not ordinary over-ceiling cuts the loop's revise phase can still fix.
+    _patch_phrases(monkeypatch)
+    monkeypatch.setattr(ens, "initial_decisions", lambda *a, **k: SimpleNamespace())
+    calls = {"n": 0}
+
+    def mildly_over(run_dir, d, *a, **k):
+        calls["n"] += 1
+        return d, _edl(10), {}, {"objective": 7.0, "over_ceiling_s": 30.0}, (0, -10, 7.0)
+
+    monkeypatch.setattr(ens, "score_draft", mildly_over)
+    cfg = EddyConfig()
+    cfg.loop.length_ceiling_minutes = 10.0
+    r = FakeReceipts()
+    ens.best_of_n_decisions("rd", object(), r, 120.0, [], [], [], cfg, n=3)
+    assert calls["n"] == 3  # no retry batch drawn
+    assert not any(e[0] == "ensemble_bad_group_retry" for e in r.events)
+
+
 def test_n_le_1_samples_exactly_one_draft(monkeypatch):
     _patch_phrases(monkeypatch)
     calls = {"n": 0}
@@ -155,5 +244,5 @@ def test_n_le_1_samples_exactly_one_draft(monkeypatch):
         ens, "score_draft",
         lambda run_dir, d, *a, **k: (d, _edl(1), {}, {"objective": 5.0, "over_ceiling_s": 0.0}, (0, 5.0, -1)),
     )
-    ens.best_of_n_decisions("rd", object(), FakeReceipts(), 1.0, [], [], [], object(), n=1)
+    ens.best_of_n_decisions("rd", object(), FakeReceipts(), 1.0, [], [], [], EddyConfig(), n=1)
     assert calls["n"] == 1  # no extra drafts when n<=1

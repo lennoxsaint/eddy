@@ -246,3 +246,19 @@ never touch `vendor/yt_tools/` · never mutate source video · **no real-API spe
   pin the override and the forwarding chain. Suite 883 green (2 pre-existing `test_version.py`
   failures are a checkout artifact — this clone has no reachable git tags, unrelated to this change),
   cov 76.9%, ruff+mypy clean, public scrub clean.
+- **v1.7.6 "Bad-group retry"** (2026-06-30) — closes the other v1.7 follow-up: "block-count stdev
+  only ↓9% — residual from bad groups (a draw whose N drafts are all bad)". `best_of_n_decisions`
+  (`ensemble.py`) now redraws up to `cfg.loop.ensemble_retry_max` (default 2) extra N-sized batches
+  when the surviving best is still catastrophically over the ceiling (`over_ceiling_s` > 1x the
+  per-run ceiling — built on v1.7.5's threaded `ceiling_minutes`, so the catastrophe check agrees
+  with the loop's own gate), instead of shipping the least-bad of a uniformly bad group outright.
+  Each retry batch and the final pick log a receipt event (`ensemble_bad_group_retry`,
+  `ensemble_pick.retries`) for visibility into how often a group needed a second roll.
+  `ensemble_retry_max=0` reproduces the exact pre-v1.7.6 behavior (off switch, byte-identical
+  selection). +4 tests pin: retry-then-pick-the-good-draft, the retry cap, the off switch, and that
+  an ordinary (non-catastrophic) over-ceiling pick is never retried. Suite 891 green (1 pre-existing
+  `test_version.py` failure, same checkout-tag artifact as v1.7.5), ruff+mypy clean, public scrub
+  clean. **Not yet confirmed on a live dogfood run** — this closes the documented gap at the code
+  level with synthetic/mocked tests only; the "revise loop re-bloating a tight pick" half of the
+  same v1.7 follow-up (confirm2-d5: ensemble picked 8 blocks, loop grew it to 75) is a separate,
+  deeper issue in the revise/directive loop and is NOT addressed here — still open.

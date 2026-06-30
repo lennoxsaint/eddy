@@ -97,6 +97,13 @@ class LoopConfig(BaseModel):
     # was too small). 1 = OFF (single draft, pre-v1.7). Gated to extract mode in the loop, so
     # normal/steer edits are unaffected regardless of this value (they always take the single-draft path).
     ensemble_n: int = 5
+    # v1.7.5: a residual variance source the v1.7 confirmation flagged as future work — a "bad
+    # group" where every one of the N draws is a catastrophe (none compile feasibly close to the
+    # ceiling). Best-of-N over a uniformly bad group still ships the least-bad catastrophe; redraw
+    # up to this many extra N-sized batches when the surviving best is still >2x the ceiling over,
+    # so a single unlucky group gets a second/third roll instead of being accepted outright. 0 =
+    # off (pre-v1.7.5 behavior: ship whatever best-of-N produced, no redraw).
+    ensemble_retry_max: int = 2
     max_model_calls_per_iteration: int = 4
     # v0.4 runaway guard, enforced at the iteration head: a pathological source on a cloud brain
     # could otherwise run up to max_iterations full-render rounds for hours at unbounded cost.

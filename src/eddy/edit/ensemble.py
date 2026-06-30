@@ -62,6 +62,12 @@ def score_draft(run_dir, decisions: EditDecisions, provider, receipts: Receipts,
     return decisions, edl, sim, qs, key
 
 
+# v1.7.5: a surviving best still over_ceiling_s past this multiple of the ceiling counts as a
+# "bad group" worth redrawing — chosen to match quality.py's documented >2.5x-ceiling saturation
+# point loosely (2x is already a catastrophe; no edit this far over ships acceptably).
+BAD_GROUP_OVER_CEILING_FACTOR = 1.0
+
+
 def best_of_n_decisions(
     run_dir, provider, receipts: Receipts, target_s: float,
     retake_hints: list[dict], filler_hints: list[dict], beats: list[dict],
@@ -74,37 +80,65 @@ def best_of_n_decisions(
     n<=1 degenerates to a single ordinary draft (no extra cost) — the off switch. `ceiling_minutes`
     should be the SAME per-run ceiling the calling loop resolved (brief-parsed or format-derived),
     so the selector's feasibility band ranks drafts against the ceiling the run will actually be
-    gated on, not the static config default."""
+    gated on, not the static config default.
+
+    v1.7.5: if every draft in the group is a catastrophe (the surviving best is still wildly over
+    the ceiling), redraw up to `cfg.loop.ensemble_retry_max` extra N-sized batches rather than
+    shipping the least-bad of a uniformly bad group — a residual variance source the v1.7
+    confirmation documented as future work (block-count stdev only -9%, "a draw whose N drafts are
+    all bad")."""
     n = max(1, int(n))
     phrases = load_phrases(run_dir)
-    best: tuple | None = None  # (key, draft_idx, decisions)
+    ceiling_s = (ceiling_minutes if ceiling_minutes is not None else cfg.loop.length_ceiling_minutes) * 60
+    best: tuple | None = None  # (key, draft_idx, decisions, qs)
     n_ok = 0
-    for i in range(n):
-        draft = initial_decisions(
-            run_dir, provider, receipts, target_s, retake_hints, filler_hints, beats, cfg,
-            focus=focus, focus_mode=focus_mode,
-        )
-        try:
-            draft, edl, _sim, qs, key = score_draft(
-                run_dir, draft, provider, receipts, cfg, target_s, phrases,
-                ceiling_minutes=ceiling_minutes,
+    n_drawn = 0
+
+    def draw_batch(count: int) -> None:
+        nonlocal best, n_ok, n_drawn
+        for _ in range(count):
+            idx = n_drawn
+            n_drawn += 1
+            draft = initial_decisions(
+                run_dir, provider, receipts, target_s, retake_hints, filler_hints, beats, cfg,
+                focus=focus, focus_mode=focus_mode,
             )
-        except CompileError as e:
-            receipts.log("ensemble_draft_failed", draft=i, problems=getattr(e, "problems", [])[:5])
-            continue
-        n_ok += 1
+            try:
+                draft, edl, _sim, qs, key = score_draft(
+                    run_dir, draft, provider, receipts, cfg, target_s, phrases,
+                    ceiling_minutes=ceiling_minutes,
+                )
+            except CompileError as e:
+                receipts.log("ensemble_draft_failed", draft=idx, problems=getattr(e, "problems", [])[:5])
+                continue
+            n_ok += 1
+            receipts.log(
+                "ensemble_draft", draft=idx, objective=qs["objective"], ranges=len(edl.ranges),
+                over_ceiling_s=qs["over_ceiling_s"], dur_s=round(edl.total_duration_s, 1),
+            )
+            if best is None or key > best[0]:
+                best = (key, idx, draft, qs)
+
+    draw_batch(n)
+
+    retries = 0
+    while (
+        best is not None
+        and best[3]["over_ceiling_s"] > ceiling_s * BAD_GROUP_OVER_CEILING_FACTOR
+        and retries < cfg.loop.ensemble_retry_max
+    ):
+        retries += 1
         receipts.log(
-            "ensemble_draft", draft=i, objective=qs["objective"], ranges=len(edl.ranges),
-            over_ceiling_s=qs["over_ceiling_s"], dur_s=round(edl.total_duration_s, 1),
+            "ensemble_bad_group_retry", retry=retries, best_over_ceiling_s=best[3]["over_ceiling_s"],
+            ceiling_s=ceiling_s,
         )
-        if best is None or key > best[0]:
-            best = (key, i, draft)
+        draw_batch(n)
 
     if best is None:
-        receipts.log("ensemble_all_failed", n=n)
+        receipts.log("ensemble_all_failed", n=n, retries=retries)
         return initial_decisions(
             run_dir, provider, receipts, target_s, retake_hints, filler_hints, beats, cfg,
             focus=focus, focus_mode=focus_mode,
         )
-    receipts.log("ensemble_pick", draft=best[1], key=list(best[0]), n_ok=n_ok, n=n)
+    receipts.log("ensemble_pick", draft=best[1], key=list(best[0]), n_ok=n_ok, n=n, retries=retries)
     return best[2]
