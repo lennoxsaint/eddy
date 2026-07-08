@@ -1,12 +1,22 @@
 ---
 name: eddy
 description: >-
-  Edit raw footage into a finished, ship-ready YouTube long video (16:9 1080p) plus 3-5
-  Shorts and 1-2 alternate hook cold-opens — one shot, no review needed. Use when Lennox
-  says "edit this", "/eddy", "edit this video", or attaches a raw camera + screen recording
-  and wants it edited. You supply all editorial taste; frozen helpers own audio DSP and pixel
-  geometry. Real Descript Studio Sound (audio only), V1 rounded-corner PiP layout, clean
-  karaoke, HTML motion on the hook + section cards. Never over-cuts, never overdubs.
+  Edit raw footage into a finished, ship-ready YouTube long (16:9 1080p) plus 3-5 Shorts and
+  1-2 alternate hook cold-opens — one shot, no review needed. Use when the user says "edit
+  this", "/eddy", "edit this video", or attaches a raw webcam + screen recording to turn into
+  a finished upload. The invoking model supplies all editorial taste; frozen helpers own audio
+  DSP and pixel geometry: real Descript Studio Sound (audio only), rounded-corner webcam PiP,
+  clean karaoke, HTML motion on the hook + section cards. Do NOT use for captioning
+  already-edited footage (use embedded-captions), faceless/no-camera explainers (use
+  faceless-explainer), or short standalone motion graphics (use motion-graphics). Never
+  over-cuts, never overdubs.
+metadata:
+  version: 0.1.0
+  author: lennoxsaint
+compatibility: >-
+  Requires ffmpeg + ffprobe, Python 3.12 with Pillow, a WhisperX venv at
+  ~/content-tools/caption-gen/.venv, `npx hyperframes`, the embedded-captions skill, and a
+  DESCRIPT_API_KEY env var. macOS/Linux; needs network for Descript Studio Sound.
 ---
 
 # Eddy — one-shot video editor
@@ -50,7 +60,9 @@ If `DESCRIPT_API_KEY` is not set, stop and say so — Studio Sound is non-negoti
 
 ## Ordered flow
 
-Run these in order. Load the referenced file before each stage that names one.
+Run these in order. Load the referenced file before each stage that names one. The canonical
+6-step edit is `references/sop.md` (source of truth); the exact CLI for every script is
+`references/commands.md`.
 
 1. **Ingest + detect tracks.** Dual-source vs talking-head. Probe durations, fps, resolution.
 2. **Transcribe.** `scripts/transcribe.py` → word-level JSON (WhisperX, deterministic).

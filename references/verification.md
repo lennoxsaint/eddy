@@ -37,6 +37,24 @@ plateaued and stalled.
   review. This is the artifact that lets Lennox ship without watching the whole thing.
 - Final Second Brain run log through the canonical gateway.
 
+## Setup failures & fallbacks (degrade gracefully, don't abort)
+
+Autonomy means never stalling on a non-essential layer. On a stage failure:
+
+- **`DESCRIPT_API_KEY` missing / Studio Sound fails** — HARD stop for the final long (Studio Sound
+  is non-negotiable). Report clearly and halt; do not ship the raw or the dev-only
+  `EDDY_FAKE_DESCRIPT` audio as final.
+- **No screen-recording track** — switch to the talking-head layout (`composite_render.py th` /
+  `short --face`). Not an error.
+- **WhisperX transcription fails** — retry once; if it still fails, stop (everything downstream
+  needs word timings). Surface the exact stderr.
+- **HyperFrames / motion engine missing or errors** — the motion layer is enhancement, not core.
+  Skip it, ship the clean webcam+screen cut, and note "motion layer skipped" in `spot-check.md`.
+- **`embedded-captions` unavailable** — fall back to the V1 caption style in `captions.py` (same
+  constants); never ship without karaoke.
+- **Render fails at full-res** — re-run once at proxy to isolate; fix the offending stage, then
+  full-res again (counts against the ≤3 self-heal budget).
+
 ## Definition of shippable
 
 All deterministic gates green, all model rubrics addressed (or the residual honestly flagged), and

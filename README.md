@@ -37,6 +37,26 @@ Motion + captions reuse the existing **HyperFrames** and **embedded-captions** (
 - WhisperX venv at `~/content-tools/caption-gen/.venv`.
 - `npx hyperframes` available for the motion layer.
 
+## Usage
+
+Point it at a folder containing a raw **webcam** track and (usually) a **screen recording** track:
+
+```
+/eddy edit ~/content-pipeline/2026-07-10-my-video
+# or: "edit this" with the raw footage attached
+```
+
+Optional flags: `--target-min N` (trim dial), `--studio-sound N` (default 100),
+`--clarity medium|heavy` (default medium), `--global-speed X` (default off). Exact per-script CLI is
+in `references/commands.md`.
+
+## Triggering tests
+
+Should trigger: "edit this" + raw footage · "/eddy edit &lt;folder&gt;" · "turn this recording into a
+YouTube video with shorts". Should NOT trigger: "add captions to this edited video"
+(→ embedded-captions) · "make a faceless explainer" (→ faceless-explainer) · "10s stat animation"
+(→ motion-graphics). Full set + functional assertions: `evals/evals.json`.
+
 ## Status
 
 Prompt layer (SKILL.md + references) is complete and is the source of truth. Frozen helper scripts

@@ -1,0 +1,54 @@
+{
+  "skill": "eddy",
+  "version": "0.1.0",
+  "notes": "Lightweight eval set. Triggering cases guard against mis-routing among the many video skills; functional cases assert the ship contract. Run with-skill vs baseline and compare (see the guide's Testing chapter).",
+  "triggering": {
+    "should_trigger": [
+      "edit this [raw webcam + screen recording attached]",
+      "/eddy edit ~/content-pipeline/2026-07-10-my-video",
+      "turn this raw footage into a finished YouTube video with shorts",
+      "cut this recording down and give me the long + a few shorts"
+    ],
+    "should_not_trigger": [
+      "add captions to this already-edited video (→ embedded-captions)",
+      "make a faceless explainer about X (→ faceless-explainer)",
+      "make a 10s animated stat callout (→ motion-graphics)",
+      "write me a thread about this topic (→ viral-writer)",
+      "what's the weather in Perth"
+    ]
+  },
+  "functional": [
+    {
+      "name": "dual-source one-shot",
+      "given": "a raw webcam.mp4 + screen.mp4 in a folder, ~12 min raw with retakes and long gaps",
+      "expect": [
+        "final long is 16:9 1080p and plays end-to-end",
+        "webcam PiP present bottom-right with rounded corners; screen recording rounded",
+        "karaoke is clean (one cue at a time), synced to speech",
+        "all >0.2s word gaps tightened to ~0.1s; sacred pauses preserved",
+        "no repeated-phrase pair remains (retakes removed, last take kept)",
+        "Descript Studio Sound applied; audio parity passes",
+        "hook (0-60s) delivers the title/thumbnail promise; 1-2 alternate cold-opens exported",
+        "3-5 Shorts rendered, each a standalone moment with its own hook + karaoke",
+        "every unique beat from edit-plan.md survives (no gutting)",
+        "spot-check.md lists any uncertain cuts"
+      ]
+    },
+    {
+      "name": "talking-head only",
+      "given": "only a webcam.mp4 (no screen track)",
+      "expect": [
+        "auto-detects talking-head layout (no PiP)",
+        "still produces long + shorts + clean karaoke + Studio Sound"
+      ]
+    },
+    {
+      "name": "no-gutting guard",
+      "given": "a 70-min recording that is mostly dead air + retakes around ~10 min of real content",
+      "expect": [
+        "final ~10 min (dead weight removed) — NOT gutted to seconds",
+        "every distinct substantive beat retained"
+      ]
+    }
+  ]
+}
