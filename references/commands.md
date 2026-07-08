@@ -20,10 +20,14 @@ Output: `{language, duration, words:[{word,start,end,score}], segments:[...]}`.
 
 ```
 python3 scripts/splice.py --in <source>.mp4 --words transcript.json --cutlist cutlist.json \
-  --out edited.mp4 [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.06]
+  --out edited.mp4 [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.06] [--scale 1920x1080]
 ```
 `cutlist.json`: `{"keep":[[s,e],...], "sacred":[[s,e],...], "gap_tighten":{"threshold":0.2,"target":0.1}}`.
 Writes `edited.segments.json` (receipt: exact sub-segments used).
+`--scale WxH` downscales each cut segment during the splice (aspect-preserving, padded) — use it to
+cut a **4K screen track directly at 1080p** so the encode is 1080p not 4K (the composite scales the
+screen to 1080p anyway; no quality lost, far lighter/safer encode). Run the same cut list on camera
+and screen so the deterministic segments stay in sync.
 
 ## 3. Descript Studio Sound (audio only)
 
@@ -57,7 +61,19 @@ python3 scripts/verify.py --final long.mp4 [--segments edited.segments.json] [--
 Prints a JSON verdict `{pass, gates:[...]}`. Exit 1 = a gate failed. Model rubrics
 (hook/cohesion/gutting) are judged separately by you.
 
-## Motion + captions (existing skills, via CLI)
+## 6. Karaoke (Shorts caption strip)
+
+```
+python3 scripts/karaoke_ass.py --transcript short.words.json --out short.ass \
+  --play-w 1080 --play-h 1920 --y 1155 --font-size 52 --max-words 4 --uppercase \
+  --burn --in short.mp4 --video-out short_cap.mp4
+```
+Self-contained per-word karaoke (cyan current word / white spoken / dim upcoming, `layout-constants.md`
+style). `--transcript` = word timings of the **edited** short (re-transcribe the composited short first,
+because splicing shifts word times). Position `--y` in the Shorts caption strip (1080–1230 → center 1155).
+
+## Motion + long-form captions (existing skills, via CLI)
 
 - HTML motion (hook, section cards, concept slides): `npx hyperframes …` (see the `hyperframes` skill).
-- Karaoke: the `embedded-captions` skill, `anchor` identity (clean, verbatim — not chaotic).
+- Talking-head long-form karaoke: `embedded-captions` `anchor` identity (matts the person). Does NOT fit
+  a screen-share composite or the Shorts split-stack — use `scripts/karaoke_ass.py` for those.

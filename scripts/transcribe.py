@@ -28,12 +28,14 @@ from pathlib import Path
 
 VENV_PY = Path(os.path.expanduser("~/content-tools/caption-gen/.venv/bin/python"))
 
-# Runs inside the caption-gen venv. Emits the normalized schema on stdout as JSON.
+# Runs inside the caption-gen venv. Writes the normalized schema to the OUTPUT FILE (argv[4]),
+# NOT stdout — WhisperX and its deps print progress/warnings to stdout, which would corrupt a
+# stdout-parsed JSON. Writing to a file makes capture immune to that library chatter.
 _RUNNER = r"""
 import json, sys
 import whisperx
 
-audio_path, model_name, lang = sys.argv[1], sys.argv[2], (sys.argv[3] or None)
+audio_path, model_name, lang, out_path = sys.argv[1], sys.argv[2], (sys.argv[3] or None), sys.argv[4]
 device = "cpu"
 compute_type = "int8"
 
@@ -64,8 +66,9 @@ segments = [{"start": round(float(s["start"]), 3),
             for s in aligned.get("segments", []) if s.get("start") is not None]
 
 duration = words[-1]["end"] if words else (segments[-1]["end"] if segments else 0.0)
-json.dump({"language": language, "duration": duration, "words": words, "segments": segments},
-          sys.stdout)
+with open(out_path, "w") as fh:
+    json.dump({"language": language, "duration": duration, "words": words, "segments": segments}, fh)
+print("WROTE", out_path)  # marker; safe even if preceded by library chatter
 """
 
 
@@ -86,24 +89,27 @@ def main() -> int:
         print(f"ERROR: input not found: {inp}", file=sys.stderr)
         return 2
 
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    raw = out.with_suffix(".raw.json")  # runner writes here; immune to stdout chatter
+
     proc = subprocess.run(
-        [str(VENV_PY), "-c", _RUNNER, str(inp), args.model, args.lang],
+        [str(VENV_PY), "-c", _RUNNER, str(inp), args.model, args.lang, str(raw)],
         capture_output=True, text=True,
     )
-    if proc.returncode != 0:
+    if proc.returncode != 0 or not raw.exists():
         print(proc.stderr[-2000:], file=sys.stderr)
+        print(proc.stdout[-1000:], file=sys.stderr)
         print("ERROR: whisperx transcription failed (see stderr).", file=sys.stderr)
         return 3
 
     try:
-        data = json.loads(proc.stdout)
+        data = json.loads(raw.read_text())
     except json.JSONDecodeError:
-        print(proc.stdout[-2000:], file=sys.stderr)
+        print(raw.read_text()[-2000:], file=sys.stderr)
         print("ERROR: transcription produced non-JSON output.", file=sys.stderr)
         return 3
 
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, indent=1))
     print(json.dumps({"event": "transcribed", "words": len(data.get("words", [])),
                       "duration": data.get("duration"), "out": str(out)}))

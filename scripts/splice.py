@@ -73,30 +73,63 @@ def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[li
     return [[round(s, 3), round(e, 3)] for s, e in segments if e - s > 0.02]
 
 
-def render(src: Path, segments: list[list[float]], out: Path, xfade: float) -> None:
-    """Frame-accurate concat via trim/atrim filter_complex, with a micro audio crossfade at joins."""
-    parts_v, parts_a, labels = [], [], []
-    for i, (s, e) in enumerate(segments):
-        parts_v.append(
-            f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{i}]")
-        parts_a.append(
-            f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS,"
-            f"afade=t=in:st=0:d={xfade},areverse,afade=t=in:st=0:d={xfade},areverse[a{i}]")
-        labels.append(f"[v{i}][a{i}]")
-    concat = "".join(labels) + f"concat=n={len(segments)}:v=1:a=1[v][a]"
-    fc = ";".join(parts_v + parts_a + [concat])
+def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
+           scale: tuple[int, int] | None = None, fps: int = 30) -> None:
+    """Single-pass select/aselect: keep only frames inside the kept segments, re-stamp timestamps
+    to remove the gaps. One decode + a per-frame keep-test — scales to hundreds of segments, where a
+    trim+concat filter_complex would split every decoded frame N ways and crawl (O(frames × N)).
 
+    Normalizes to constant `fps` first, so a VFR / odd-fps source (e.g. a 29.97/29.67 screen track)
+    comes out CFR and stays frame-synced with a co-spliced camera track cut from the same list.
+
+    `scale` (W,H) optionally downscales during the cut (aspect-preserving, padded) — use it to cut a
+    4K screen track straight to 1080p so the encode is 1080p not 4K (machine-safety: no heavy 4K
+    encode; the composite scales the screen to 1080p anyway). Hard cuts land on word-gap silence, so
+    no audio crossfade is needed (`xfade` kept for signature compatibility, unused here).
+    """
+    # Render VIDEO and AUDIO in SEPARATE passes, then mux. Doing both in one filter_complex makes the
+    # muxer buffer video while the N-input audio concat catches up — with hundreds of segments that
+    # starves into a stall. Separate passes have no cross-stream sync, so each runs clean and fast.
     out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        "ffmpeg", "-y", "-i", str(src),
-        "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
+    vtmp = out.with_suffix(".vonly.mp4")
+    atmp = out.with_suffix(".aonly.m4a")
+
+    def ff(cmd: list[str], what: str) -> None:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            print(proc.stderr[-2000:], file=sys.stderr)
+            raise RuntimeError(f"ffmpeg splice {what} failed")
+
+    # VIDEO: one decode, per-frame keep-test (select), re-stamp to drop gaps. fps normalizes CFR.
+    expr = "+".join(f"between(t,{s:.3f},{e:.3f})" for s, e in segments)
+    if scale:
+        sw, sh = scale
+        vscale = (f",scale={sw}:{sh}:force_original_aspect_ratio=decrease,"
+                  f"pad={sw}:{sh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
+    else:
+        vscale = ""
+    ff(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-an",
+        "-vf", f"fps={fps},select='{expr}',setpts=N/FRAME_RATE/TB{vscale}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        print(proc.stderr[-2000:], file=sys.stderr)
-        raise RuntimeError("ffmpeg splice failed")
+        "-movflags", "+faststart", str(vtmp)], "video")
+
+    # AUDIO: atrim each kept span + concat (aselect doesn't drop frames in this ffmpeg build). Audio
+    # only — no video decode, no cross-stream sync — so hundreds of segments stay cheap.
+    aparts = [f"[0:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{i}]"
+              for i, (s, e) in enumerate(segments)]
+    alabels = "".join(f"[a{i}]" for i in range(len(segments)))
+    afc = ";".join(aparts + [f"{alabels}concat=n={len(segments)}:v=0:a=1[a]"])
+    ff(["ffmpeg", "-y", "-i", str(src), "-vn", "-filter_complex", afc, "-map", "[a]",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(atmp)], "audio")
+
+    # MUX (stream copy) — no sync problem, just interleave the two finished streams.
+    ff(["ffmpeg", "-y", "-i", str(vtmp), "-i", str(atmp), "-map", "0:v:0", "-map", "1:a:0",
+        "-c", "copy", "-movflags", "+faststart", str(out)], "mux")
+    for t in (vtmp, atmp):
+        try:
+            t.unlink()
+        except OSError:
+            pass
 
 
 def main() -> int:
@@ -108,7 +141,18 @@ def main() -> int:
     ap.add_argument("--gap-threshold", type=float, default=None)
     ap.add_argument("--gap-target", type=float, default=None)
     ap.add_argument("--xfade", type=float, default=0.06)
+    ap.add_argument("--scale", default=None,
+                    help="WxH — downscale each cut segment (e.g. 1920x1080 for a 4K screen track)")
     args = ap.parse_args()
+
+    scale = None
+    if args.scale:
+        try:
+            sw, sh = (int(x) for x in args.scale.lower().split("x"))
+            scale = (sw, sh)
+        except ValueError:
+            print("ERROR: --scale must be WxH, e.g. 1920x1080.", file=sys.stderr)
+            return 2
 
     words = load(args.words).get("words", [])
     cut = load(args.cutlist)
@@ -128,7 +172,7 @@ def main() -> int:
         return 3
 
     out = Path(args.out)
-    render(Path(args.inp), segments, out, args.xfade)
+    render(Path(args.inp), segments, out, args.xfade, scale)
 
     kept = round(sum(e - s for s, e in segments), 2)
     (out.parent / (out.stem + ".segments.json")).write_text(

@@ -66,6 +66,21 @@ def run(cmd: list[str]) -> None:
         raise RuntimeError("ffmpeg composite failed")
 
 
+def probe_dur(path: Path) -> float:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        capture_output=True, text=True).stdout.strip()
+    return float(out) if out else 0.0
+
+
+def bound(*inputs: Path) -> list[str]:
+    """`-t <min real-input duration>` — hard-bounds the output so infinite `-loop 1` mask
+    inputs can never make the encode run forever (‑shortest alone fails when there's no audio)."""
+    durs = [d for d in (probe_dur(p) for p in inputs) if d > 0]
+    return ["-t", f"{min(durs):.3f}"] if durs else []
+
+
 def scale_factor(proxy: bool) -> float:
     return 0.5 if proxy else 1.0
 
@@ -99,10 +114,11 @@ def render_long(screen: Path, camera: Path, out: Path, bg: str, proxy: bool, wor
     run([
         "ffmpeg", "-y",
         "-i", str(screen), "-i", str(camera),
-        "-loop", "1", "-i", str(scr_mask), "-loop", "1", "-i", str(cam_mask),
+        "-loop", "1", "-framerate", "30", "-i", str(scr_mask),
+        "-loop", "1", "-framerate", "30", "-i", str(cam_mask),
         "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
         *x264(proxy), "-c:a", "aac", "-b:a", "192k", "-shortest",
-        "-movflags", "+faststart", str(out),
+        "-r", "30", *bound(screen, camera), "-movflags", "+faststart", str(out),
     ])
 
 
@@ -132,10 +148,11 @@ def render_short_dual(face: Path, screen: Path, out: Path, bg: str, proxy: bool,
     run([
         "ffmpeg", "-y",
         "-i", str(face), "-i", str(screen),
-        "-loop", "1", "-i", str(face_mask), "-loop", "1", "-i", str(scr_mask),
+        "-loop", "1", "-framerate", "30", "-i", str(face_mask),
+        "-loop", "1", "-framerate", "30", "-i", str(scr_mask),
         "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
         *x264(proxy), "-c:a", "aac", "-b:a", "192k", "-shortest",
-        "-movflags", "+faststart", str(out),
+        "-r", "30", *bound(face, screen), "-movflags", "+faststart", str(out),
     ])
 
 
