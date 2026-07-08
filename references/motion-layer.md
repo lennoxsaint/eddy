@@ -18,21 +18,39 @@ whole video, so it stays interactive without becoming bloated.
 
 Everything else stays clean webcam + screen recording. If there's no clear win, don't add motion.
 
-## Engine
+## Engine — HyperFrames is the default (overrides the old minimal-type mandate)
 
-- **Default — premium type in ffmpeg: `scripts/motion_type.py`.** Bold sparse type, one accent color,
-  fade in/out — the mandated minimal aesthetic, done deterministically in ffmpeg. No headless browser,
-  so **zero machine-panic risk** and fast to iterate (LOOK at a frame, adjust the beats, re-render in
-  seconds). This is the go-to for hook benefit-beats and Shorts headlines. Rule: complement the screen
-  (add the benefit framing), never duplicate what's already visible (e.g. don't re-list models the
-  on-screen picker already shows), and never cover the picker/proof or the camera PiP.
-- **Richer option — HTML → video: HyperFrames.** Invoke via its CLI (`npx hyperframes …`). Higher
-  ceiling (real HTML layouts) but heavier + uses a headless Chromium (keep GPU off, never run its
-  capture during an encode). Use only when type-in-ffmpeg genuinely isn't enough. Render proxies first.
-- **Karaoke: `embedded-captions` `anchor` identity** — the clean, calm, verbatim default. This is
-  the fix for Tariq's "transcription highlighting is a bit too chaotic" complaint. Never a per-word
-  storm.
-- **Base composite: V1 ffmpeg** (`scripts/composite_render.py`) — corners, PiP, Shorts stack.
+**The previous "minimal premium typography in ffmpeg" mandate is retired.** Motion is now
+**HyperFrames by default**, and it is **iconography- and image-forward, not text**. The graphics
+should be a **visual representation of the words being spoken** — icons, screenshots, diagrams,
+receipts, product chrome — with text as a supporting label at most, never the lead.
+
+- **Default engine — HyperFrames (`scripts/motion_render.py`).** HTML → video via the
+  `~/eddy-v2` runner, in the **`threadify-fc` identity, restrained profile** (palette + Avenir/Space
+  Mono type + brand atoms; allow `receipt_print`, `ledger`, `card_handoff`, section-intro cards,
+  icon/image concept slides; **disallow** the FWED mascot, the fire register, `type_slam`, and the
+  `cursor_press` CTA — this is a tutorial, not a launch video). Every off-screen reference the
+  narration makes ("the post showed…", "the email said…") gets an on-brand icon/image, not a caption.
+  - **Machine safety (hard rule):** headless Chromium, GPU off; **never run a HyperFrames capture
+    concurrently with an ffmpeg encode**; proxy (`draft`) in the self-heal loop, `hd` once at the end.
+- **Fallback only — `scripts/motion_type.py`.** The old ffmpeg type engine. Use ONLY when HyperFrames
+  is unavailable/erroring or for a trivial one-word label where a full HTML render is overkill. It is
+  no longer the default and no longer the aesthetic target.
+- **Karaoke: `embedded-captions` `anchor` identity** (long) / `scripts/karaoke_ass.py` (Shorts split
+  stack) — the clean, calm, verbatim look. Never a per-word storm (Tariq's critique).
+- **Base composite: V1 ffmpeg** (`scripts/composite_render.py`) — full-frame screen, flush rounded
+  PiP, Shorts stack. HyperFrames overlays composite ON TOP of this base.
+
+## Iconography, not text (the rule that changed)
+
+- Lead with a **visual** of what's being said. A concept about "any model" → model logos/chips as a
+  ledger; "they stole my post" → the actual post/receipt; "runs locally & free" → a laptop + lock
+  icon. Text is a short label under the visual, if at all.
+- **Show real proof when it exists.** If `source/` (or the screen capture) contains the referenced
+  screenshot, composite the REAL thing. Only recreate on-brand (`receipt_print`) when no real asset
+  exists.
+- Never cover the picker/proof on the screen or the camera PiP. Complement the screen; don't
+  duplicate what it already shows.
 
 ## Layout menu (alternate with camera cuts)
 
@@ -46,6 +64,16 @@ cuts"). Choose per moment:
 
 Cut between these on natural beats. Personal/vulnerability moments stay **speaker full** — no
 animation competing with the emotion.
+
+**On the Long, apply the menu actively (this is now enforced, not optional):**
+- A **section-intro card** at every section boundary in `edit-plan.md`.
+- A **HyperFrames concept slide** (icon/image-led) for each major framework, number, comparison, or
+  list the narration lands on — aim for one every ~60-90s of body, not a flat screen+PiP for minutes.
+- **Alternate** full-animation / animation+speaker-PiP / screen / speaker-full so it never sits on
+  one template. These varied HTML layouts are the visual proof the Long is *produced*, not raw.
+
+**On Shorts:** whenever the narration references something not on the screen panel, drop an on-brand
+HyperFrames icon/image overlay for that beat (top or mid, clear of the caption strip and the face).
 
 ## Render speed (proxy-first)
 

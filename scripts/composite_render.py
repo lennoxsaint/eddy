@@ -6,7 +6,7 @@ it calls this. Rounded corners are done HERE (Descript's web app can't), via the
 a Pillow rounded-rectangle alpha mask -> ffmpeg alphamerge -> overlay.
 
 Modes:
-  long   : screen recording (rounded, inset) as base + webcam PiP (rounded) bottom-right. 16:9.
+  long   : screen recording (rounded, full-frame fill) as base + webcam PiP (rounded) flush bottom-right. 16:9.
   short  : dual-source Shorts stack (face square top / gap for captions / screen panel bottom). 9:16.
   th     : talking-head fill (camera only), captions burned separately. 9:16 or 16:9.
 
@@ -32,9 +32,9 @@ from PIL import Image, ImageDraw  # Pillow — same dep V1 uses for masks/captio
 LONG_W, LONG_H = 1920, 1080
 CAM_SIZE = 260
 CAM_RADIUS = 30
-SCREEN_RADIUS_LONG = 30
-SCREEN_INSET = 24          # inset so the screen's rounded corners are visible (SOP steps 1-2)
-CAM_EDGE_GAP = 32          # gap from canvas edge for the PiP
+SCREEN_RADIUS_LONG = 26     # slight rounding on the full-frame screen (corners reveal bg)
+SCREEN_INSET = 0           # screen FILLS the frame — no border (was 24; caused a black margin)
+CAM_EDGE_GAP = 0           # PiP flush to the bottom-right corner (was 32; caused a gap)
 
 # Shorts (1080x1920)
 S_W, S_H = 1080, 1920
@@ -101,8 +101,8 @@ def render_long(screen: Path, camera: Path, out: Path, bg: str, proxy: bool, wor
 
     fc = (
         f"color=c={bg}:s={W}x{H},format=rgba[bg];"
-        f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=decrease,"
-        f"pad={sw}:{sh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=rgba[scr0];"
+        f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh},"
+        f"setsar=1,fps=30,format=rgba[scr0];"
         f"[2:v]format=gray,scale={sw}:{sh}[scrm];[scr0][scrm]alphamerge[scr];"
         f"[bg][scr]overlay={inset}:{inset}:shortest=1:format=auto[base];"
         f"[1:v]scale={cam}:{cam}:force_original_aspect_ratio=increase,crop={cam}:{cam},"
@@ -139,8 +139,8 @@ def render_short_dual(face: Path, screen: Path, out: Path, bg: str, proxy: bool,
         f"setsar=1,fps=30,format=rgba[f0];"
         f"[2:v]format=gray,scale={face_sz}:{face_sz}[fm];[f0][fm]alphamerge[face];"
         f"[bg][face]overlay=0:0:shortest=1:format=auto[b1];"
-        f"[1:v]scale={W}:{sp_h}:force_original_aspect_ratio=decrease,"
-        f"pad={W}:{sp_h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=rgba[s0];"
+        f"[1:v]scale={W}:{sp_h}:force_original_aspect_ratio=increase,crop={W}:{sp_h},"
+        f"setsar=1,fps=30,format=rgba[s0];"
         f"[3:v]format=gray,scale={W}:{sp_h}[sm];[s0][sm]alphamerge[scr];"
         f"[b1][scr]overlay=0:{sp_y}:format=auto,format=yuv420p[v]"
     )

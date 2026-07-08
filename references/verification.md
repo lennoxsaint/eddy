@@ -7,15 +7,27 @@ plateaued and stalled.
 
 ## Deterministic gates (`scripts/verify.py`)
 
+Run the gate suite on **every emitted file — each long AND each Short**, not just the primary long.
+
 - **Audio parity** — Studio Sound output duration within ±1% or 1s of the audio it was given
   (Descript must not have changed timing). Fail → re-run or fall back per the script.
 - **Gap band** — post-edit median/P95/max gaps within `layout-constants.md` band; no gap over hard
   max (0.28s) outside sacred spans.
+- **Max internal silence** (`max_internal_silence_ok`) — `silencedetect` on the **rendered** file:
+  no silence longer than `--max-deadair` (1.5s). This is the deterministic catch for the dead-air
+  that word-only tightening missed (the 16s / 4s survivors). Runs on the source-of-truth audio, not
+  the segment receipt.
+- **Speech ratio** (`speech_ratio_ok`) — 1 − (total silence / duration) ≥ floor; a low ratio means
+  dead air slipped through.
+- **Retake scan** (`retake_repeat_scan`) — **re-transcribe the final render** (`transcribe.py` on the
+  output) and pass its words as `--final-words`; flags adjacent duplicate 4-gram phrases (a leftover
+  retake said twice). If it fires, review each flag — real retake → re-cut; genuine repetition →
+  override. This is the machine half of the retake sweep; do it for **Shorts too**.
 - **Beat completeness** — every `keep` beat id from `edit-plan.md` is present in the final cut.
   Losing one is a hard fail.
 - **Protected count** — `protected_count` (sacred spans) preserved end-to-end.
-- **Layout asserts** — PiP present at the right position/radius; corners applied; Shorts stack
-  geometry correct.
+- **Layout asserts** — PiP flush to the bottom-right corner at the right size/radius; screen fills
+  the frame (no black bars) with slight rounded corners; Shorts stack geometry correct.
 - **Caption sync** — cue timings align to word timings; no cue overlaps the next by >1 frame.
 - **Loudness** — final mix hits the loudness target; no clipping.
 
@@ -23,8 +35,11 @@ plateaued and stalled.
 
 - **Hook self-check** — score 0-60s against the `hook-doctrine.md` rubric. Below threshold →
   re-cut the hook.
-- **Retake sweep** — scan the final transcript: any repeated-phrase pair still present? Did you
-  keep the last take?
+- **Retake sweep (long + every Short)** — the `retake_repeat_scan` gate flags duplicates; you make
+  the call. Because Shorts are clipped from the edited body, a retake boundary can land inside a
+  Short even when the long is clean — so **re-transcribe each Short** and sweep it independently. If
+  a retake survived, surgically remove it from that Short's source span, re-splice, re-caption. Keep
+  the last take.
 - **Cohesion pass** — "watch" the edited transcript+timings start to finish. Jumpcuts, dangling
   references ("as I said earlier" when that beat was cut), lost context? Fix.
 - **Gutting check** — did any sacred or grounded beat get cut or compressed? Restore it.

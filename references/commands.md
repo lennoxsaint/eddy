@@ -20,14 +20,21 @@ Output: `{language, duration, words:[{word,start,end,score}], segments:[...]}`.
 
 ```
 python3 scripts/splice.py --in <source>.mp4 --words transcript.json --cutlist cutlist.json \
-  --out edited.mp4 [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.06] [--scale 1920x1080]
+  --out edited.mp4 [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.012] [--silence-db -30] \
+  [--scale 1920x1080] [--segments prior.segments.json]
 ```
 `cutlist.json`: `{"keep":[[s,e],...], "sacred":[[s,e],...], "gap_tighten":{"threshold":0.2,"target":0.1}}`.
 Writes `edited.segments.json` (receipt: exact sub-segments used).
-`--scale WxH` downscales each cut segment during the splice (aspect-preserving, padded) — use it to
-cut a **4K screen track directly at 1080p** so the encode is 1080p not 4K (the composite scales the
-screen to 1080p anyway; no quality lost, far lighter/safer encode). Run the same cut list on camera
-and screen so the deterministic segments stay in sync.
+**Dead air** is removed via ffmpeg `silencedetect` (real audio energy) as well as inter-word gaps, so
+a long silence with NO transcribed words is still tightened (fixes the survivors). `--silence-db` is
+the noise floor. `--xfade` (~12ms) is a length-preserving de-click fade at each join (kills the cut
+click without desyncing audio from the frame-select'd video).
+`--scale WxH` downscales each cut segment during the splice — use it to cut a **4K screen track
+directly at 1080p** (lighter/safer encode; the composite scales to 1080p anyway).
+**Co-splicing a screen track:** splice the **camera first** (it has audio → it owns the
+silence-driven cut and writes `.segments.json`), then splice the screen with
+`--segments <camera>.segments.json` so it reuses the identical sub-segments and stays frame-synced
+(the screen has no audio to silencedetect, so it must NOT recompute).
 
 ## 3. Descript Studio Sound (audio only)
 
@@ -56,38 +63,56 @@ Karaoke is NOT burned here — add it with `embedded-captions` `anchor`.
 
 ```
 python3 scripts/verify.py --final long.mp4 [--segments edited.segments.json] [--plan edit-plan.json] \
-  [--source-audio source.wav] [--expect-w 1920] [--expect-h 1080]
+  [--source-audio source.wav] [--expect-w 1920] [--expect-h 1080] \
+  [--final-words final.words.json] [--max-deadair 1.5] [--min-speech-ratio 0.45] [--silence-db -30]
 ```
-Prints a JSON verdict `{pass, gates:[...]}`. Exit 1 = a gate failed. Model rubrics
-(hook/cohesion/gutting) are judged separately by you.
+Prints a JSON verdict `{pass, gates:[...]}`. Exit 1 = a gate failed. New gates:
+`max_internal_silence_ok` (silencedetect the rendered file — catches dead air a cut missed),
+`speech_ratio_ok`, and `retake_repeat_scan` (needs `--final-words`: **re-transcribe the final render**
+with `transcribe.py`, pass its words here; flags adjacent duplicate phrases = leftover retakes).
+**Run this on every long AND every Short.** Model rubrics (hook/cohesion/gutting) are judged by you.
 
 ## 6. Karaoke (Shorts caption strip)
 
 ```
 python3 scripts/karaoke_ass.py --transcript short.words.json --out short.ass \
-  --play-w 1080 --play-h 1920 --y 1155 --font-size 52 --max-words 4 --uppercase \
+  --play-w 1080 --play-h 1920 --y 1155 --font-size 68 --max-words 4 --uppercase \
   --burn --in short.mp4 --video-out short_cap.mp4
 ```
 Self-contained per-word karaoke (cyan current word / white spoken / dim upcoming, `layout-constants.md`
 style). `--transcript` = word timings of the **edited** short (re-transcribe the composited short first,
 because splicing shifts word times). Position `--y` in the Shorts caption strip (1080–1230 → center 1155).
 
-## 7. Premium type motion (hook beats, Shorts headlines)
+## 7. HyperFrames motion — the DEFAULT engine (iconography-forward, threadify-fc)
+
+```
+# render an on-brand overlay AND composite it onto a base (keyed alpha; base continues after):
+python3 scripts/motion_render.py --run-dir work/mo-hook --hook "Codex with any model — free" \
+  --out work/mo-hook/overlay.mp4 --duration 60 \
+  --composite-over work/long_composite.mp4 --composite-out work/long_motion.mp4
+# overlay only (composite later):        add --portrait for a 1080x1920 Short card
+python3 scripts/motion_render.py --run-dir work/mo1 --hook "..." --out overlay.mp4 [--portrait] [--duration N]
+# GPU-free dry run to validate mechanics: add --fake
+```
+Reuses eddy-v2's proven scaffolder + runner (`~/eddy-v2`), threadify-fc identity, **restrained
+profile** (see `motion-layer.md`). Output is a black-bg MP4 keyed to alpha, composited over the base.
+- **Machine safety (hard rule):** the real render drives a headless Chromium via `npx hyperframes`.
+  **Never run it during an ffmpeg encode** — render motion first, composite after. Validate with
+  `--fake` first (zero GPU). Proxy in the loop; only the final pass is full-res.
+- Feed the hook/beat text that represents the **spoken words as a visual** (icon/image-led), never a
+  restated caption. Never cover the on-screen picker/proof or the camera PiP.
+
+## 7b. ffmpeg type motion — FALLBACK ONLY (`motion_type.py`)
 
 ```
 python3 scripts/motion_type.py --in in.mp4 --out out.mp4 --beats beats.json \
   --font assets/fonts/Montserrat.ttf [--fade 0.25] [--audio copy|reencode]
 ```
-`beats.json`: `[{"text","start","end","size","color":"cyan|white|0xRRGGBB","x","y","align":"l|c",
-"kicker"?,"kicker_size"?,"kicker_color"?}]`. Bold sparse type, ONE accent color (cyan `0x4AA3FF`),
-fade in/out, a few words at a time — the goal-prompt's motion aesthetic in pure ffmpeg (no headless
-browser, no panic risk). Placement rules: never cover the picker/proof or the camera PiP; on the long,
-bottom-left (`x≈70, y≈900`) clears the bottom-right PiP; on Shorts, a top lockup (`align:c, y≈112`)
-sits over the wall above the head. Don't duplicate what's already on screen — add the benefit framing.
-This is the machine-safe default; HyperFrames (below) is the richer-but-risky HTML option.
+The old flat-type engine. Use ONLY when HyperFrames is unavailable/erroring, or for a trivial
+one-word label where a full HTML render is overkill. No longer the default or the aesthetic target.
+`beats.json`: `[{"text","start","end","size","color":"cyan|white|0xRRGGBB","x","y","align":"l|c",...}]`.
 
-## Motion + long-form captions (existing skills, via CLI)
+## Long-form captions (existing skill, via CLI)
 
-- HTML motion (hook, section cards, concept slides): `npx hyperframes …` (see the `hyperframes` skill).
 - Talking-head long-form karaoke: `embedded-captions` `anchor` identity (matts the person). Does NOT fit
   a screen-share composite or the Shorts split-stack — use `scripts/karaoke_ass.py` for those.

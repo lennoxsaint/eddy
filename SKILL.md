@@ -2,11 +2,11 @@
 name: eddy
 description: >-
   Edit raw footage into a finished, ship-ready YouTube long (16:9 1080p) plus 3-5 Shorts and
-  1-2 alternate hook cold-opens — one shot, no review needed. Use when the user says "edit
+  3 full hook variants (shared body) — one shot, no review needed. Use when the user says "edit
   this", "/eddy", "edit this video", or attaches a raw webcam + screen recording to turn into
   a finished upload. The invoking model supplies all editorial taste; frozen helpers own audio
-  DSP and pixel geometry: real Descript Studio Sound (audio only), rounded-corner webcam PiP,
-  clean karaoke, HTML motion on the hook + section cards. Do NOT use for captioning
+  DSP and pixel geometry: real Descript Studio Sound (audio only), full-frame screen + flush
+  rounded webcam PiP, clean karaoke, HyperFrames iconography motion. Do NOT use for captioning
   already-edited footage (use embedded-captions), faceless/no-camera explainers (use
   faceless-explainer), or short standalone motion graphics (use motion-graphics). Never
   over-cuts, never overdubs.
@@ -39,11 +39,15 @@ video works. Spend disproportionate effort there. Everything after the hook is c
 - Final long plays as a coherent story; **every unique substantive beat survives** (see
   `references/retention-policy.md`). It was NOT gutted.
 - Real Descript Studio Sound applied; audio parity passes.
-- Rounded-corner webcam PiP over screen recording; clean, non-chaotic karaoke.
-- Hook delivers the title/thumbnail promise; 1-2 alternate cold-opens exported.
-- 3-5 Shorts, each a standalone moment with its own hook + karaoke.
-- All deterministic gates green (`references/verification.md`); a `spot-check.md` list of any
-  cut you were unsure about is written.
+- **Screen fills the frame** (no black bars) with slight rounded corners; webcam PiP **flush** to the
+  bottom-right corner, rounded. No cut clicks (de-clicked joins). No surviving dead air or retakes.
+- **Three full longs sharing one body edit**, each with a **self-contained, proof-carrying hook**
+  (the referenced post/receipt is shown on screen, not just named).
+- Motion is **HyperFrames, iconography-forward** (threadify-fc restrained): hook + section cards +
+  concept slides on the Long; icon/image overlays on Shorts for off-screen references.
+- 3-5 Shorts, each a standalone moment with its own hook + **large** clean karaoke; retake-swept.
+- All deterministic gates green (`references/verification.md`) on **every** long and Short; a
+  `spot-check.md` list of any cut you were unsure about is written.
 
 ## Inputs contract
 
@@ -73,27 +77,33 @@ Run these in order. Load the referenced file before each stage that names one. T
    timestamped **beat map**. Classify every beat `keep | duplicate | tangent | retake-group`.
    Mark sacred zones and the last take of each retake group.
    (`references/retention-policy.md`)
-5. **HOOK HUNT (disproportionate budget).** Find the strongest 0-30s opener and the 30-60s
-   preview bridge that pays off the packaging target. Draft → score against the rubric →
-   re-cut the hook specifically until it clears threshold. Emit the main hook + 1-2 alternate
-   cold-opens. (`references/hook-doctrine.md`)
-6. **Body edit.** Turn the beat map into a cut list and run `scripts/splice.py`: remove retakes
-   (last-take bias), tighten gaps >0.2s to 0.1s (sacred pauses exempt), clarity MEDIUM. Preserve
-   every unique beat + every sacred zone. Honor `--target-min` if given.
-7. **Audio.** `scripts/descript_studio_sound.py` — extract WAV → Descript Studio Sound (default
-   100%) → parity check → mux back. Never touches timing or content.
-8. **Interactive motion layer (scoped).** HyperFrames for: the hook animation (first 60s),
-   section-intro / chapter cards, and a handful of concept slides YOU choose. Alternate layouts
-   with camera cuts. Rest of the video stays clean webcam+screen.
-   (`references/motion-layer.md`)
-9. **Composite.** `scripts/composite_render.py` — screen base + rounded-corner webcam PiP;
-   burn clean karaoke via `embedded-captions` `anchor`. (`references/layout-constants.md`)
-10. **Shorts.** Pick 3-5 standalone moments → Shorts stack, each with its own hook + karaoke.
+5. **HOOK HUNT (disproportionate budget).** Find the **3 strongest distinct angles** the footage
+   supports. For each, cut a self-contained 0-30s opener + 30-60s bridge that pays off the packaging
+   target AND **shows its proof on screen** (real screenshot from `source/` if present, else an
+   on-brand HyperFrames recreation). Draft → score each against the rubric → re-cut until it clears.
+   The three share one body (step 6) and differ only in the opening. (`references/hook-doctrine.md`)
+6. **Body edit (one shared body).** Turn the beat map into a cut list and run `scripts/splice.py`:
+   remove retakes (last-take bias), remove dead air via `silencedetect` (not just word gaps), tighten
+   gaps >0.2s to 0.1s (sacred exempt), clarity MEDIUM. Co-splice the screen with `--segments` off the
+   camera's receipt so they stay synced. Preserve every unique beat + sacred zone. Honor `--target-min`.
+7. **Audio.** `scripts/descript_studio_sound.py` — Studio Sound (default 100%) → parity → mux back.
+   Never touches timing/content. If a full-length Studio-Sound master already exists, re-cut from it.
+8. **Motion layer — HyperFrames by default, iconography-forward.** `scripts/motion_render.py` in the
+   threadify-fc restrained profile: hook animation, a section-intro card per section, concept slides
+   (icon/image-led) for the key frameworks/numbers, and Shorts overlays for off-screen references.
+   `motion_type.py` is a fallback only. **Machine safety: no HyperFrames capture during an ffmpeg
+   encode; proxy first.** (`references/motion-layer.md`)
+9. **Composite.** `scripts/composite_render.py` — full-frame screen base + flush rounded webcam PiP;
+   HyperFrames overlays on top; karaoke via `embedded-captions` `anchor` (long) /
+   `karaoke_ass.py` (Shorts). (`references/layout-constants.md`)
+10. **Shorts.** Pick 3-5 standalone moments → Shorts stack, each with its own hook, **large** karaoke,
+    and icon/image overlays for anything the narration references off-screen. Re-transcribe each Short
+    and sweep for leftover retakes.
 11. **Render.** Low-res **proxy** during the loop; full-res **once** at the end (proxy-first).
-12. **Verify → self-heal (≤3).** Run `scripts/verify.py` + the model rubrics. On any fail, redo
-    the offending stage up to **3 times**, then ship the best attempt and flag what's unresolved.
-    (`references/verification.md`)
-13. **Output + receipts.** Write `final/` (long, cold-opens, Shorts), `edit-plan.md`,
+12. **Verify → self-heal (≤3).** Run `scripts/verify.py` (incl. the silence + retake gates) on **every
+    long and Short** + the model rubrics. On any fail, redo the offending stage up to **3 times**, then
+    ship the best attempt and flag what's unresolved. (`references/verification.md`)
+13. **Output + receipts.** Write `final/` (3 longs `long-<angle>.mp4` + Shorts), `edit-plan.md`,
     `spot-check.md`, and log the run through the Second Brain gateway.
 
 ## Hard constraints (never violate)

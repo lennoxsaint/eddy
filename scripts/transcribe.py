@@ -111,7 +111,11 @@ def main() -> int:
         return 3
 
     out.write_text(json.dumps(data, indent=1))
-    print(json.dumps({"event": "transcribed", "words": len(data.get("words", [])),
+    words = data.get("words", [])
+    # low-confidence words are retake / mumble candidates — surface the count for the beat map.
+    low_conf = sum(1 for w in words if w.get("score", 1.0) < 0.5)
+    print(json.dumps({"event": "transcribed", "words": len(words),
+                      "low_confidence_words": low_conf,
                       "duration": data.get("duration"), "out": str(out)}))
     return 0
 

@@ -6,8 +6,12 @@ already approved.
 
 ## YouTube long — 1920×1080
 
-- Screen recording is the **base layer** (padded/fit to 1920×1080, black bars if needed, `setsar=1`).
-- Webcam **PiP** bottom-right: **260×260**, corner **radius 30**, **margin 0** from the edges.
+- Screen recording is the **base layer** and **FILLS the frame** — cover-scale + center-crop
+  (`force_original_aspect_ratio=increase,crop=1920:1080`), **never** `decrease`+`pad` (that letterboxes
+  with black bars). `SCREEN_INSET = 0` (no border) and a **slight rounded corner** (`radius 26`) whose
+  arcs reveal the background; `setsar=1`.
+- Webcam **PiP** bottom-right: **260×260**, corner **radius 30**, **flush to the corner**
+  (`CAM_EDGE_GAP = 0` — no gap on the right or bottom edge).
   - At 1080p: `cam_x = 1920 - 260 - 0 = 1660`, `cam_y = 1080 - 260 - 0 = 820`.
   - Rounded corners = PIL rounded-rectangle **alpha mask** → `alphamerge` → `overlay` (V1 method):
     `[cam_scaled][mask]alphamerge[cam]; [screen][cam]overlay=1660:820:format=auto`.
@@ -20,7 +24,8 @@ already approved.
 - Canvas `W,H = 1080,1920`, background `0x0b0b0b`.
 - **Face** square: `1080×1080` at `(0, 0)`, radius **30**.
 - **Caption** strip: `y=1080`, height **150**.
-- **Screen/proof** panel: `1080×608` at `(0, 1230)`, radius **28**.
+- **Screen/proof** panel: `1080×608` at `(0, 1230)`, radius **28**, cover-scale + crop to fill (no
+  black bars — same `increase,crop` rule as the long).
 - Talking-head-only Short: fill 9:16 with the head, captions at `y=1320`.
 
 ## Karaoke captions (style reference)
@@ -32,7 +37,8 @@ Rendered by `embedded-captions` `anchor` (clean, non-chaotic). Match this style:
 - Already-spoken words: bright white `RGBA(245,250,255,255)`.
 - Future words: dimmed `RGBA(132,145,160,125)`.
 - Dark navy stroke `RGBA(1,10,22,230)`; +120ms tail after the last word.
-- Font ~58px (50px fallback when a cue wraps).
+- Font **~68px** on Shorts (`karaoke_ass.py --font-size` default; bumped from 52 for mobile
+  legibility); 58px fallback when a cue wraps.
 - **One cue at a time — never a chaotic per-word storm.** (Tariq's explicit critique.)
 
 ## Cut-safety handles (seconds) — from the approved standard

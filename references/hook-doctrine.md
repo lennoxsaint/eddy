@@ -35,14 +35,23 @@ Score the drafted 0-60s. Re-cut until it clears threshold (redo up to 3, per ver
 | Curiosity gap | Is there an open loop the viewer needs closed? | must pass |
 | No dead air | Zero slow intro, filler, or setup before the promise lands? | must pass |
 | Payoff visible | Does the bridge promise concrete upcoming reveals? | must pass |
+| **Proof on screen** | Is every concrete artifact the hook NAMES (a post, receipt, demo, screenshot, number) actually **shown on screen within 0-60s** — not just spoken? A hook that says "look what this post did" and never shows the post fails. Use the real screenshot if present in `source/`; else render it on-brand (HyperFrames `receipt_print`). | **must pass** |
 | Visuals | Is the first-60 motion (see `motion-layer.md`) carrying the promise? | should pass |
 
-## Step 4 — Alternate cold-opens (A/B)
+## Step 4 — Three full versions, one per hook (A/B/C)
 
-The main cut uses the best hook. **Also export 1-2 alternate opening cuts** (different first beat /
-different framing of the same promise) as separate files, for YouTube Test & Compare. Do not
-re-render the whole video — just the alternate opening segments. Name them
-`final/cold-open-A.mp4`, `cold-open-B.mp4`.
+Output **three complete longs that share one body edit** and differ only in a **self-contained hook
+opening**. This replaces the old "1 main + cold-open clips" — each hook is its own whole video so
+Test & Compare measures a real like-for-like swap.
+
+- Pick the 3 strongest distinct angles the footage supports (e.g. `theft`, `free-any-model`,
+  `mechanism`). Each hook must independently clear the Step 3 rubric — including **Proof on screen**.
+- The body edit is rendered **once** and reused; only the 0-60s opening changes. Name them by angle:
+  `final/long-<angle>.mp4` (e.g. `long-theft.mp4`, `long-freemodel.mp4`, `long-mechanism.mp4`).
+- A hook is **self-contained**: it carries its own proof and needs no context from the other two. Do
+  not defer the proof to "later in the video" — show it inside the hook.
+- Never overdub to fix a misspoken hook line. If the recorded words are factually off (wrong
+  name/pronoun), pick a cleaner take or don't lead on that phrase, and log it in `spot-check.md`.
 
 ## Step 5 — Hook visuals
 

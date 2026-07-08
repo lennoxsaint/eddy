@@ -100,7 +100,7 @@ def main() -> int:
     ap.add_argument("--play-w", type=int, default=1080)
     ap.add_argument("--play-h", type=int, default=1920)
     ap.add_argument("--y", type=int, default=1155)
-    ap.add_argument("--font-size", type=int, default=52)
+    ap.add_argument("--font-size", type=int, default=68)  # bumped from 52 — mobile Shorts legibility
     ap.add_argument("--max-words", type=int, default=4)
     ap.add_argument("--uppercase", action="store_true")
     ap.add_argument("--burn", action="store_true")
