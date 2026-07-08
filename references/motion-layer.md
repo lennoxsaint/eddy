@@ -20,8 +20,15 @@ Everything else stays clean webcam + screen recording. If there's no clear win, 
 
 ## Engine
 
-- **HTML → video: HyperFrames.** Invoke via its CLI (`npx hyperframes …`) so it works under Claude
-  *or* Codex. See the `hyperframes` skill for authoring; render low-res proxies first.
+- **Default — premium type in ffmpeg: `scripts/motion_type.py`.** Bold sparse type, one accent color,
+  fade in/out — the mandated minimal aesthetic, done deterministically in ffmpeg. No headless browser,
+  so **zero machine-panic risk** and fast to iterate (LOOK at a frame, adjust the beats, re-render in
+  seconds). This is the go-to for hook benefit-beats and Shorts headlines. Rule: complement the screen
+  (add the benefit framing), never duplicate what's already visible (e.g. don't re-list models the
+  on-screen picker already shows), and never cover the picker/proof or the camera PiP.
+- **Richer option — HTML → video: HyperFrames.** Invoke via its CLI (`npx hyperframes …`). Higher
+  ceiling (real HTML layouts) but heavier + uses a headless Chromium (keep GPU off, never run its
+  capture during an encode). Use only when type-in-ffmpeg genuinely isn't enough. Render proxies first.
 - **Karaoke: `embedded-captions` `anchor` identity** — the clean, calm, verbatim default. This is
   the fix for Tariq's "transcription highlighting is a bit too chaotic" complaint. Never a per-word
   storm.

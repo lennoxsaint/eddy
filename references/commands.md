@@ -72,6 +72,20 @@ Self-contained per-word karaoke (cyan current word / white spoken / dim upcoming
 style). `--transcript` = word timings of the **edited** short (re-transcribe the composited short first,
 because splicing shifts word times). Position `--y` in the Shorts caption strip (1080–1230 → center 1155).
 
+## 7. Premium type motion (hook beats, Shorts headlines)
+
+```
+python3 scripts/motion_type.py --in in.mp4 --out out.mp4 --beats beats.json \
+  --font assets/fonts/Montserrat.ttf [--fade 0.25] [--audio copy|reencode]
+```
+`beats.json`: `[{"text","start","end","size","color":"cyan|white|0xRRGGBB","x","y","align":"l|c",
+"kicker"?,"kicker_size"?,"kicker_color"?}]`. Bold sparse type, ONE accent color (cyan `0x4AA3FF`),
+fade in/out, a few words at a time — the goal-prompt's motion aesthetic in pure ffmpeg (no headless
+browser, no panic risk). Placement rules: never cover the picker/proof or the camera PiP; on the long,
+bottom-left (`x≈70, y≈900`) clears the bottom-right PiP; on Shorts, a top lockup (`align:c, y≈112`)
+sits over the wall above the head. Don't duplicate what's already on screen — add the benefit framing.
+This is the machine-safe default; HyperFrames (below) is the richer-but-risky HTML option.
+
 ## Motion + long-form captions (existing skills, via CLI)
 
 - HTML motion (hook, section cards, concept slides): `npx hyperframes …` (see the `hyperframes` skill).
