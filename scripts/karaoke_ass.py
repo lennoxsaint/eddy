@@ -66,26 +66,30 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: kar,Arial,{fs},{WHITE},{WHITE},{STROKE},&H64000000,-1,0,0,0,100,100,0,0,1,3,0,5,60,60,0,1
 
 [Events]
-Format: Layer, Start, End, Style, MarginL, MarginR, MarginV, Effect, Text
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+    # flatten so each word-state ends exactly when the NEXT word starts — never linger into the next
+    # cue (overlapping Dialogues at the same \pos double-render and look garbled).
+    cue_list = cues(words, max_words)
+    flat = [(ci, i, cw) for ci, cue in enumerate(cue_list) for i, cw in enumerate(cue)]
     lines = []
-    for cue in cues(words, max_words):
-        for i, cw in enumerate(cue):
-            parts = []
-            for j, ww in enumerate(cue):
-                txt = esc(ww["word"])
-                if upper:
-                    txt = txt.upper()
-                if j < i:
-                    parts.append(f"{{\\c{WHITE}}}{txt}")
-                elif j == i:
-                    parts.append(f"{{\\c{CYAN}\\b1}}{txt}{{\\b0}}")
-                else:
-                    parts.append(f"{{\\c{DIM}}}{txt}")
-            text = "{\\pos(%d,%d)\\an5}" % (w // 2, y) + " ".join(parts)
-            start = cw["start"]
-            end = cue[i + 1]["start"] if i + 1 < len(cue) else cw["end"] + 0.12
-            lines.append(f"Dialogue: 0,{ts(start)},{ts(end)},kar,,0,0,0,,{text}")
+    for gi, (ci, i, cw) in enumerate(flat):
+        cue = cue_list[ci]
+        parts = []
+        for j, ww in enumerate(cue):
+            txt = esc(ww["word"])
+            if upper:
+                txt = txt.upper()
+            if j < i:
+                parts.append(f"{{\\c{WHITE}}}{txt}")
+            elif j == i:
+                parts.append(f"{{\\c{CYAN}\\b1}}{txt}{{\\b0}}")
+            else:
+                parts.append(f"{{\\c{DIM}}}{txt}")
+        text = "{\\pos(%d,%d)\\an5}" % (w // 2, y) + " ".join(parts)
+        start = cw["start"]
+        end = flat[gi + 1][2]["start"] if gi + 1 < len(flat) else cw["end"] + 0.12
+        lines.append(f"Dialogue: 0,{ts(start)},{ts(end)},kar,,0,0,0,,{text}")
     return head + "\n".join(lines) + "\n"
 
 
@@ -104,7 +108,9 @@ def main() -> int:
     ap.add_argument("--video-out")
     args = ap.parse_args()
 
-    words = [w for w in json.load(open(args.transcript)).get("words", []) if w.get("word")]
+    # drop standalone punctuation tokens WhisperX sometimes emits (else they render as stray ","/".")
+    words = [w for w in json.load(open(args.transcript)).get("words", [])
+             if any(c.isalnum() for c in w.get("word", ""))]
     ass = build(words, args.play_w, args.play_h, args.y, args.font_size, args.max_words, args.uppercase)
     Path(args.out).write_text(ass)
     print(json.dumps({"event": "ass_written", "cues": ass.count("Dialogue:"), "out": args.out}))
