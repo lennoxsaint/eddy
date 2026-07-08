@@ -85,11 +85,11 @@ def render_long(screen: Path, camera: Path, out: Path, bg: str, proxy: bool, wor
     cam_mask = rounded_mask(work / f"cam-mask-{cam}-r{cam_r}.png", cam, cam, cam_r)
 
     fc = (
-        f"color=c={bg}:s={W}x{H}:d=1,format=rgba[bg];"
+        f"color=c={bg}:s={W}x{H},format=rgba[bg];"
         f"[0:v]scale={sw}:{sh}:force_original_aspect_ratio=decrease,"
         f"pad={sw}:{sh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=rgba[scr0];"
         f"[2:v]format=gray,scale={sw}:{sh}[scrm];[scr0][scrm]alphamerge[scr];"
-        f"[bg][scr]overlay={inset}:{inset}:format=auto[base];"
+        f"[bg][scr]overlay={inset}:{inset}:shortest=1:format=auto[base];"
         f"[1:v]scale={cam}:{cam}:force_original_aspect_ratio=increase,crop={cam}:{cam},"
         f"setsar=1,fps=30,format=rgba[cam0];"
         f"[3:v]format=gray,scale={cam}:{cam}[camm];[cam0][camm]alphamerge[cam];"
@@ -118,11 +118,11 @@ def render_short_dual(face: Path, screen: Path, out: Path, bg: str, proxy: bool,
     scr_mask = rounded_mask(work / f"sscr-mask-{W}x{sp_h}-r{scr_r}.png", W, sp_h, scr_r)
 
     fc = (
-        f"color=c={bg}:s={W}x{H}:d=1,format=rgba[bg];"
+        f"color=c={bg}:s={W}x{H},format=rgba[bg];"
         f"[0:v]scale={face_sz}:{face_sz}:force_original_aspect_ratio=increase,crop={face_sz}:{face_sz},"
         f"setsar=1,fps=30,format=rgba[f0];"
         f"[2:v]format=gray,scale={face_sz}:{face_sz}[fm];[f0][fm]alphamerge[face];"
-        f"[bg][face]overlay=0:0:format=auto[b1];"
+        f"[bg][face]overlay=0:0:shortest=1:format=auto[b1];"
         f"[1:v]scale={W}:{sp_h}:force_original_aspect_ratio=decrease,"
         f"pad={W}:{sp_h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=rgba[s0];"
         f"[3:v]format=gray,scale={W}:{sp_h}[sm];[s0][sm]alphamerge[scr];"

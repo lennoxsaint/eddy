@@ -62,7 +62,7 @@ def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[li
             gap = gap_end - gap_start
             # sacred gaps (deliberate pauses / breath) are never tightened
             mid = (gap_start + gap_end) / 2.0
-            if gap > threshold and not in_any(mid, sacred):
+            if gap > threshold + 1e-6 and not in_any(mid, sacred):
                 # close the current sub-segment at gap_start + target, then jump to gap_end
                 keep_until = gap_start + target
                 segments.append([seg_start, keep_until])
