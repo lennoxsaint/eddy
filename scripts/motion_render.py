@@ -98,6 +98,14 @@ _CSS = """
     background: linear-gradient(90deg, var(--accent,#FF0000), var(--panel-edge,#282626)); z-index:8; }
   .scene { position:absolute; inset:0; opacity:0; z-index:3; display:flex; align-items:center;
     justify-content:center; }
+  .scene.reg-lower { align-items:flex-end; }
+  /* opaque band covering the Shorts screen panel. Charcoal (NOT near-black) so the black-key that
+     makes the rest transparent doesn't erase it — #242424 sits above the colorkey threshold. */
+  .scene.reg-lower .block { background:#444444; width:100%; box-sizing:border-box;
+    min-height:700px; justify-content:center; padding:70px 70px 190px; }
+  .scene.reg-upper { align-items:flex-start; }
+  .scene.reg-upper .block { background:#444444; width:100%; box-sizing:border-box;
+    min-height:640px; justify-content:center; padding:180px 70px 70px; }
   .block { display:flex; flex-direction:column; align-items:center; gap:34px; text-align:center;
     padding:0 160px; box-sizing:border-box; max-width:100%; }
   .kicker { color:var(--accent,#FF0000); font-family:var(--mono); letter-spacing:0.26em;
@@ -159,7 +167,8 @@ def _beat_markup(i: int, b: dict) -> str:
     else:
         lbl = f'<div class="label">{esc(b.get("label",""))}</div>' if b.get("label") else ""
         inner = lbl
-    return (f'<div id="scene-{i}" class="scene"><div class="block">'
+    region = b.get("region", "center")  # center | lower | upper (place clear of face/captions on Shorts)
+    return (f'<div id="scene-{i}" class="scene reg-{region}"><div class="block">'
             f'{kicker}{rule}{inner}</div></div>')
 
 
@@ -184,10 +193,18 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None)
     w = int(brief.get("width", 1920)); h = int(brief.get("height", 1080))
     beats = brief.get("beats", [])
     dur = float(brief.get("duration") or max((float(b["start"]) + float(b.get("dur", 4.0)) for b in beats), default=6.0))
-    brand = (f'<span class="b">'
-             + (f'<img src="./{needle_rel}" alt=""/>' if needle_rel else "")
-             + 'THREADIFY</span>')
-    ring = f'<img class="ring" src="./{ring_rel}" alt="" data-layout-ignore>' if ring_rel else ""
+    # hud = persistent brand chrome + frameline + ring (good on dark motion-dominant hooks). Set
+    # "hud":"none" for overlays on a screen demo (body) so only the beat cards show — no top clutter.
+    hud = brief.get("hud", "persistent") != "none"
+    if hud:
+        brand = ('<span class="b">'
+                 + (f'<img src="./{needle_rel}" alt=""/>' if needle_rel else "")
+                 + 'THREADIFY</span>')
+        ring = f'<img class="ring" src="./{ring_rel}" alt="" data-layout-ignore>' if ring_rel else ""
+        chrome = f'<div class="chrome">{brand}<span>THREADIFY-FC</span></div><div class="frameline" data-layout-ignore></div>'
+    else:
+        ring = ""
+        chrome = ""
     scenes = "\n".join(_beat_markup(i, b) for i, b in enumerate(beats))
     return f"""<!doctype html>
 <html><head><meta charset="utf-8" />
@@ -199,8 +216,7 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None)
 <div id="stage" data-composition-id="eddy-v2" data-start="0" data-duration="{dur:.3f}" data-track-index="0" data-width="{w}" data-height="{h}">
   <div class="grain" data-layout-ignore></div>
   {ring}
-  <div class="chrome">{brand}<span>THREADIFY-FC</span></div>
-  <div class="frameline" data-layout-ignore></div>
+  {chrome}
   {scenes}
 </div>
 <script>

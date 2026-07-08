@@ -116,7 +116,8 @@ def render_long(screen: Path, camera: Path, out: Path, bg: str, proxy: bool, wor
         "-i", str(screen), "-i", str(camera),
         "-loop", "1", "-framerate", "30", "-i", str(scr_mask),
         "-loop", "1", "-framerate", "30", "-i", str(cam_mask),
-        "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
+        # audio = CAMERA (input 1) — the mic / Studio-Sound master, not the screen capture's audio.
+        "-filter_complex", fc, "-map", "[v]", "-map", "1:a?",
         *x264(proxy), "-c:a", "aac", "-b:a", "192k", "-shortest",
         "-r", "30", *bound(screen, camera), "-movflags", "+faststart", str(out),
     ])
