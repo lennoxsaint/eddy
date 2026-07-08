@@ -1,0 +1,24 @@
+# secrets — never commit
+.env
+*.key
+DESCRIPT_API_KEY*
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# run artifacts / scratch
+runs/
+*.mp4
+*.mov
+*.wav
+*.m4a
+masks/
+audio/
+caption-states/
+proxy.mp4
+final/
+
+# os
+.DS_Store
