@@ -41,11 +41,31 @@ receipts, product chrome — with text as a supporting label at most, never the 
 - **Base composite: V1 ffmpeg** (`scripts/composite_render.py`) — full-frame screen, flush rounded
   PiP, Shorts stack. HyperFrames overlays composite ON TOP of this base.
 
-## Iconography, not text (the rule that changed)
+## Body motion is a full-frame OPAQUE CUTAWAY — never a transparent text overlay on the screen
+
+The iteration-2 defect: body motion was a semi-transparent colorkey overlay riding on top of the live
+screen recording (faint red text bleeding over the repo — 1:40, 1:56). **Fixed.** On the Long body,
+motion is now a **full-frame opaque cutaway that REPLACES the screen** for its beat:
+
+- Author the beat with `"mode":"cutaway"` (or render with `--cutaway`). `scripts/motion_render.py`
+  renders it on an **opaque `#0a0a0a` threadify-fc ground** (no colorkey), with a ~150ms fade in/out,
+  as a **standalone, video-only segment**. The timeline **overlays it in place of the screen** for
+  `[start,end]` while the narration audio keeps playing underneath — screen-proof plays clean between
+  cutaways. It is NEVER colorkey-composited over the screen.
+- **Transcript-anchored:** each cutaway starts at the transcript timestamp of the words it depicts, so
+  the visual always matches what's being said (kills the "words don't match the visual" drift).
+- The transparent-overlay path still exists for **Shorts labels only** (opaque panel card + light
+  labels), not the body.
+
+## Iconography, not text (the rule that changed) — now LINT-ENFORCED
 
 - Lead with a **visual** of what's being said. A concept about "any model" → model logos/chips as a
   ledger; "they stole my post" → the actual post/receipt; "runs locally & free" → a laptop + lock
   icon. Text is a short label under the visual, if at all.
+- **Enforced by `lint_brief` in `motion_render.py`:** on a body/cutaway brief, a `flow` node or a
+  `chip` whose lead is bare text is **rejected** (non-zero exit) — supply an icon per node/chip
+  (`{"icon":"swap","text":"…"}` / `{"icon":"chip","label":"…"}`). A `stat` supporting line must be a
+  short label (≤5 words), not a sentence. The kicker may stay as a small mono label.
 - **Show real proof when it exists.** If `source/` (or the screen capture) contains the referenced
   screenshot, composite the REAL thing. Only recreate on-brand (`receipt_print`) when no real asset
   exists.
@@ -57,7 +77,8 @@ receipts, product chrome — with text as a supporting label at most, never the 
 Vary the layout; don't lock one template (Tariq: "curious how it will alternate between camera
 cuts"). Choose per moment:
 
-- **Full animation** — HTML slide fills the frame (section intros, big reveals).
+- **Full animation (opaque cutaway)** — HTML slide fills the frame and REPLACES the screen (section
+  intros, concept beats, big reveals). Opaque `#0a0a0a` ground, narration continues under it.
 - **Animation + speaker PiP** — slide with the webcam in the corner (explaining a concept).
 - **Speaker full** — just the talking head (personal / vulnerability beats — no motion here).
 - **Screen recording** — the raw demo (walkthroughs, proof).

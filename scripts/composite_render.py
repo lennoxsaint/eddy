@@ -71,7 +71,10 @@ def probe_dur(path: Path) -> float:
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
         capture_output=True, text=True).stdout.strip()
-    return float(out) if out else 0.0
+    try:
+        return float(out)          # a still image reports "N/A" (no duration) -> treat as 0.0
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def bound(*inputs: Path) -> list[str]:
@@ -123,7 +126,11 @@ def render_long(screen: Path, camera: Path, out: Path, bg: str, proxy: bool, wor
     ])
 
 
-def render_short_dual(face: Path, screen: Path, out: Path, bg: str, proxy: bool, work: Path) -> None:
+def render_short_dual(face: Path, screen: Path, out: Path, bg: str, proxy: bool, work: Path,
+                      panel_loop: bool = False) -> None:
+    """Dual Shorts stack: face square top / bottom panel. The bottom panel is `screen` — either the
+    raw screen recording OR an OPAQUE motion card (see --panel-card). Either way the panel interior
+    is opaque (never a see-through overlay); a still-image card is looped (`panel_loop`)."""
     f = scale_factor(proxy)
     W, H = int(S_W * f), int(S_H * f)
     face_sz = int(FACE_SIZE * f)
@@ -145,10 +152,13 @@ def render_short_dual(face: Path, screen: Path, out: Path, bg: str, proxy: bool,
         f"[3:v]format=gray,scale={W}:{sp_h}[sm];[s0][sm]alphamerge[scr];"
         f"[b1][scr]overlay=0:{sp_y}:format=auto,format=yuv420p[v]"
     )
+    # A still-image panel card must be looped so it spans the whole Short (face owns duration/audio).
+    panel_in = (["-loop", "1", "-framerate", "30", "-i", str(screen)] if panel_loop
+                else ["-i", str(screen)])
     out.parent.mkdir(parents=True, exist_ok=True)
     run([
         "ffmpeg", "-y",
-        "-i", str(face), "-i", str(screen),
+        "-i", str(face), *panel_in,
         "-loop", "1", "-framerate", "30", "-i", str(face_mask),
         "-loop", "1", "-framerate", "30", "-i", str(scr_mask),
         "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
@@ -185,6 +195,8 @@ def main() -> int:
     ap.add_argument("--screen")
     ap.add_argument("--camera")
     ap.add_argument("--face")
+    ap.add_argument("--panel-card", dest="panel_card",
+                    help="opaque motion card (image or mp4) for the Shorts bottom panel, replacing the screen")
     ap.add_argument("--out", required=True)
     ap.add_argument("--bg", default=BG_DEFAULT)
     ap.add_argument("--proxy", action="store_true")
@@ -203,12 +215,17 @@ def main() -> int:
                 return 2
             render_long(Path(args.screen), Path(args.camera), out, args.bg, args.proxy, work)
         elif args.mode == "short":
-            if args.face and args.screen:
+            if args.face and args.panel_card:
+                card = Path(args.panel_card)
+                is_img = card.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+                render_short_dual(Path(args.face), card, out, args.bg, args.proxy, work,
+                                  panel_loop=is_img)
+            elif args.face and args.screen:
                 render_short_dual(Path(args.face), Path(args.screen), out, args.bg, args.proxy, work)
             elif args.face:
                 render_short_th(Path(args.face), out, args.proxy)
             else:
-                print("ERROR: short mode needs --face (and optionally --screen).", file=sys.stderr)
+                print("ERROR: short mode needs --face (and optionally --screen/--panel-card).", file=sys.stderr)
                 return 2
         else:  # th
             if not args.camera:

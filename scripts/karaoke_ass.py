@@ -53,7 +53,43 @@ def ts(t: float) -> str:
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
-def build(words, w, h, y, fs, max_words, upper):
+def _line_w(text: str, fs: int, upper: bool) -> float:
+    """Conservative rendered-width estimate for Arial (over-estimates slightly so we never clip)."""
+    factor = 0.60 if upper else 0.55
+    return len(text) * fs * factor
+
+
+def fit_cue(texts: list[str], fs: int, max_w: float, upper: bool, font_min: int) -> tuple[int, int | None]:
+    """Return (font_size, break_index) so the cue fits inside `max_w` (the safe-area width).
+
+    First shrink the font (down to font_min); if a single line still overruns at the floor, wrap into
+    two balanced lines and shrink to the widest of the two. Guarantees no glyph crosses the margin.
+    """
+    joined = " ".join(texts)
+    if _line_w(joined, fs, upper) <= max_w:
+        return fs, None
+    ideal1 = int(max_w / (_line_w(joined, 1, upper) or 1))     # px that fits the whole cue on one line
+    fits_at_floor = _line_w(joined, max(font_min, ideal1), upper) <= max_w
+    if fits_at_floor or len(texts) < 2:
+        # one line: shrink to font_min if that fits; a lone unbreakable token drops BELOW the floor so
+        # no glyph ever crosses the margin (absolute no-clip beats the legibility floor for that case).
+        return (min(fs, max(font_min, ideal1)) if fits_at_floor else max(8, min(fs, ideal1))), None
+    # still too wide at the floor -> wrap into two char-balanced lines
+    best_brk, best_diff = 1, 10 ** 9
+    for brk in range(1, len(texts)):
+        diff = abs(len(" ".join(texts[:brk])) - len(" ".join(texts[brk:])))
+        if diff < best_diff:
+            best_diff, best_brk = diff, brk
+    widest = max(" ".join(texts[:best_brk]), " ".join(texts[best_brk:]), key=len)
+    ideal = int(max_w / (_line_w(widest, 1, upper) or 1))
+    # normally floor at font_min; but if a single unbreakable token is wider than the safe area even
+    # at font_min, drop BELOW the floor for that cue so no glyph ever crosses the margin (the absolute
+    # no-clip guarantee wins over the legibility floor for a pathological long word).
+    line_fs = max(font_min, min(fs, ideal)) if ideal >= font_min else max(8, ideal)
+    return line_fs, best_brk
+
+
+def build(words, w, h, y, fs, max_words, upper, margin=60, font_min=52):
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
@@ -71,10 +107,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     # flatten so each word-state ends exactly when the NEXT word starts — never linger into the next
     # cue (overlapping Dialogues at the same \pos double-render and look garbled).
     cue_list = cues(words, max_words)
+    # Safe-area fit per cue: shrink font (to font_min) then wrap to 2 lines so nothing clips the frame.
+    max_w = w - 2 * margin
+    fit = {}
+    for ci, cue in enumerate(cue_list):
+        texts = [(esc(ww["word"]).upper() if upper else esc(ww["word"])) for ww in cue]
+        fit[ci] = fit_cue(texts, fs, max_w, upper, font_min)
     flat = [(ci, i, cw) for ci, cue in enumerate(cue_list) for i, cw in enumerate(cue)]
     lines = []
     for gi, (ci, i, cw) in enumerate(flat):
         cue = cue_list[ci]
+        cue_fs, brk = fit[ci]
         parts = []
         for j, ww in enumerate(cue):
             txt = esc(ww["word"])
@@ -86,7 +129,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 parts.append(f"{{\\c{CYAN}\\b1}}{txt}{{\\b0}}")
             else:
                 parts.append(f"{{\\c{DIM}}}{txt}")
-        text = "{\\pos(%d,%d)\\an5}" % (w // 2, y) + " ".join(parts)
+        if brk:
+            body = " ".join(parts[:brk]) + "\\N" + " ".join(parts[brk:])
+        else:
+            body = " ".join(parts)
+        fs_tag = f"\\fs{cue_fs}" if cue_fs != fs else ""
+        text = "{\\pos(%d,%d)\\an5%s}" % (w // 2, y, fs_tag) + body
         start = cw["start"]
         end = flat[gi + 1][2]["start"] if gi + 1 < len(flat) else cw["end"] + 0.12
         lines.append(f"Dialogue: 0,{ts(start)},{ts(end)},kar,,0,0,0,,{text}")
@@ -101,6 +149,8 @@ def main() -> int:
     ap.add_argument("--play-h", type=int, default=1920)
     ap.add_argument("--y", type=int, default=1155)
     ap.add_argument("--font-size", type=int, default=68)  # bumped from 52 — mobile Shorts legibility
+    ap.add_argument("--font-min", type=int, default=52, help="floor for the safe-area auto-shrink")
+    ap.add_argument("--margin", type=int, default=60, help="left/right safe-area margin (px)")
     ap.add_argument("--max-words", type=int, default=4)
     ap.add_argument("--uppercase", action="store_true")
     ap.add_argument("--burn", action="store_true")
@@ -111,7 +161,8 @@ def main() -> int:
     # drop standalone punctuation tokens WhisperX sometimes emits (else they render as stray ","/".")
     words = [w for w in json.load(open(args.transcript)).get("words", [])
              if any(c.isalnum() for c in w.get("word", ""))]
-    ass = build(words, args.play_w, args.play_h, args.y, args.font_size, args.max_words, args.uppercase)
+    ass = build(words, args.play_w, args.play_h, args.y, args.font_size, args.max_words,
+                args.uppercase, args.margin, args.font_min)
     Path(args.out).write_text(ass)
     print(json.dumps({"event": "ass_written", "cues": ass.count("Dialogue:"), "out": args.out}))
 

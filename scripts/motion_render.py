@@ -100,7 +100,7 @@ _CSS = """
     justify-content:center; }
   .scene.reg-lower { align-items:flex-end; }
   /* opaque band covering the Shorts screen panel. Charcoal (NOT near-black) so the black-key that
-     makes the rest transparent doesn't erase it — #242424 sits above the colorkey threshold. */
+     makes the rest transparent doesn't erase it — #444444 sits well above the colorkey threshold. */
   .scene.reg-lower .block { background:#444444; width:100%; box-sizing:border-box;
     min-height:700px; justify-content:center; padding:70px 70px 190px; }
   .scene.reg-upper { align-items:flex-start; }
@@ -133,7 +133,11 @@ _CSS = """
   .flow { display:flex; align-items:center; justify-content:center; gap:0; flex-wrap:nowrap; }
   .node { padding:30px 34px; font-family:var(--display); font-weight:900; font-size:40px; color:var(--text);
     background: color-mix(in srgb, var(--panel,#141414) 90%, transparent); border:1px solid var(--panel-edge,#282626);
-    border-bottom:6px solid var(--accent,#FF0000); max-width:360px; }
+    border-bottom:6px solid var(--accent,#FF0000); max-width:360px; display:flex; flex-direction:column;
+    align-items:center; gap:16px; }
+  .node .ic { width:88px; height:88px; color:var(--accent,#FF0000); display:block; }
+  .chip.ico { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .chip .ic { width:72px; height:72px; color:var(--text); display:block; }
   .arrow { color:var(--accent,#FF0000); font-family:var(--mono); font-weight:700; font-size:56px; padding:0 22px; }
 """
 
@@ -146,8 +150,15 @@ def _beat_markup(i: int, b: dict) -> str:
         cap = f'<div class="label">{esc(b["label"])}</div>' if b.get("label") else ""
         inner = f'<div class="imgwrap"><img src="./img-{i}.png" alt=""/></div>{cap}'
     elif layout == "chips":
-        chips = "".join(f'<div class="chip stagger">{esc(c)}</div>' for c in b.get("chips", []))
-        inner = f'<div class="row">{chips}</div>'
+        parts = []
+        for c in b.get("chips", []):
+            if isinstance(c, dict):  # icon-led chip: icon over label
+                ic = c.get("svg") or c.get("icon") or "check"
+                lab = esc(c.get("label") or c.get("text") or "")
+                parts.append(f'<div class="chip ico stagger"><span class="ic">{svg(ic)}</span>{lab}</div>')
+            else:                    # legacy bare-text chip
+                parts.append(f'<div class="chip stagger">{esc(c)}</div>')
+        inner = f'<div class="row">{"".join(parts)}</div>'
     elif layout == "icons":
         tiles = "".join(
             f'<div class="tile stagger"><span class="ic">{svg(ic.get("svg","check"))}</span>'
@@ -162,7 +173,12 @@ def _beat_markup(i: int, b: dict) -> str:
         for j, n in enumerate(b.get("nodes", [])):
             if j:
                 parts.append('<span class="arrow stagger">&#8594;</span>')
-            parts.append(f'<div class="node stagger">{esc(n)}</div>')
+            if isinstance(n, dict):  # icon-led node: icon over label
+                ic = n.get("svg") or n.get("icon") or "check"
+                txt = esc(n.get("text") or n.get("label") or "")
+                parts.append(f'<div class="node stagger"><span class="ic">{svg(ic)}</span>{txt}</div>')
+            else:                    # legacy bare-text node
+                parts.append(f'<div class="node stagger">{esc(n)}</div>')
         inner = f'<div class="flow">{"".join(parts)}</div>'
     else:
         lbl = f'<div class="label">{esc(b.get("label",""))}</div>' if b.get("label") else ""
@@ -189,7 +205,36 @@ def _timeline(beats: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None) -> str:
+def lint_brief(brief: dict) -> list[str] | None:
+    """Iconography enforcement (T2). On the body (mode:cutaway) or when enforce_iconography is set,
+    a beat's LEAD must be a visual, not bare text: flow nodes and chips need an icon; a stat's
+    supporting line must be a short label, not a sentence. Returns error strings (naming the beat) or
+    None. Lighter Shorts label overlays (no enforce flag) are not constrained."""
+    if not (brief.get("mode") == "cutaway" or brief.get("enforce_iconography")):
+        return None
+    errs: list[str] = []
+    for i, b in enumerate(brief.get("beats", [])):
+        layout = b.get("layout", "icons")
+        if layout == "flow":
+            for j, n in enumerate(b.get("nodes", [])):
+                if not (isinstance(n, dict) and (n.get("svg") or n.get("icon") or n.get("image"))):
+                    errs.append(f"beat[{i}] flow node[{j}] is bare text — needs an icon "
+                                f"(use {{\"icon\":\"swap\",\"text\":\"...\"}})")
+        elif layout == "chips":
+            for j, c in enumerate(b.get("chips", [])):
+                if not (isinstance(c, dict) and (c.get("svg") or c.get("icon") or c.get("logo"))):
+                    errs.append(f"beat[{i}] chip[{j}] is bare text — needs an icon/logo "
+                                f"(use {{\"icon\":\"chip\",\"label\":\"...\"}})")
+        elif layout == "stat":
+            lbl = str(b.get("label", ""))
+            if len(lbl.split()) > 5:
+                errs.append(f"beat[{i}] stat label is a sentence ({len(lbl.split())} words) — "
+                            f"use a short label (≤5 words)")
+    return errs or None
+
+
+def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None,
+                      ground: str = "#000") -> str:
     w = int(brief.get("width", 1920)); h = int(brief.get("height", 1080))
     beats = brief.get("beats", [])
     dur = float(brief.get("duration") or max((float(b["start"]) + float(b.get("dur", 4.0)) for b in beats), default=6.0))
@@ -210,6 +255,8 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None)
 <html><head><meta charset="utf-8" />
 <style>{_CSS}
   #stage {{ width:{w}px; height:{h}px; }}
+  /* cutaway = OPAQUE full-frame ground (replaces the screen); overlay path keeps #000 for the key */
+  body {{ background:{ground}; }} #stage {{ background:{ground}; }}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 </head><body>
@@ -226,7 +273,7 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None)
 """
 
 
-def scaffold_custom_project(project: Path, brief: dict) -> float:
+def scaffold_custom_project(project: Path, brief: dict, ground: str = "#000") -> float:
     project.mkdir(parents=True, exist_ok=True)
     # identity assets (frozen — copied, never edited)
     for f in ("identity.css", "font-face.css"):
@@ -246,7 +293,7 @@ def scaffold_custom_project(project: Path, brief: dict) -> float:
         img = b.get("image")
         if img and Path(img).exists():
             shutil.copy2(img, project / f"img-{i}.png")
-    html_doc = build_custom_html(brief, needle_rel, ring_rel)
+    html_doc = build_custom_html(brief, needle_rel, ring_rel, ground)
     (project / "index.html").write_text(html_doc, encoding="utf-8")
     return float(brief.get("duration") or max(
         (float(b["start"]) + float(b.get("dur", 4.0)) for b in brief.get("beats", [])), default=6.0))
@@ -324,6 +371,25 @@ def probe_wh(path: Path) -> tuple[int, int]:
         return 1920, 1080
 
 
+def finalize_cutaway(raw: Path, out: Path, dur: float, fade: float = 0.15) -> bool:
+    """Turn the rendered (opaque-ground) motion into a standalone full-frame cutaway SEGMENT:
+    short fade in/out, yuv420p, 30fps, VIDEO-ONLY (the body's narration audio plays under it when the
+    timeline overlays this clip in place of the screen). No colorkey — it REPLACES the screen."""
+    fo = max(0.0, dur - fade)
+    vf = (f"fade=t=in:st=0:d={fade:.3f},fade=t=out:st={fo:.3f}:d={fade:.3f},"
+          f"setsar=1,fps=30,format=yuv420p")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    cp = subprocess.run(
+        ["nice", "ffmpeg", "-y", "-i", str(raw), "-an", "-vf", vf,
+         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-r", "30",
+         "-movflags", "+faststart", str(out)],
+        capture_output=True, text=True)
+    if cp.returncode != 0:
+        print(cp.stderr[-2000:], file=sys.stderr)
+        return False
+    return True
+
+
 def composite(base: Path, overlay: Path, out: Path) -> bool:
     w, h = probe_wh(base)
     fc = (f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
@@ -352,6 +418,10 @@ def main() -> int:
     ap.add_argument("--duration", type=float, default=60.0)
     ap.add_argument("--composite-over")
     ap.add_argument("--composite-out")
+    ap.add_argument("--cutaway", action="store_true",
+                    help="render an OPAQUE full-frame cutaway segment (body B-roll that REPLACES the "
+                         "screen); no colorkey, faded, video-only. Also triggered by brief mode:cutaway")
+    ap.add_argument("--fade", type=float, default=0.15, help="cutaway fade in/out, seconds")
     ap.add_argument("--fake", action="store_true", help="GPU-free dry run (ffmpeg testsrc stand-in)")
     args = ap.parse_args()
 
@@ -362,14 +432,37 @@ def main() -> int:
     out = Path(args.out)
     if args.brief:
         brief = json.loads(Path(args.brief).read_text())
+        cutaway = args.cutaway or brief.get("mode") == "cutaway"
+        if cutaway:
+            brief["mode"] = "cutaway"  # so lint_brief enforces iconography on the body
         w = int(brief.get("width", 1080 if args.portrait else 1920))
         h = int(brief.get("height", 1920 if args.portrait else 1080))
         brief.setdefault("width", w); brief.setdefault("height", h)
+        lint_errs = lint_brief(brief)
+        if lint_errs:
+            print("ERROR: iconography lint failed (body motion must be icon-led, not text):",
+                  file=sys.stderr)
+            for e in lint_errs:
+                print(f"  - {e}", file=sys.stderr)
+            return 2
         project = Path(args.run_dir) / ("shorts-card" if args.portrait else "long-overlay")
-        dur = scaffold_custom_project(project, brief)
-        ok = render_custom_node(project, out, args.fake, w, h, dur)
-        mode = "custom_brief"
+        # cutaway renders on an OPAQUE ground and becomes a standalone segment; overlay path stays #000
+        dur = scaffold_custom_project(project, brief, ground="#0a0a0a" if cutaway else "#000")
+        if cutaway:
+            raw = out.with_suffix(".raw.mp4")
+            ok = render_custom_node(project, raw, args.fake, w, h, dur)
+            if ok:
+                ok = finalize_cutaway(raw, out, dur, args.fade)
+                try:
+                    raw.unlink()
+                except OSError:
+                    pass
+            mode = "cutaway"
+        else:
+            ok = render_custom_node(project, out, args.fake, w, h, dur)
+            mode = "custom_brief"
     else:
+        cutaway = False
         ok = render_hook_scaffolder(args.run_dir, args.identity, args.hook, args.portrait,
                                     args.duration, out, args.fake)
         mode = "hook_scaffolder"
@@ -379,7 +472,8 @@ def main() -> int:
         return 3
 
     result = {"event": "motion_rendered", "mode": mode, "overlay": str(out), "fake": args.fake}
-    if args.composite_over and args.composite_out:
+    # A cutaway is a standalone opaque segment — never colorkey-composited over a base.
+    if not cutaway and args.composite_over and args.composite_out:
         if not composite(Path(args.composite_over), out, Path(args.composite_out)):
             print("ERROR: motion composite failed.", file=sys.stderr)
             return 4

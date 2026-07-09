@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,64 @@ def _merge(intervals: list[list[float]]) -> list[list[float]]:
     return merged
 
 
+def _norm(word: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", word.lower())
+
+
+def detect_retakes(words: list[dict], ngram: int = 4, window_s: float = 3.0,
+                   sacred: list[list[float]] | None = None) -> list[dict]:
+    """Find IMMEDIATE stutters / false-starts and return the short spans to DROP.
+
+    When the same `ngram` word-sequence recurs within `window_s`, drop [earlier_start, later_start)
+    (keep the LATER take — last-take bias). CRITICAL: the window MUST stay small (~4s). A genuine
+    false-start restarts within a couple of seconds, so the dropped span is short. A LARGE window is
+    wrong — common 4-grams recur naturally in speech seconds apart ("your ai coding model", "you
+    dont have to"), and dropping the whole inter-occurrence span would butcher legit content (a 20s
+    window dropped 124 legit >5s spans in testing). Wide-gap retakes are handled by explicit --drop,
+    not this scan; verify.py's blocking gate catches any survivor. A repeat whose midpoint is sacred
+    is never dropped. Returns [{"span":[a,b], "phrase": "..."}]; overlaps merged by the caller.
+    """
+    sacred = sacred or []
+    toks = [(_norm(w.get("word", "")), w) for w in words]
+    toks = [(t, w) for t, w in toks if t]
+    drops: list[dict] = []
+    seen: dict[tuple, float] = {}
+    for i in range(len(toks) - ngram + 1):
+        key = tuple(t for t, _ in toks[i:i + ngram])
+        start = toks[i][1]["start"]
+        prev = seen.get(key)
+        if prev is not None and 0 < start - prev <= window_s:
+            if not in_any((prev + start) / 2.0, sacred):
+                drops.append({"span": [round(prev, 3), round(start, 3)], "phrase": " ".join(key)})
+        seen[key] = start
+    return drops
+
+
+def subtract_spans(keep: list[list[float]], drops: list[list[float]]) -> list[list[float]]:
+    """Remove every drop span from the keep spans, splitting a keep span around an interior drop.
+
+    A drop outside all keep spans is a no-op. Used to excise retakes / explicit drops from the
+    coarse content selection BEFORE gap-tightening, so they never reach the cut.
+    """
+    drops = _merge([list(d) for d in drops])
+    result: list[list[float]] = []
+    for s, e in keep:
+        cur = [[s, e]]
+        for da, db in drops:
+            nxt: list[list[float]] = []
+            for cs, ce in cur:
+                if db <= cs or da >= ce:          # no overlap
+                    nxt.append([cs, ce])
+                    continue
+                if da > cs:
+                    nxt.append([cs, da])          # piece before the drop
+                if db < ce:
+                    nxt.append([db, ce])          # piece after the drop
+            cur = nxt
+        result.extend([c for c in cur if c[1] - c[0] > 0.02])
+    return result
+
+
 def span_gaps(span_start: float, span_end: float, inside: list[dict],
               silences: list[list[float]], sacred: list[list[float]],
               threshold: float) -> list[list[float]]:
@@ -112,18 +171,23 @@ def span_gaps(span_start: float, span_end: float, inside: list[dict],
 
 def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[list[float]],
                      threshold: float, target: float,
-                     silences: list[list[float]]) -> list[list[float]]:
+                     silences: list[list[float]], max_gap: float = 0.6) -> list[list[float]]:
     """Within each kept span, cap every dead-air stretch > threshold to `target` (unless sacred).
 
     Dead air = word-gaps OR silencedetect spans (so a span with no words is still tightened).
-    Returns an ordered list of source sub-segments [start,end] to concatenate.
+    HARD max-gap: the tightening trigger is min(threshold, max_gap), so no internal gap can ever
+    exceed `max_gap` regardless of the configured threshold — the belt-and-suspenders guarantee that
+    a long wordless stretch (that a high threshold or a missed silencedetect could let slip) is still
+    collapsed. Returns an ordered list of source sub-segments [start,end] to concatenate.
     """
+    eff_threshold = min(threshold, max_gap)
+    keep_len = min(target, max_gap)
     segments: list[list[float]] = []
     for span_start, span_end in keep:
         inside = [w for w in words if w["start"] >= span_start - 1e-6 and w["end"] <= span_end + 1e-6]
         seg_start = span_start
-        for g0, g1 in span_gaps(span_start, span_end, inside, silences, sacred, threshold):
-            keep_until = g0 + target
+        for g0, g1 in span_gaps(span_start, span_end, inside, silences, sacred, eff_threshold):
+            keep_until = g0 + keep_len
             if keep_until > seg_start + 1e-6:
                 segments.append([seg_start, keep_until])
             seg_start = g1
@@ -134,7 +198,7 @@ def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[li
 
 
 def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
-           scale: tuple[int, int] | None = None, fps: int = 30) -> None:
+           scale: tuple[int, int] | None = None, fps: int = 30, no_audio: bool = False) -> None:
     """Single-pass select/aselect: keep only frames inside the kept segments, re-stamp timestamps
     to remove the gaps. One decode + a per-frame keep-test — scales to hundreds of segments, where a
     trim+concat filter_complex would split every decoded frame N ways and crawl (O(frames × N)).
@@ -173,10 +237,15 @@ def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
                   f"pad={sw}:{sh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
     else:
         vscale = ""
+    # no_audio: video-only output (e.g. a co-spliced SCREEN track whose audio the composite discards).
+    # Skips the audio + mux passes entirely — the expensive part on a 4K screen decode.
+    vtarget = out if no_audio else vtmp
     ff(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-an",
         "-vf", f"fps={fps},select='{expr}',setpts=N/FRAME_RATE/TB{vscale}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-        "-movflags", "+faststart", str(vtmp)], "video")
+        "-movflags", "+faststart", str(vtarget)], "video")
+    if no_audio:
+        return
 
     # AUDIO: atrim each kept span + a short in/out fade (de-click) + concat (aselect doesn't drop
     # frames in this ffmpeg build). Audio only — no video decode, no cross-stream sync — so hundreds
@@ -215,10 +284,21 @@ def main() -> int:
                     help="de-click fade at each join, seconds (length-preserving)")
     ap.add_argument("--silence-db", type=float, default=-30.0,
                     help="silencedetect noise floor in dB (dead-air detection)")
+    ap.add_argument("--max-gap", type=float, default=0.6,
+                    help="hard ceiling on any internal gap inside a kept span, seconds (dead-air kill)")
+    ap.add_argument("--retake-window", type=float, default=3.0,
+                    help="window (s) for IMMEDIATE stutter/false-start detection — keep small (~3s); "
+                         "wide-gap retakes go through --drop, not this scan")
+    ap.add_argument("--drop", default=None,
+                    help="JSON file of explicit source-second spans to remove: "
+                         "[[a,b],...] or {\"explicit_drops\":[{\"span\":[a,b]},...]}")
     ap.add_argument("--segments", default=None,
                     help="reuse the exact segments from a prior .segments.json (co-splice a screen track)")
     ap.add_argument("--scale", default=None,
                     help="WxH — downscale each cut segment (e.g. 1920x1080 for a 4K screen track)")
+    ap.add_argument("--no-audio", action="store_true",
+                    help="video-only output (skip the audio+mux passes) — for a co-spliced screen "
+                         "track whose audio the composite discards; big speedup on a 4K decode")
     args = ap.parse_args()
 
     scale = None
@@ -235,9 +315,12 @@ def main() -> int:
     threshold = args.gap_threshold if args.gap_threshold is not None else gt.get("threshold", 0.2)
     target = args.gap_target if args.gap_target is not None else gt.get("target", 0.1)
 
+    retakes: list[dict] = []
+    explicit: list[list[float]] = []
     if args.segments:
         # co-splice mode: reuse the EXACT sub-segments a prior run computed (keeps a screen track
-        # frame-synced with the camera that owns the silence-driven cut).
+        # frame-synced with the camera that owns the silence-driven cut). Retake/drop excision
+        # already happened on the camera pass — its segments carry the drops, so we reuse verbatim.
         segments = load(args.segments).get("segments", [])
         if not segments:
             print("ERROR: --segments file has no 'segments'.", file=sys.stderr)
@@ -249,20 +332,42 @@ def main() -> int:
         if not keep:
             print("ERROR: cut list has no 'keep' spans.", file=sys.stderr)
             return 2
-        silences = detect_silences(Path(args.inp), args.silence_db, threshold)
-        segments = compute_segments(keep, words, sacred, threshold, target, silences)
+        # Retake removal wired INTO the cut: excise the earlier of each adjacent near-duplicate
+        # phrase (last-take bias) plus any explicit surgical drops, BEFORE gap-tightening.
+        retakes = detect_retakes(words, window_s=args.retake_window, sacred=sacred)
+        if args.drop:
+            dd = load(args.drop)
+            raw = dd.get("explicit_drops", []) if isinstance(dd, dict) else dd
+            for item in raw:
+                if isinstance(item, dict) and "span" in item:
+                    explicit.append([float(item["span"][0]), float(item["span"][1])])
+                elif isinstance(item, (list, tuple)) and len(item) == 2:
+                    explicit.append([float(item[0]), float(item[1])])
+        drop_spans = [d["span"] for d in retakes] + explicit
+        if drop_spans:
+            keep = subtract_spans(keep, drop_spans)
+            if not keep:
+                print("ERROR: all keep spans removed by drops — check --drop / retake window.",
+                      file=sys.stderr)
+                return 3
+        silences = detect_silences(Path(args.inp), args.silence_db, min(threshold, args.max_gap))
+        segments = compute_segments(keep, words, sacred, threshold, target, silences, args.max_gap)
         if not segments:
             print("ERROR: computed zero segments — check keep spans vs word timings.", file=sys.stderr)
             return 3
 
     out = Path(args.out)
-    render(Path(args.inp), segments, out, args.xfade, scale)
+    render(Path(args.inp), segments, out, args.xfade, scale, no_audio=args.no_audio)
 
     kept = round(sum(e - s for s, e in segments), 2)
     (out.parent / (out.stem + ".segments.json")).write_text(
         json.dumps({"segments": segments, "kept_seconds": kept,
-                    "gap_threshold": threshold, "gap_target": target}, indent=1))
+                    "gap_threshold": threshold, "gap_target": target,
+                    "max_gap": args.max_gap, "silence_db": args.silence_db,
+                    "retakes_dropped": retakes,
+                    "explicit_drops": [{"span": s} for s in explicit]}, indent=1))
     print(json.dumps({"event": "spliced", "segments": len(segments), "kept_seconds": kept,
+                      "retakes_dropped": len(retakes), "explicit_drops": len(explicit),
                       "out": str(out)}))
     return 0
 
