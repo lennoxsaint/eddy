@@ -54,8 +54,8 @@ def test_talking_head_pipeline_renders_three_shared_body_longs(tmp_path: Path, m
         "motion_beats": [],
     }
     manager.submit_plan(job.id, plan)
-    monkeypatch.setenv("EDDY_FAKE_DESCRIPT", "1")
-    monkeypatch.setenv("EDDY_FAKE_HYPERFRAMES", "1")
+    monkeypatch.setenv("EDDY_FAKE_DESCRIPT", "true")
+    monkeypatch.setenv("EDDY_FAKE_HYPERFRAMES", "true")
 
     PipelineRunner(root=ROOT, manager=manager).finalize(job.id)
 

@@ -152,8 +152,8 @@ class PipelineRunner:
         blockers: list[str] = []
         qa_rows: list[dict[str, Any]] = []
         long_dir = attempt
-        fake_descript = os.environ.get("EDDY_FAKE_DESCRIPT") == "1"
-        fake_hyperframes = os.environ.get("EDDY_FAKE_HYPERFRAMES") == "1"
+        fake_descript = bool(os.environ.get("EDDY_FAKE_DESCRIPT"))
+        fake_hyperframes = bool(os.environ.get("EDDY_FAKE_HYPERFRAMES"))
         for item in render_plan.longs:
             camera_hook = stage / f"hook-camera-{item.hook.rank}.mp4"
             _splice(self.root, sources.camera, transcript, item.hook_cutlist, camera_hook)
