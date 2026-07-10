@@ -13,6 +13,7 @@ from eddy.pipeline import (
     _merge_short_drops,
     _splice,
     _transcribe_final,
+    _write_caption_words_for_segments,
     build_render_plan,
     discover_sources,
 )
@@ -187,6 +188,52 @@ def test_final_verification_transcribes_the_delivered_media(tmp_path: Path, monk
 
     assert str(delivered) in captured[0][0]
     assert str(output) in captured[0][0]
+
+
+def test_short_caption_words_follow_the_exact_spliced_timeline(tmp_path: Path) -> None:
+    transcript = tmp_path / "transcript.json"
+    segments = tmp_path / "short.segments.json"
+    output = tmp_path / "short.words.json"
+    transcript.write_text(
+        json.dumps(
+            {
+                "words": [
+                    {"word": "hello", "start": 0.15, "end": 0.35},
+                    {"word": "world", "start": 0.80, "end": 1.10},
+                    {"word": "again", "start": 2.20, "end": 2.40},
+                ]
+            }
+        )
+    )
+    segments.write_text(
+        json.dumps({"segments": [[0.10, 0.50], [0.75, 1.20], [2.10, 2.50]]})
+    )
+
+    _write_caption_words_for_segments(transcript, segments, output)
+
+    assert json.loads(output.read_text())["words"] == [
+        {
+            "word": "hello",
+            "start": 0.05,
+            "end": 0.25,
+            "source_start": 0.15,
+            "source_end": 0.35,
+        },
+        {
+            "word": "world",
+            "start": 0.45,
+            "end": 0.75,
+            "source_start": 0.8,
+            "source_end": 1.1,
+        },
+        {
+            "word": "again",
+            "start": 0.95,
+            "end": 1.15,
+            "source_start": 2.2,
+            "source_end": 2.4,
+        },
+    ]
 
 
 def test_long_receipt_preserves_hook_then_shared_body_output_order(tmp_path: Path) -> None:

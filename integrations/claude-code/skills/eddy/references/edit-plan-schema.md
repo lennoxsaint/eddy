@@ -97,5 +97,10 @@ source evidence; it never contains generated speech or packaging.
 - Every dual-source Short maps at least 25% of its duration to raw screen proof and declares at least
   two motion beats: an opening hook beat by 2s and a later proof beat.
 - Each long hook receives at least two host-authored HyperFrames beats through `motion_beats`.
+- Eddy resolves each motion beat against the real base frame into a compact contextual panel. Host
+  intent supplies the message and visual layout; Eddy owns safe placement, PiP/face/caption/footer
+  exclusions, light/dark environment treatment, and rendered-pixel collision proof.
+- Short caption timing comes from the final splice receipt and must align with a fresh delivered-media
+  transcript. Source-time or uniformly synthesized word timings cannot pass.
 - Titles, descriptions, chapters, thumbnails, publishing fields, and arbitrary timestamps outside the
   source lock are rejected.

@@ -44,6 +44,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from eddy.motion_layout import extract_video_frame, resolve_motion_layout
+
 ROOT = Path(__file__).resolve().parents[1]
 IDENTITY_DIR = ROOT / "assets" / "motion" / "threadify-fc"
 GSAP_SOURCE = ROOT / "assets" / "vendor" / "gsap.min.js"
@@ -83,8 +85,6 @@ _CSS = """
   body { margin: 0; background: #000; }
   #stage { position: relative; overflow: hidden; background: #000; color: var(--text,#fafafa);
            font-family: var(--display); }
-  .grain { position:absolute; inset:0; pointer-events:none; opacity:0.10; mix-blend-mode:screen; z-index:1;
-    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 4px); }
   .ring { position:absolute; right:120px; bottom:96px; width:360px; height:360px; opacity:0.16; z-index:1; }
   .chrome { position:absolute; left:88px; right:88px; top:60px; display:flex; align-items:center;
     justify-content:space-between; font-family:var(--mono); letter-spacing:0.22em; font-weight:700;
@@ -93,55 +93,67 @@ _CSS = """
   .chrome .b img { width:30px; height:30px; }
   .frameline { position:absolute; left:88px; right:88px; top:104px; height:2px; transform-origin:left center;
     background: linear-gradient(90deg, var(--accent,#FF0000), var(--panel-edge,#282626)); z-index:8; }
-  .scene { position:absolute; inset:0; opacity:0; z-index:3; display:flex; align-items:center;
-    justify-content:center; }
-  .scene.reg-lower { align-items:flex-end; }
-  /* opaque band covering the Shorts screen panel. Charcoal (NOT near-black) so the black-key that
-     makes the rest transparent doesn't erase it — #444444 sits well above the colorkey threshold. */
-  .scene.reg-lower .block { background:#444444; width:100%; box-sizing:border-box;
-    min-height:700px; justify-content:center; padding:70px 70px 190px; }
-  .scene.reg-upper { align-items:flex-start; }
-  .scene.reg-upper .block { background:#444444; width:100%; box-sizing:border-box;
-    min-height:640px; justify-content:center; padding:180px 70px 70px; }
-  .block { display:flex; flex-direction:column; align-items:center; gap:34px; text-align:center;
-    padding:0 160px; box-sizing:border-box; max-width:100%; }
-  .kicker { color:var(--accent,#FF0000); font-family:var(--mono); letter-spacing:0.26em;
-    font-weight:700; font-size:26px; text-transform:uppercase; }
-  .accent-rule { height:5px; width:150px; background:var(--accent,#FF0000); transform-origin:center; }
-  .label { color:var(--text,#fafafa); font-family:var(--display); font-weight:900; font-size:56px;
-    line-height:1.02; letter-spacing:-0.02em; max-width:1400px; }
-  .row { display:flex; align-items:stretch; justify-content:center; gap:34px; flex-wrap:wrap; }
-  .tile { display:flex; flex-direction:column; align-items:center; gap:18px; padding:34px 30px;
-    min-width:210px; background: color-mix(in srgb, var(--panel,#141414) 88%, transparent);
-    border:1px solid var(--panel-edge,#282626); border-top:6px solid var(--accent,#FF0000); }
-  .tile .ic { width:120px; height:120px; color:var(--text); }
-  .tile .cap { font-family:var(--mono); font-weight:700; font-size:26px; letter-spacing:0.08em;
-    text-transform:uppercase; color:var(--text); }
-  .chip { padding:22px 40px; font-family:var(--mono); font-weight:700; font-size:40px; letter-spacing:0.02em;
-    color:var(--text); background: color-mix(in srgb, var(--panel,#141414) 90%, transparent);
-    border:1px solid var(--panel-edge,#282626); border-left:6px solid var(--accent,#FF0000); }
-  .stat { font-family:var(--display); font-weight:900; letter-spacing:-0.03em; color:var(--accent,#FF0000);
-    font-size:300px; line-height:0.9; }
-  .sub { font-family:var(--mono); font-weight:700; font-size:34px; letter-spacing:0.06em; color:var(--text);
+  .scene { position:absolute; inset:0; opacity:0; z-index:3; pointer-events:none; }
+  .contextual-panel { position:absolute; box-sizing:border-box; overflow:hidden; display:flex;
+    flex-direction:column; border-radius:20px; border:1px solid rgba(255,255,255,0.38);
+    box-shadow:0 24px 60px rgba(0,0,0,0.28),0 2px 10px rgba(0,0,0,0.18); }
+  .skin-light { color:#17243b; background:#f4f5f7; border-color:rgba(20,28,45,0.18); }
+  .skin-dark { color:#f7f7f8; background:#34363d; border-color:rgba(255,255,255,0.22); }
+  .windowbar { height:38px; flex:0 0 38px; display:flex; align-items:center; gap:8px;
+    padding:0 16px; box-sizing:border-box; border-bottom:1px solid rgba(127,127,127,0.24);
+    background:rgba(127,127,127,0.10); }
+  .traffic { width:10px; height:10px; border-radius:50%; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .traffic.red { background:#ff5f57; } .traffic.amber { background:#febc2e; } .traffic.green { background:#28c840; }
+  .window-title { margin-left:8px; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+    font-family:var(--mono); font-size:14px; font-weight:700; letter-spacing:0; opacity:0.72;
     text-transform:uppercase; }
-  .imgwrap { border:1px solid var(--panel-edge,#282626); border-top:8px solid var(--accent,#FF0000);
-    background:var(--panel,#141414); padding:12px; box-shadow:0 26px 80px rgba(0,0,0,0.45); }
-  .imgwrap img { display:block; max-width:1360px; max-height:760px; }
-  .flow { display:flex; align-items:center; justify-content:center; gap:0; flex-wrap:nowrap; }
-  .node { padding:30px 34px; font-family:var(--display); font-weight:900; font-size:40px; color:var(--text);
-    background: color-mix(in srgb, var(--panel,#141414) 90%, transparent); border:1px solid var(--panel-edge,#282626);
-    border-bottom:6px solid var(--accent,#FF0000); max-width:360px; display:flex; flex-direction:column;
-    align-items:center; gap:16px; }
-  .node .ic { width:88px; height:88px; color:var(--accent,#FF0000); display:block; }
-  .chip.ico { display:flex; flex-direction:column; align-items:center; gap:14px; }
-  .chip .ic { width:72px; height:72px; color:var(--text); display:block; }
-  .arrow { color:var(--accent,#FF0000); font-family:var(--mono); font-weight:700; font-size:56px; padding:0 22px; }
+  .panel-body { min-height:0; flex:1; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; padding:20px 24px 24px; box-sizing:border-box; text-align:center; }
+  .accent-rule { height:3px; width:48px; border-radius:2px; background:var(--accent,#FF0000);
+    transform-origin:center; }
+  .label { font-family:var(--display); font-weight:800; font-size:30px; line-height:1.06;
+    letter-spacing:0; max-width:100%; }
+  .row { width:100%; display:flex; align-items:stretch; justify-content:center; gap:12px; flex-wrap:nowrap; }
+  .tile { min-width:0; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; padding:14px 12px; border-radius:12px; background:rgba(127,127,127,0.12);
+    border:1px solid rgba(127,127,127,0.24); }
+  .tile .ic { width:56px; height:56px; }
+  .tile .cap { font-family:var(--mono); font-weight:700; font-size:16px; letter-spacing:0;
+    text-transform:uppercase; }
+  .chip { min-width:0; flex:1; padding:16px 12px; border-radius:12px; font-family:var(--mono);
+    font-weight:700; font-size:20px; letter-spacing:0; background:rgba(127,127,127,0.12);
+    border:1px solid rgba(127,127,127,0.24); border-left:4px solid var(--accent,#FF0000); }
+  .stat { font-family:var(--display); font-weight:900; letter-spacing:0; color:var(--accent,#FF0000);
+    line-height:0.94; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+  .sub { font-family:var(--mono); font-weight:700; font-size:18px; letter-spacing:0;
+    text-transform:uppercase; }
+  .imgwrap { width:100%; min-height:0; overflow:hidden; border-radius:12px;
+    border:1px solid rgba(127,127,127,0.24); background:rgba(127,127,127,0.10); padding:8px;
+    box-sizing:border-box; }
+  .imgwrap img { display:block; width:100%; max-height:170px; object-fit:contain; }
+  .flow { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:nowrap; }
+  .node { min-width:0; flex:1; padding:14px 10px; border-radius:12px; font-family:var(--display);
+    font-weight:800; font-size:18px; line-height:1.08; background:rgba(127,127,127,0.12);
+    border:1px solid rgba(127,127,127,0.24); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:8px; overflow-wrap:anywhere; }
+  .node .ic { width:38px; height:38px; color:var(--accent,#FF0000); display:block; }
+  .chip.ico { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .chip .ic { width:38px; height:38px; display:block; }
+  .arrow { color:var(--accent,#FF0000); font-family:var(--mono); font-weight:700; font-size:26px; padding:0 2px; }
+  #stage.portrait .contextual-panel { border-radius:24px; }
+  #stage.portrait .windowbar { height:44px; flex-basis:44px; }
+  #stage.portrait .panel-body { padding:20px; gap:12px; }
+  #stage.portrait .flow { flex-direction:column; gap:6px; }
+  #stage.portrait .flow .arrow { transform:rotate(90deg); line-height:0.7; }
+  #stage.portrait .node { width:100%; flex:auto; padding:9px 12px; font-size:17px; flex-direction:row; }
+  #stage.portrait .node .ic { width:28px; height:28px; }
+  #stage.portrait .label { font-size:28px; }
 """
 
 
-def _beat_markup(i: int, b: dict) -> str:
+def _beat_markup(i: int, b: dict, *, portrait: bool) -> str:
     layout = b.get("layout", "icons")
-    kicker = f'<div class="kicker">{esc(b["kicker"])}</div>' if b.get("kicker") else ""
+    title = esc(b.get("kicker") or b.get("label") or "Proof")
     rule = '<div class="accent-rule"></div>'
     if layout == "image":
         cap = f'<div class="label">{esc(b["label"])}</div>' if b.get("label") else ""
@@ -180,9 +192,18 @@ def _beat_markup(i: int, b: dict) -> str:
     else:
         lbl = f'<div class="label">{esc(b.get("label",""))}</div>' if b.get("label") else ""
         inner = lbl
-    region = b.get("region", "center")  # center | lower | upper (place clear of face/captions on Shorts)
-    return (f'<div id="scene-{i}" class="scene reg-{region}"><div class="block">'
-            f'{kicker}{rule}{inner}</div></div>')
+    default = (60, 1325, 454, 461) if portrait else (77, 140, 595, 281)
+    x, y = int(b.get("x", default[0])), int(b.get("y", default[1]))
+    width, height = int(b.get("w", default[2])), int(b.get("h", default[3]))
+    theme = b.get("theme", "dark")
+    layout_class = esc(layout.replace("_", "-"))
+    return (
+        f'<div id="scene-{i}" class="scene"><div class="block contextual-panel '
+        f'skin-{esc(theme)} layout-{layout_class}" style="left:{x}px;top:{y}px;width:{width}px;height:{height}px">'
+        '<div class="windowbar"><span class="traffic red"></span><span class="traffic amber"></span>'
+        f'<span class="traffic green"></span><span class="window-title">{title}</span></div>'
+        f'<div class="panel-body">{rule}{inner}</div></div></div>'
+    )
 
 
 def _timeline(beats: list[dict]) -> str:
@@ -192,10 +213,10 @@ def _timeline(beats: list[dict]) -> str:
         s = float(b["start"]); d = float(b.get("dur", 4.0))
         lines += [
             f'tl.set("#scene-{i}", {{opacity:1}}, {s:.3f});',
-            f'tl.from("#scene-{i} .block", {{y:64, opacity:0, duration:0.6, ease:"power3.out"}}, {s + 0.04:.3f});',
-            f'tl.from("#scene-{i} .accent-rule", {{scaleX:0, duration:0.5, ease:"power3.out"}}, {s + 0.28:.3f});',
-            f'tl.from("#scene-{i} .stagger", {{y:34, opacity:0, duration:0.42, stagger:0.12, ease:"back.out(1.3)"}}, {s + 0.34:.3f});',
-            f'tl.to("#scene-{i} .block", {{y:-22, opacity:0, duration:0.34, ease:"power2.in"}}, {s + d - 0.34:.3f});',
+            f'tl.from("#scene-{i} .block", {{y:18, scale:0.98, opacity:0, duration:0.42, ease:"power3.out"}}, {s + 0.04:.3f});',
+            f'tl.from("#scene-{i} .accent-rule", {{scaleX:0, duration:0.34, ease:"power3.out"}}, {s + 0.20:.3f});',
+            f'tl.from("#scene-{i} .stagger", {{y:10, opacity:0, duration:0.30, stagger:0.07, ease:"power2.out"}}, {s + 0.24:.3f});',
+            f'tl.to("#scene-{i} .block", {{y:-8, scale:0.99, opacity:0, duration:0.28, ease:"power2.in"}}, {s + d - 0.28:.3f});',
             f'tl.set("#scene-{i}", {{opacity:0}}, {s + d:.3f});',
         ]
     lines.append('window.__timelines["eddy"] = tl;')
@@ -233,8 +254,8 @@ def lint_brief(brief: dict) -> list[str] | None:
 def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None,
                       ground: str = "#000") -> str:
     w = int(brief.get("width", 1920)); h = int(brief.get("height", 1080))
-    stat_size = 160 if h > w else 300
-    stat_width = max(320, w - 140)
+    portrait = h > w
+    stat_size = 72 if portrait else 88
     beats = brief.get("beats", [])
     dur = float(brief.get("duration") or max((float(b["start"]) + float(b.get("dur", 4.0)) for b in beats), default=6.0))
     # hud = persistent brand chrome + frameline + ring (good on dark motion-dominant hooks). Set
@@ -249,19 +270,18 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None,
     else:
         ring = ""
         chrome = ""
-    scenes = "\n".join(_beat_markup(i, b) for i, b in enumerate(beats))
+    scenes = "\n".join(_beat_markup(i, b, portrait=portrait) for i, b in enumerate(beats))
     return f"""<!doctype html>
 <html><head><meta charset="utf-8" />
 <style>{_CSS}
   #stage {{ width:{w}px; height:{h}px; }}
-  .stat {{ font-size:{stat_size}px; max-width:{stat_width}px; white-space:nowrap; }}
+  .stat {{ font-size:{stat_size}px; }}
   /* cutaway = OPAQUE full-frame ground (replaces the screen); overlay path keeps #000 for the key */
   body {{ background:{ground}; }} #stage {{ background:{ground}; }}
 </style>
 <script src="./gsap.min.js"></script>
 </head><body>
-<div id="stage" data-composition-id="eddy" data-start="0" data-duration="{dur:.3f}" data-track-index="0" data-width="{w}" data-height="{h}">
-  <div class="grain" data-layout-ignore></div>
+<div id="stage" class="{'portrait' if portrait else 'landscape'}" data-composition-id="eddy" data-start="0" data-duration="{dur:.3f}" data-track-index="0" data-width="{w}" data-height="{h}">
   {ring}
   {chrome}
   {scenes}
@@ -450,6 +470,27 @@ def main() -> int:
         w = int(brief.get("width", 1080 if args.portrait else 1920))
         h = int(brief.get("height", 1920 if args.portrait else 1080))
         brief.setdefault("width", w); brief.setdefault("height", h)
+        placement_proof = None
+        if not cutaway:
+            frames = []
+            base = Path(args.composite_over) if args.composite_over else None
+            for beat in brief.get("beats", []):
+                frame = (
+                    extract_video_frame(
+                        base,
+                        float(beat.get("start", 0.0)) + float(beat.get("dur", 1.0)) * 0.5,
+                        width=w,
+                        height=h,
+                    )
+                    if base is not None and base.exists()
+                    else None
+                )
+                frames.append(frame)
+            brief, placement_proof = resolve_motion_layout(
+                brief,
+                frames,
+                portrait=h > w,
+            )
         lint_errs = lint_brief(brief)
         if lint_errs:
             print("ERROR: iconography lint failed (body motion must be icon-led, not text):",
@@ -460,6 +501,11 @@ def main() -> int:
         project = Path(args.run_dir) / ("shorts-card" if args.portrait else "long-overlay")
         # cutaway renders on an OPAQUE ground and becomes a standalone segment; overlay path stays #000
         dur = scaffold_custom_project(project, brief, ground="#0a0a0a" if cutaway else "#000")
+        if placement_proof is not None:
+            (project / "resolved-brief.json").write_text(json.dumps(brief, indent=2) + "\n")
+            (project / "placement-proof.json").write_text(
+                json.dumps(placement_proof, indent=2) + "\n"
+            )
         if cutaway:
             raw = out.with_suffix(".raw.mp4")
             ok = render_custom_node(project, raw, args.fake, w, h, dur)

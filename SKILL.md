@@ -104,11 +104,14 @@ eddy status <job-id>
    cached output hash, private provenance, and effect-survival receipt validate. Re-transcribe and QA
    cache hits normally. Never silently substitute local processing.
 8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
-   Prove semantic collision safety before compositing.
+   Place compact skeuomorphic panels against the real underlying frame, automatically choose the
+   quietest valid region, reserve the camera PiP/face/caption/footer geometry, and prove the rendered
+   overlay pixels stay inside their assigned regions before compositing.
 9. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
-10. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke. A
-    dual-source Short needs at least 25% verified raw-screen proof plus two animated HyperFrames
-    beats: an opening hook beat by 2s and a later supporting proof beat.
+10. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke.
+    Project every caption word through the exact splice receipt and verify its timing against a fresh
+    delivered transcript. A dual-source Short needs at least 25% verified raw-screen proof plus two
+    compact animated HyperFrames beats: an opening hook beat by 2s and a later supporting proof beat.
 11. Iterate with proxies; render full resolution only after the final plan is green.
 12. Re-transcribe every emitted long and Short. Actual delivered silence is the hard pacing truth.
     If word timing shows sustained slow p95 cadence or an extreme gap above 0.8s, run up to three
@@ -124,8 +127,9 @@ eddy status <job-id>
   when its delivered variants match the exact source-ledger candidate reviewed as intentional.
 - Word onsets are audible; gap, silence, loudness, clipping, and A/V drift gates pass.
 - Descript duration parity and Effect-Survival Gate pass on the delivered audio.
-- Screen/camera geometry, captions, proof assets, motion collisions, Shorts source/style locks,
-  25% source-mapped screen proof, and motion activity at 10 fps pass.
+- Screen/camera geometry, transcript-synchronous caption timing, proof assets, rendered contextual
+  motion placement, Shorts source/style locks, 25% source-mapped screen proof, and motion activity at
+  10 fps pass.
 - `spot-check.md`, `edit-plan.json`, `final/qa.json`, and `receipts.jsonl` are inspectable.
 
 ## Descript boundary

@@ -59,10 +59,27 @@ A HyperFrames beat with at least three distinct perceptual frame states at 10 fp
 frozen time.
 _Avoid_: Static overlay, title card
 
+**Caption Timeline Truth**:
+Short captions whose word timings are projected through the exact source-segment splice receipt and
+then checked against a fresh transcript of the delivered Short. Synthetic per-word cadence is never
+accepted as edited-timeline timing.
+_Avoid_: Evenly spaced captions, source-time captions on an edited clip
+
+**Contextual Motion Placement**:
+Per-beat placement selected from the real underlying video frame, using the quietest valid region
+while excluding the camera PiP, face, caption band, and delivery-safe footer. Promotion verifies the
+rendered overlay pixels, not just the motion plan.
+_Avoid_: Center everything, overlay-only collision proof
+
+**Skeuomorphic Motion Panel**:
+A compact animated panel that borrows the window chrome, light/dark treatment, depth, and scale of
+the visible desktop environment while leaving the source proof legible around it.
+_Avoid_: Full-screen title card, opaque proof replacement, giant text over UI
+
 **Evidence-Bearing Short**:
 A dual-source Short with at least 25% real source-mapped screen proof, an animated hook beat in its
-first two seconds, a later animated proof beat, delivered-media transcription, and green audio and
-editorial gates.
+first two seconds, a later animated proof beat, transcript-synchronous captions, delivered-media
+transcription, and green audio, contextual-motion, and editorial gates.
 _Avoid_: Talking head plus static card, motion-only proof
 
 **Exact Studio Sound Reuse**:

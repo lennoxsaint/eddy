@@ -16,7 +16,7 @@ def load_motion_script():
     return module
 
 
-def test_portrait_stat_uses_short_safe_type_scale() -> None:
+def test_portrait_stat_uses_compact_skeuomorphic_panel() -> None:
     motion = load_motion_script()
     brief = {
         "width": 1080,
@@ -35,12 +35,14 @@ def test_portrait_stat_uses_short_safe_type_scale() -> None:
 
     html = motion.build_custom_html(brief, None, None)
 
-    assert ".stat { font-size:160px; max-width:940px; white-space:nowrap; }" in html
+    assert "contextual-panel" in html
+    assert ".stat { font-size:72px;" in html
+    assert "windowbar" in html
     assert '<div class="stat stagger">ANY MODEL</div>' in html
     assert '<div class="sub stagger">ONE CLICK</div>' in html
 
 
-def test_landscape_stat_keeps_long_form_type_scale() -> None:
+def test_landscape_stat_uses_compact_type_instead_of_covering_the_screen() -> None:
     motion = load_motion_script()
     html = motion.build_custom_html(
         {"width": 1920, "height": 1080, "duration": 1.0, "beats": []},
@@ -48,4 +50,5 @@ def test_landscape_stat_keeps_long_form_type_scale() -> None:
         None,
     )
 
-    assert ".stat { font-size:300px; max-width:1780px; white-space:nowrap; }" in html
+    assert ".stat { font-size:88px;" in html
+    assert "font-size:300px" not in html

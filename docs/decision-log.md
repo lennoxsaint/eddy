@@ -1,5 +1,23 @@
 # Eddy decision log
 
+## 2026-07-11 - Captions and motion must follow the delivered environment
+
+- Short caption timing is projected through the exact splice segment receipt. Eddy no longer
+  invents a uniform 0.1-second duration for every word.
+- Caption promotion compares the planned burned-caption timeline with a fresh transcript of the
+  delivered Short. Word-match coverage, total duration, onset error, and cue hold time must pass.
+- HyperFrames beats render as compact skeuomorphic desktop panels, not full-width opaque bands or
+  giant centered text. The real base frame selects light/dark treatment and the quietest valid
+  placement.
+- Long-form placement reserves the camera PiP. Portrait placement reserves the face, caption band,
+  and footer while leaving most of the raw screen proof visible.
+- Placement metadata is not enough: Eddy samples the rendered overlay pixels for every beat and
+  blocks promotion when coverage is excessive, the graphic escapes its assigned panel, or any pixel
+  enters a reserved region.
+
+This repairs the run where Short captions compressed 16-23 seconds of speech into 5-9 seconds and
+where otherwise green motion covered the browser UI, source proof, and caption-safe regions.
+
 ## 2026-07-10 - Exact green Studio Sound renders are reusable proof
 
 - Eddy caches a real Studio Sound output by the SHA-256 of the exact pre-audio MP4, never by title,

@@ -9,6 +9,8 @@ from PIL import Image
 
 from eddy.proof import (
     _global_ssim,
+    caption_sync_verdict,
+    contextual_motion_verdict,
     measure_motion_activity,
     motion_activity_verdict,
     screen_proof_share,
@@ -17,6 +19,83 @@ from eddy.proof import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_caption_sync_rejects_synthetic_tenth_second_timings() -> None:
+    planned = [
+        {"word": word, "start": index * 0.1, "end": index * 0.1 + 0.08}
+        for index, word in enumerate("captions must follow the words people actually hear".split())
+    ]
+    delivered = [
+        {"word": word, "start": index * 0.32, "end": index * 0.32 + 0.24}
+        for index, word in enumerate("captions must follow the words people actually hear".split())
+    ]
+
+    verdict = caption_sync_verdict(planned, delivered)
+
+    assert verdict["pass"] is False
+    assert verdict["reason"] == "caption_timeline_out_of_sync"
+
+
+def test_caption_sync_accepts_splice_mapped_word_timings() -> None:
+    planned = [
+        {"word": word, "start": index * 0.32 + 0.03, "end": index * 0.32 + 0.25}
+        for index, word in enumerate("captions follow the delivered speech".split())
+    ]
+    delivered = [
+        {"word": word, "start": index * 0.32, "end": index * 0.32 + 0.24}
+        for index, word in enumerate("captions follow the delivered speech".split())
+    ]
+
+    verdict = caption_sync_verdict(planned, delivered)
+
+    assert verdict["pass"] is True
+    assert verdict["matched_word_ratio"] == 1.0
+
+
+def test_contextual_motion_verifies_rendered_pixels_avoid_reserved_regions(
+    tmp_path: Path,
+) -> None:
+    overlay = tmp_path / "overlay.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:size=320x180:rate=30:duration=1",
+            "-vf",
+            "drawbox=x=20:y=20:w=80:h=60:color=white:t=fill",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(overlay),
+        ],
+        check=True,
+    )
+    placement = {
+        "contract": "contextual_skeuomorphic_v1",
+        "pass": True,
+        "reserved_regions": [[240, 120, 320, 180]],
+        "beats": [
+            {
+                "id": "proof",
+                "start": 0.0,
+                "dur": 1.0,
+                "box": [20, 20, 100, 80],
+                "pass": True,
+            }
+        ],
+    }
+
+    verdict = contextual_motion_verdict(overlay, placement)
+
+    assert verdict["pass"] is True
+    assert verdict["beats"][0]["rendered_reserved_overlap_ratio"] == 0.0
 
 
 def _load_script(name: str):

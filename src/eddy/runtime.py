@@ -42,7 +42,10 @@ REQUIRED_FINAL_GATES = {
     "editorial_ledger_resolved",
     "shorts_screen_proof",
     "shorts_motion_activity",
+    "shorts_caption_sync",
+    "shorts_contextual_motion",
     *(f"hyperframes_motion_hook_{rank}" for rank in range(1, 4)),
+    *(f"contextual_motion_hook_{rank}" for rank in range(1, 4)),
     *(f"descript_effect_survival_hook_{rank}" for rank in range(1, 4)),
     *(f"deterministic_qa_hook_{rank}" for rank in range(1, 4)),
 }

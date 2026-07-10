@@ -14,7 +14,12 @@ from typing import Any
 
 from .audio_effect import restore_effect_cache, store_effect_cache
 from .plan import EditPlanV3, HookPlan, ShortPlan
-from .proof import measure_motion_activity, screen_proof_verdict
+from .proof import (
+    caption_sync_verdict,
+    contextual_motion_verdict,
+    measure_motion_activity,
+    screen_proof_verdict,
+)
 from .runtime import JobManager, JobState
 
 
@@ -436,12 +441,20 @@ class PipelineRunner:
                 if motion is not None and motion.returncode == 0 and motion_overlay.exists()
                 else {"pass": False, "failed_beats": ["motion_render_missing"], "beats": []}
             )
+            motion_placement = _read_motion_context_proof(
+                stage / f"motion-{item.hook.rank}" / "long-overlay" / "placement-proof.json",
+                expected_beats=len(long_beats),
+            )
+            motion_context = contextual_motion_verdict(motion_overlay, motion_placement)
+            context_green = bool(motion_context["pass"])
+            gates[f"contextual_motion_hook_{item.hook.rank}"] = context_green
             motion_green = (
                 motion is not None
                 and motion.returncode == 0
                 and motioned.exists()
                 and not fake_hyperframes
                 and bool(motion_activity["pass"])
+                and context_green
             )
             gates[f"hyperframes_motion_hook_{item.hook.rank}"] = motion_green
             if not motion_green:
@@ -450,6 +463,8 @@ class PipelineRunner:
                     if fake_hyperframes
                     else "hyperframes_motion_failed"
                 )
+            if not context_green:
+                blockers.append("contextual_motion_fit_failed")
 
             self.manager.transition(job_id, JobState.ENHANCING_AUDIO)
             enhanced = long_dir / item.output_name
@@ -531,6 +546,7 @@ class PipelineRunner:
                         "rank": item.hook.rank,
                         "delivered_cadence_repaired": cadence_repaired,
                         "motion_activity": motion_activity,
+                        "motion_context": motion_context,
                         **qa_payload,
                     }
                 )
@@ -553,6 +569,8 @@ class PipelineRunner:
             short_greens: list[bool] = []
             short_screen_greens: list[bool] = []
             short_motion_greens: list[bool] = []
+            short_context_greens: list[bool] = []
+            short_caption_greens: list[bool] = []
             for index, short in enumerate(plan.shorts, start=1):
                 short_id = _slug(short.id)
                 cutlist = stage / f"short-{short_id}-cutlist.json"
@@ -627,7 +645,11 @@ class PipelineRunner:
                         cwd=self.root,
                     )
                 short_words = stage / f"short-{short_id}-words.json"
-                _write_words_for_ranges(transcript, short.segments, short_words)
+                _write_caption_words_for_segments(
+                    transcript,
+                    short_camera.with_name(f"short-{short_id}-camera.segments.json"),
+                    short_words,
+                )
                 short_ass = stage / f"short-{short_id}.ass"
                 captioned = stage / f"short-{short_id}-captioned.mp4"
                 _run(
@@ -643,6 +665,8 @@ class PipelineRunner:
                         str(short_composite),
                         "--video-out",
                         str(captioned),
+                        "--max-words",
+                        "5",
                     ],
                     cwd=self.root,
                 )
@@ -678,15 +702,31 @@ class PipelineRunner:
                     if short_motion.returncode == 0 and short_motion_overlay.exists()
                     else {"pass": False, "failed_beats": ["motion_render_missing"], "beats": []}
                 )
+                short_motion_placement = _read_motion_context_proof(
+                    stage
+                    / f"motion-short-{short_id}"
+                    / "shorts-card"
+                    / "placement-proof.json",
+                    expected_beats=len(short.motion_beats),
+                )
+                short_motion_context = contextual_motion_verdict(
+                    short_motion_overlay,
+                    short_motion_placement,
+                )
+                short_context_green = bool(short_motion_context["pass"])
+                short_context_greens.append(short_context_green)
                 short_motion_green = (
                     short_motion.returncode == 0
                     and short_motioned.exists()
                     and not fake_hyperframes
                     and bool(short_motion_activity["pass"])
+                    and short_context_green
                 )
                 short_motion_greens.append(short_motion_green)
                 if not short_motion_green:
                     blockers.append(f"short_motion_failed:{short_id}")
+                if not short_context_green:
+                    blockers.append(f"short_contextual_motion_failed:{short_id}")
                 short_final = shorts_dir / f"{index:02d}-{short_id}.mp4"
                 short_artifact = f"shorts/{index:02d}-{short_id}.mp4"
                 audio_input = short_motioned if short_motion_green else captioned
@@ -711,6 +751,18 @@ class PipelineRunner:
                 short_final_words = stage / f"short-{short_id}-final-words.json"
                 if audio.passed:
                     _transcribe_final(self.root, short_final, short_final_words)
+                short_caption_sync = (
+                    caption_sync_verdict(
+                        json.loads(short_words.read_text()).get("words", []),
+                        json.loads(short_final_words.read_text()).get("words", []),
+                    )
+                    if audio.passed and short_final_words.exists()
+                    else {"pass": False, "reason": "caption_timeline_out_of_sync"}
+                )
+                short_caption_green = bool(short_caption_sync["pass"])
+                short_caption_greens.append(short_caption_green)
+                if not short_caption_green:
+                    blockers.append(f"short_caption_sync_failed:{short_id}")
                 short_qa = subprocess.run(
                     [
                         sys.executable,
@@ -764,6 +816,7 @@ class PipelineRunner:
                     and short_qa is not None
                     and short_qa.returncode == 0
                     and short_motion_green
+                    and short_caption_green
                     and bool(proof["pass"])
                 )
                 short_greens.append(green)
@@ -771,6 +824,8 @@ class PipelineRunner:
                     {
                         "short": short.id,
                         "motion_activity": short_motion_activity,
+                        "motion_context": short_motion_context,
+                        "caption_sync": short_caption_sync,
                         "screen_proof": proof,
                         "pass": green,
                     }
@@ -787,9 +842,17 @@ class PipelineRunner:
             gates["shorts_motion_activity"] = (
                 len(short_motion_greens) == len(plan.shorts) and all(short_motion_greens)
             )
+            gates["shorts_contextual_motion"] = (
+                len(short_context_greens) == len(plan.shorts) and all(short_context_greens)
+            )
+            gates["shorts_caption_sync"] = (
+                len(short_caption_greens) == len(plan.shorts) and all(short_caption_greens)
+            )
         gates["editorial_ledger_resolved"] = True
         gates.setdefault("shorts_screen_proof", False)
         gates.setdefault("shorts_motion_activity", False)
+        gates.setdefault("shorts_contextual_motion", False)
+        gates.setdefault("shorts_caption_sync", False)
         finish_attempt()
 
 
@@ -1219,23 +1282,66 @@ def _write_motion_brief(
     )
 
 
-def _write_words_for_ranges(
+def _write_caption_words_for_segments(
     transcript: Path,
-    ranges: Any,
+    segment_receipt: Path,
     output: Path,
 ) -> None:
     words = json.loads(transcript.read_text()).get("words", [])
-    selected = [
-        word
-        for start, end in ranges
-        for word in words
-        if float(word.get("start", 0.0)) >= start and float(word.get("end", 0.0)) <= end
-    ]
-    normalized = [
-        {"word": word.get("word", ""), "start": index * 0.1, "end": index * 0.1 + 0.08}
-        for index, word in enumerate(selected)
-    ]
-    _write_json(output, {"words": normalized})
+    segments = json.loads(segment_receipt.read_text()).get("segments", [])
+    mapped: list[dict[str, Any]] = []
+    output_cursor = 0.0
+    for segment_start_raw, segment_end_raw in segments:
+        segment_start = float(segment_start_raw)
+        segment_end = float(segment_end_raw)
+        for word in words:
+            word_start = float(word.get("start", 0.0))
+            word_end = float(word.get("end", 0.0))
+            if word_end <= segment_start or word_start >= segment_end:
+                continue
+            clipped_start = max(word_start, segment_start)
+            clipped_end = min(word_end, segment_end)
+            if clipped_end <= clipped_start:
+                continue
+            mapped.append(
+                {
+                    "word": word.get("word", ""),
+                    "start": round(output_cursor + clipped_start - segment_start, 3),
+                    "end": round(output_cursor + clipped_end - segment_start, 3),
+                    "source_start": round(clipped_start, 3),
+                    "source_end": round(clipped_end, 3),
+                }
+            )
+        output_cursor += segment_end - segment_start
+    _write_json(output, {"words": mapped})
+
+
+def _read_motion_context_proof(path: Path, *, expected_beats: int) -> dict[str, Any]:
+    if not path.exists():
+        return {
+            "pass": False,
+            "contract": "contextual_skeuomorphic_v1",
+            "reason": "motion_placement_proof_missing",
+            "beats": [],
+        }
+    try:
+        payload = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {
+            "pass": False,
+            "contract": "contextual_skeuomorphic_v1",
+            "reason": "motion_placement_proof_invalid",
+            "beats": [],
+        }
+    beats = payload.get("beats") if isinstance(payload, dict) else None
+    valid = (
+        isinstance(beats, list)
+        and len(beats) == expected_beats
+        and payload.get("contract") == "contextual_skeuomorphic_v1"
+        and payload.get("pass") is True
+        and all(isinstance(row, dict) and row.get("pass") is True for row in beats)
+    )
+    return {**payload, "pass": valid}
 
 
 def _write_transcript_markdown(transcript: Path, output: Path) -> None:
