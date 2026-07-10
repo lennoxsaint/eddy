@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -55,6 +56,19 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def canonical_surface_commit(
+    root: Path, files: Iterable[str] = CANONICAL_SURFACES
+) -> str:
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", *tuple(files)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else "UNKNOWN"
 
 
 def build_manifest(

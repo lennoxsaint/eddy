@@ -5,14 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from eddy.sync import CANONICAL_SURFACES, check_projection, write_projection  # noqa: E402
+from eddy.sync import (  # noqa: E402
+    CANONICAL_SURFACES,
+    canonical_surface_commit,
+    check_projection,
+    write_projection,
+)
 
 PROJECTIONS = (
     ROOT / "plugins" / "eddy" / "skills" / "eddy",
@@ -20,19 +24,12 @@ PROJECTIONS = (
 )
 
 
-def commit() -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
-    )
-    return result.stdout.strip() if result.returncode == 0 else "UNKNOWN"
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     results = []
-    canonical_commit = commit()
+    canonical_commit = canonical_surface_commit(ROOT)
     for projection in PROJECTIONS:
         if args.check:
             result = check_projection(

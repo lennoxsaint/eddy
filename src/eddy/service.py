@@ -12,7 +12,7 @@ from typing import Any
 
 from .contract import canonical_contract
 from .runtime import JobManager, JobState
-from .sync import CANONICAL_SURFACES, check_projection
+from .sync import CANONICAL_SURFACES, canonical_surface_commit, check_projection
 from .support import create_support_bundle
 from .trust import trust_status
 
@@ -104,6 +104,7 @@ class EddyService:
 
     def sync_doctor(self) -> dict[str, Any]:
         commit = _git_commit(self.canonical_root)
+        surface_commit = canonical_surface_commit(self.canonical_root)
         installed: dict[str, dict[str, Any]] = {}
         for path in (
             Path.home() / ".claude" / "skills" / "eddy",
@@ -126,7 +127,7 @@ class EddyService:
                 self.canonical_root,
                 path,
                 files=CANONICAL_SURFACES,
-                canonical_commit=commit,
+                canonical_commit=surface_commit,
             )
             projections[relative] = {
                 "exists": True,
@@ -140,6 +141,7 @@ class EddyService:
             "product": canonical_contract().product_name,
             "canonical_root": str(self.canonical_root),
             "canonical_commit": commit,
+            "canonical_surface_commit": surface_commit,
             "owner_channel": "main",
             "public_channel": "stable_tags",
             "installed": installed,
