@@ -36,6 +36,8 @@ def test_portrait_stat_uses_short_safe_type_scale() -> None:
     html = motion.build_custom_html(brief, None, None)
 
     assert ".stat { font-size:160px; max-width:940px; white-space:nowrap; }" in html
+    assert '<div class="stat stagger">ANY MODEL</div>' in html
+    assert '<div class="sub stagger">ONE CLICK</div>' in html
 
 
 def test_landscape_stat_keeps_long_form_type_scale() -> None:

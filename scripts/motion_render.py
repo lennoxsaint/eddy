@@ -163,8 +163,8 @@ def _beat_markup(i: int, b: dict) -> str:
             for ic in b.get("icons", []))
         inner = f'<div class="row">{tiles}</div>'
     elif layout == "stat":
-        sub = f'<div class="sub">{esc(b["label"])}</div>' if b.get("label") else ""
-        inner = f'<div class="stat">{esc(b.get("value",""))}</div>{sub}'
+        sub = f'<div class="sub stagger">{esc(b["label"])}</div>' if b.get("label") else ""
+        inner = f'<div class="stat stagger">{esc(b.get("value",""))}</div>{sub}'
     elif layout == "flow":
         parts = []
         for j, n in enumerate(b.get("nodes", [])):

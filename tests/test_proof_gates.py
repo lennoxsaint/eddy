@@ -490,6 +490,103 @@ def test_delivered_gap_gate_blocks_extreme_outlier() -> None:
     assert verdict["violations"] == [[0.3, 1.2]]
 
 
+def test_delivered_repeat_honors_matching_reviewed_callback() -> None:
+    verify = _load_script("verify")
+    issue = {
+        "kind": "repeat",
+        "variants": [
+            {"text": "I'll build the whole thing on screen and you'll walk away with your own copy running any model you want."},
+            {"text": "Got your own copy running any model you want."},
+        ],
+    }
+    ledger = {
+        "candidates": [
+            {
+                "id": "repeat-reviewed",
+                "kind": "repeat",
+                "variants": [
+                    {"text": "I'll build the whole thing on screen and you'll walk away with your own copy running any model you want."},
+                    {"text": "You've got your own copy running any model you want."},
+                ],
+            }
+        ]
+    }
+    plan = {
+        "editorial_review": {
+            "resolutions": [
+                {"candidate_id": "repeat-reviewed", "action": "intentional_repeat"}
+            ]
+        }
+    }
+
+    assert verify.filter_resolved_intentional_repeats([issue], plan, ledger) == []
+
+
+def test_delivered_repeat_does_not_hide_unmatched_retake() -> None:
+    verify = _load_script("verify")
+    issue = {
+        "kind": "repeat",
+        "variants": [
+            {"text": "So the fix is this exact local proxy."},
+            {"text": "So the fix is this exact local proxy again."},
+        ],
+    }
+    ledger = {
+        "candidates": [
+            {
+                "id": "repeat-reviewed",
+                "kind": "repeat",
+                "variants": [
+                    {"text": "Your own copy running any model you want."},
+                    {"text": "You now have a copy running any model you want."},
+                ],
+            }
+        ]
+    }
+    plan = {
+        "editorial_review": {
+            "resolutions": [
+                {"candidate_id": "repeat-reviewed", "action": "intentional_repeat"}
+            ]
+        }
+    }
+
+    assert verify.filter_resolved_intentional_repeats([issue], plan, ledger) == [issue]
+
+
+def test_delivered_repeat_does_not_hide_an_extra_unreviewed_variant() -> None:
+    verify = _load_script("verify")
+    issue = {
+        "kind": "repeat",
+        "variants": [
+            {"text": "I'll build the whole thing and you get your own copy."},
+            {"text": "You get your own copy at the end."},
+            {"text": "You get your own copy at the end again."},
+        ],
+    }
+    ledger = {
+        "candidates": [
+            {
+                "id": "repeat-reviewed",
+                "kind": "repeat",
+                "variants": [
+                    {"text": "I'll build the whole thing and you get your own copy."},
+                    {"text": "You get your own copy at the end."},
+                ],
+            }
+        ]
+    }
+    plan = {
+        "editorial_review": {
+            "resolutions": [
+                {"candidate_id": "repeat-reviewed", "action": "intentional_repeat"}
+            ]
+        }
+    }
+
+    assert verify.filter_resolved_intentional_repeats([issue], plan, ledger) == [issue]
+
+
 def test_delivered_gap_gate_blocks_slow_p95() -> None:
     verify = _load_script("verify")
     words = [

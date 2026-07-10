@@ -1,9 +1,21 @@
 # Eddy decision log
 
+## 2026-07-10 - Delivered callbacks inherit exact source-ledger resolutions
+
+- Delivered-media retranscription remains the final editorial source of truth.
+- A delivered repeat is treated as resolved only when two distinct delivered variants match two
+  distinct variants from one source-ledger candidate explicitly reviewed as `intentional_repeat`.
+- New repeats, unmatched variants, reset loops, and false starts remain blocking.
+
+This repairs the free-model long where a reviewed opening promise and closing CTA callback was
+incorrectly reclassified as an unresolved retake after delivery.
+
 ## 2026-07-10 - Portrait motion owns a portrait type scale
 
 - HyperFrames stat beats use `160px` type inside a 1080px portrait Short while long-form landscape
   beats retain the approved `300px` scale.
+- Stat and subtitle nodes are real stagger targets, so HyperFrames validation receipts stay complete
+  instead of overflowing its warning-output cap with missing-target noise.
 - Motion inspection remains blocking. Eddy fixes overflow at the composition source rather than
   bypassing `text_box_overflow` or falling back to a static captioned card.
 
