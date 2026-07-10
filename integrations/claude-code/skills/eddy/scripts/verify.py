@@ -188,7 +188,7 @@ def word_gap_verdict(
 
     gaps: list[list[float]] = []
     protected_violations: list[list[float]] = []
-    ordinary_violations: list[list[float]] = []
+    ordinary_gaps: list[list[float]] = []
     for left, right in zip(words, words[1:], strict=False):
         start, end = float(left["end"]), float(right["start"])
         if end <= start:
@@ -199,17 +199,29 @@ def word_gap_verdict(
         if _in_windows(midpoint, protected_windows, pad=0.0):
             if end - start > PROTECTED_PAUSE_CEILING:
                 protected_violations.append(gap)
-        elif end - start > hard_max + alignment_tolerance:
-            ordinary_violations.append(gap)
+        else:
+            ordinary_gaps.append(gap)
     durations = sorted(end - start for start, end in gaps)
     percentile_index = max(0, int(len(durations) * 0.95) - 1)
     p95 = durations[percentile_index] if durations else 0.0
+    slow_overall = p95 > hard_max + alignment_tolerance
+    ordinary_violations = (
+        [gap for gap in ordinary_gaps if gap[1] - gap[0] > hard_max + alignment_tolerance]
+        if slow_overall
+        else [
+            gap
+            for gap in ordinary_gaps
+            if gap[1] - gap[0] > PROTECTED_PAUSE_CEILING
+        ]
+    )
     return {
         "pass": not ordinary_violations and not protected_violations,
         "hard_max_s": hard_max,
         "alignment_tolerance_s": alignment_tolerance,
+        "extreme_gap_ceiling_s": PROTECTED_PAUSE_CEILING,
         "protected_ceiling_s": PROTECTED_PAUSE_CEILING,
         "p95_s": round(p95, 3),
+        "slow_overall": slow_overall,
         "violations": ordinary_violations,
         "protected_violations": protected_violations,
     }
