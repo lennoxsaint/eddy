@@ -1,5 +1,5 @@
 {
-  "canonical_commit": "50e329007af05d9a01956e012cfc969543d42281",
+  "canonical_commit": "aa8204f3b7a1cc0097cedb1a177b04de78727da9",
   "files": {
     "README.md": "8f0664b106f69857c19b4ee6fb31ffaa66a71daa8817031814d4aa4455d9198a",
     "SKILL.md": "01899eff9b26c7f24f57ce354cb966154004255d4f131a503a1b931479e7398f",
@@ -12,13 +12,13 @@
     "assets/vendor/gsap.min.js": "c3a03a345e45bc954cd48c43f11572891f5dca7a5d99348d5bc14753a728618c",
     "evals/evals.json": "9061e6dd633125f7df213a4a4e25bd5ea960a6eaa805e199e5aa33d30e9baf2f",
     "references/commands.md": "73ccf6adcb6d1a28c4e70b9ce05922ba52dd1ff6072910eab6c0e04754f3ac86",
-    "references/edit-plan-schema.md": "05ad2e3041952237c113204e517b294ef34599ad149e7ece4dedfe43cb6f8d11",
+    "references/edit-plan-schema.md": "769b0859f227956421a2a6d1ff19ed589f7d2c93dc60798f9de743efaa94d243",
     "references/hook-doctrine.md": "077fa891f915e4a35a9b4952abdccd413dd58bfb4064b461fd9d71f16a5e8c57",
     "references/layout-constants.md": "25a9738cc54e6d2dfee5862fb1c081a429086c007c4f226820705df54c998b41",
     "references/motion-layer.md": "587c36062d5fcef2bb90184d604a607230256f8ec0a5241e66d451acce495284",
     "references/retention-policy.md": "edc5973a55792b6afab4fe49a0ff3c3cca979cdce7ef9b1fae50d2fa8732b664",
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
-    "references/verification.md": "83b68b4eebe2a354a437f7d093ef84ff1dfe1823a11467062b131dd5f977e508",
+    "references/verification.md": "a8f6453ac7926609b5e586f2a105ecbada4be3fe923b853a5841d567498d7ef1",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
     "scripts/descript_studio_sound.py": "c63f46d17c8725e9b5bd9c6272562f273bc932bf4424611510ce56de83bdbb3b",
     "scripts/karaoke_ass.py": "8dfd70889e335656be9152518fc16812dc512d4bc850dfd3ee1dd8e83773987d",

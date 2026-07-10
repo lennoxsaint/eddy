@@ -18,7 +18,11 @@ source evidence; it never contains generated speech or packaging.
     {"id": "speed", "rank": 2, "segments": [[180.0, 215.0]], "proof_assets": []},
     {"id": "cost", "rank": 3, "segments": [[220.0, 255.0]], "proof_assets": []}
   ],
-  "shorts": [],
+  "shorts": [
+    {"id": "proof-short", "segments": [[140.0, 170.0]]},
+    {"id": "speed-short", "segments": [[180.0, 210.0]]},
+    {"id": "cost-short", "segments": [[220.0, 250.0]]}
+  ],
   "motion_beats": [{"hook_id": "proof", "start": 0.0, "end": 4.0, "kind": "proof"}]
 }
 ```
@@ -30,6 +34,6 @@ source evidence; it never contains generated speech or packaging.
 - The rank-1 hook creates the Primary Long; ranks 2 and 3 create Alternate Longs.
 - Every range is source time with `0 <= start < end`.
 - Protected moments survive every long.
-- Shorts are empty when no candidate clears the quality bar; otherwise provide 3–5 candidates.
+- Provide 3–5 unique, quality-gated Short candidates. If three do not clear the bar, the plan blocks.
 - Titles, descriptions, chapters, thumbnails, publishing fields, and arbitrary timestamps outside the
   source lock are rejected.

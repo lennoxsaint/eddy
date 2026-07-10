@@ -64,8 +64,8 @@ Autonomy means never stalling on a non-essential layer. On a stage failure:
   `short --face`). Not an error.
 - **WhisperX transcription fails** — retry once; if it still fails, stop (everything downstream
   needs word timings). Surface the exact stderr.
-- **HyperFrames / motion engine missing or errors** — the motion layer is enhancement, not core.
-  Skip it, ship the clean webcam+screen cut, and note "motion layer skipped" in `spot-check.md`.
+- **HyperFrames / motion engine missing or errors** — HARD stop for final promotion. Preserve the
+  clean cut as a candidate, quarantine the failed attempt, and report the exact motion blocker.
 - **`embedded-captions` unavailable** — fall back to the V1 caption style in `captions.py` (same
   constants); never ship without karaoke.
 - **Render fails at full-res** — re-run once at proxy to isolate; fix the offending stage, then
