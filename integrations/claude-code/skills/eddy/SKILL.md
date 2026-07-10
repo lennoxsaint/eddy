@@ -104,6 +104,11 @@ optional authenticated host plugin. Both must return a local audio artifact plus
 composition, provider, and hash receipts, and both pass the same Effect-Survival Gate. Never expose
 credentials in receipts, logs, project files, or answers.
 
+Configure a host adapter with `EDDY_DESCRIPT_CONNECTOR`. Eddy passes `--input-wav`,
+`--output-audio`, and `--receipt`. The receipt must identify `descript_host_connector`, a private
+project and composition, and matching source/output SHA-256 hashes. The host owns authentication
+and must not print credentials.
+
 ## Outputs
 
 Successful runs write `final/long-primary.mp4`, two `final/long-alternate-<angle>.mp4` files,
