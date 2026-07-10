@@ -70,12 +70,67 @@ class EddyService:
         job = self.manager.load(job_id)
         source_lock = json.loads((job.run_dir / "source-lock.json").read_text())
         transcript_path = job.run_dir / "transcript.json"
+        ledger_path = job.run_dir / "editorial-ledger.json"
+        ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else {
+            "chunks": [],
+            "candidates": [],
+        }
+        proof_assets = [
+            {
+                "path": path.relative_to(job.snapshot).as_posix(),
+                "kind": "image",
+            }
+            for path in sorted(job.snapshot.rglob("*"))
+            if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+        ]
+        screen_sources = [
+            relative
+            for relative in source_lock["before"]
+            if "screen" in relative.lower() or "display" in relative.lower()
+        ]
         return {
             "schema_version": "eddy-host-packet-v3",
             "job_id": job.id,
             "state": job.state.value,
             "source_hashes": source_lock["before"],
             "transcript": json.loads(transcript_path.read_text()) if transcript_path.exists() else None,
+            "transcript_chunks": ledger.get("chunks", []),
+            "editorial_ledger": ledger,
+            "long_gaps": [
+                item for item in ledger.get("candidates", []) if item.get("kind") == "long_gap"
+            ],
+            "proof_assets": proof_assets,
+            "screen_sources": screen_sources,
+            "screen_proof_candidates": [
+                {
+                    "id": chunk["id"],
+                    "start": chunk["start"],
+                    "end": chunk["end"],
+                    "text": chunk["text"],
+                }
+                for chunk in ledger.get("chunks", [])
+            ],
+            "motion_requirements": {
+                "longs": {
+                    "minimum_animated_beats_per_hook": 2,
+                    "render_host_authored_plan": True,
+                },
+                "shorts": {
+                    "minimum_screen_share": 0.25,
+                    "minimum_animated_beats": 2,
+                    "hook_beat_starts_by_s": 2.0,
+                }
+            },
+            "prior_repair": (
+                json.loads((job.run_dir / "repair-packet.json").read_text())
+                if (job.run_dir / "repair-packet.json").exists()
+                else None
+            ),
+            "requested_host_action": (
+                "repair_edit_plan_from_prior_evidence"
+                if (job.run_dir / "repair-packet.json").exists()
+                else "review_every_chunk_and_resolve_every_ledger_item"
+            ),
             "edit_plan_schema": "edit-plan-v3",
             "requirements": {
                 "primary_hooks": 1,

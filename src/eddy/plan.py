@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from .proof import screen_proof_share
+
 
 class PlanValidationError(ValueError):
     """The host plan violates the public Eddy v3 contract."""
@@ -15,7 +17,43 @@ class PlanValidationError(ValueError):
 class BodyPlan:
     keep: tuple[tuple[float, float], ...]
     drop: tuple[tuple[float, float], ...]
-    retake_groups: tuple[dict[str, Any], ...]
+    retake_groups: tuple["RetakeGroup", ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RetakeVariant:
+    id: str
+    start: float
+    end: float
+
+
+@dataclass(frozen=True, slots=True)
+class RetakeGroup:
+    id: str
+    selected_variant_id: str
+    variants: tuple[RetakeVariant, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EditorialResolution:
+    candidate_id: str
+    action: str
+    selected_variant_id: str | None
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class EditorialReview:
+    coverage: tuple[tuple[float, float], ...]
+    resolutions: tuple[EditorialResolution, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ShortPlan:
+    id: str
+    segments: tuple[tuple[float, float], ...]
+    screen_proof_segments: tuple[tuple[float, float], ...]
+    motion_beats: tuple[dict[str, Any], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,9 +69,10 @@ class EditPlanV3:
     schema_version: str
     source_hashes: dict[str, str]
     protected: tuple[dict[str, Any], ...]
+    editorial_review: EditorialReview
     body: BodyPlan
     hooks: tuple[HookPlan, HookPlan, HookPlan]
-    shorts: tuple[dict[str, Any], ...]
+    shorts: tuple[ShortPlan, ...]
     motion_beats: tuple[dict[str, Any], ...]
 
     @property
@@ -50,6 +89,7 @@ class EditPlanV3:
             "schema_version",
             "source_hashes",
             "protected",
+            "editorial_review",
             "body",
             "hooks",
             "shorts",
@@ -70,13 +110,21 @@ class EditPlanV3:
         if len({hook.id for hook in hooks}) != 3:
             raise PlanValidationError("hook_ids_must_be_unique")
 
+        raw_review = payload.get("editorial_review")
+        if not isinstance(raw_review, dict):
+            raise PlanValidationError("editorial_review_required")
+        editorial_review = EditorialReview(
+            coverage=_ranges(raw_review.get("coverage"), "editorial_coverage"),
+            resolutions=_parse_resolutions(raw_review.get("resolutions")),
+        )
+
         raw_body = payload.get("body")
         if not isinstance(raw_body, dict):
             raise PlanValidationError("shared_body_required")
         body = BodyPlan(
             keep=_ranges(raw_body.get("keep"), "body_keep"),
             drop=_ranges(raw_body.get("drop", []), "body_drop"),
-            retake_groups=_dict_sequence(raw_body.get("retake_groups", []), "retake_groups"),
+            retake_groups=_parse_retake_groups(raw_body.get("retake_groups", [])),
         )
         if not body.keep:
             raise PlanValidationError("shared_body_keep_required")
@@ -87,17 +135,14 @@ class EditPlanV3:
         if not all(isinstance(key, str) and _valid_hash(value) for key, value in hashes.items()):
             raise PlanValidationError("source_hash_invalid")
 
-        shorts = payload.get("shorts", [])
-        if not isinstance(shorts, list) or not 3 <= len(shorts) <= 5:
+        raw_shorts = payload.get("shorts", [])
+        if not isinstance(raw_shorts, list) or not 3 <= len(raw_shorts) <= 5:
             raise PlanValidationError("shorts_count_must_be_3_to_5")
-        if any(
-            not isinstance(item, dict)
-            or not isinstance(item.get("id"), str)
-            or not _ranges(item.get("segments"), "short_segments")
-            for item in shorts
-        ):
-            raise PlanValidationError("short_candidate_invalid")
-        short_ids = [str(item["id"]).strip() for item in shorts]
+        dual_source = any(
+            "screen" in name.lower() or "display" in name.lower() for name in hashes
+        )
+        shorts = tuple(_parse_short(item, dual_source=dual_source) for item in raw_shorts)
+        short_ids = [item.id for item in shorts]
         if any(not short_id for short_id in short_ids) or len(set(short_ids)) != len(short_ids):
             raise PlanValidationError("short_ids_must_be_unique")
 
@@ -111,13 +156,38 @@ class EditPlanV3:
                 raise PlanValidationError("protected_range_invalid")
             if not isinstance(item.get("reason"), str) or not item["reason"].strip():
                 raise PlanValidationError("protected_reason_required")
+            protected_range = (start, end)
+            if not _range_fully_covered(protected_range, body.keep):
+                raise PlanValidationError("protected_span_missing_from_shared_body")
+            if any(_overlaps(protected_range, dropped) for dropped in body.drop):
+                raise PlanValidationError("body_drop_overlaps_protected_span")
+            for group in body.retake_groups:
+                for variant in group.variants:
+                    variant_range = (variant.start, variant.end)
+                    if (
+                        variant.id != group.selected_variant_id
+                        and _overlaps(protected_range, variant_range)
+                    ):
+                        raise PlanValidationError("retake_drop_overlaps_protected_span")
 
         motion_beats = _dict_sequence(payload.get("motion_beats", []), "motion_beats")
+        _validate_motion_beats(motion_beats, label="long_motion")
+        for hook in hooks:
+            applicable = tuple(
+                beat
+                for beat in motion_beats
+                if beat.get("hook_id") in {None, "*", hook.id}
+            )
+            if len(applicable) < 2:
+                raise PlanValidationError(f"long_two_motion_beats_required:{hook.id}")
+            if min(float(beat["start"]) for beat in applicable) > 2.0:
+                raise PlanValidationError(f"long_hook_motion_must_start_by_two_seconds:{hook.id}")
 
         return cls(
             schema_version="edit-plan-v3",
             source_hashes=dict(hashes),
             protected=protected,
+            editorial_review=editorial_review,
             body=body,
             hooks=hooks,  # type: ignore[arg-type]
             shorts=tuple(shorts),
@@ -129,10 +199,32 @@ class EditPlanV3:
             "schema_version": self.schema_version,
             "source_hashes": self.source_hashes,
             "protected": list(self.protected),
+            "editorial_review": {
+                "coverage": [list(item) for item in self.editorial_review.coverage],
+                "resolutions": [
+                    {
+                        "candidate_id": item.candidate_id,
+                        "action": item.action,
+                        "selected_variant_id": item.selected_variant_id,
+                        "reason": item.reason,
+                    }
+                    for item in self.editorial_review.resolutions
+                ],
+            },
             "body": {
                 "keep": [list(item) for item in self.body.keep],
                 "drop": [list(item) for item in self.body.drop],
-                "retake_groups": list(self.body.retake_groups),
+                "retake_groups": [
+                    {
+                        "id": group.id,
+                        "selected_variant_id": group.selected_variant_id,
+                        "variants": [
+                            {"id": variant.id, "start": variant.start, "end": variant.end}
+                            for variant in group.variants
+                        ],
+                    }
+                    for group in self.body.retake_groups
+                ],
             },
             "hooks": [
                 {
@@ -143,7 +235,15 @@ class EditPlanV3:
                 }
                 for hook in self.hooks
             ],
-            "shorts": list(self.shorts),
+            "shorts": [
+                {
+                    "id": item.id,
+                    "segments": [list(value) for value in item.segments],
+                    "screen_proof_segments": [list(value) for value in item.screen_proof_segments],
+                    "motion_beats": list(item.motion_beats),
+                }
+                for item in self.shorts
+            ],
             "motion_beats": list(self.motion_beats),
         }
 
@@ -193,3 +293,108 @@ def _parse_hook(value: object) -> HookPlan:
     if not isinstance(proof_assets, list) or not all(isinstance(item, str) for item in proof_assets):
         raise PlanValidationError("hook_proof_assets_invalid")
     return HookPlan(hook_id.strip(), rank, segments, tuple(proof_assets))
+
+
+def _parse_resolutions(value: object) -> tuple[EditorialResolution, ...]:
+    if not isinstance(value, list):
+        raise PlanValidationError("editorial_resolutions_required")
+    allowed_actions = {"keep_last", "keep_variant", "drop_all", "intentional_repeat", "tighten_gap"}
+    parsed: list[EditorialResolution] = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("candidate_id"), str):
+            raise PlanValidationError("editorial_resolution_invalid")
+        action = item.get("action")
+        if action not in allowed_actions:
+            raise PlanValidationError("editorial_resolution_action_invalid")
+        reason = item.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise PlanValidationError("editorial_resolution_reason_required")
+        selected = item.get("selected_variant_id")
+        if selected is not None and not isinstance(selected, str):
+            raise PlanValidationError("editorial_selected_variant_invalid")
+        parsed.append(EditorialResolution(item["candidate_id"], action, selected, reason.strip()))
+    if len({item.candidate_id for item in parsed}) != len(parsed):
+        raise PlanValidationError("editorial_resolution_ids_must_be_unique")
+    return tuple(parsed)
+
+
+def _parse_retake_groups(value: object) -> tuple[RetakeGroup, ...]:
+    if not isinstance(value, list):
+        raise PlanValidationError("retake_groups_must_be_object_list")
+    groups: list[RetakeGroup] = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise PlanValidationError("retake_group_invalid")
+        selected = item.get("selected_variant_id")
+        variants_raw = item.get("variants")
+        if not isinstance(selected, str) or not isinstance(variants_raw, list) or len(variants_raw) < 2:
+            raise PlanValidationError("retake_group_variants_invalid")
+        variants: list[RetakeVariant] = []
+        for variant in variants_raw:
+            if not isinstance(variant, dict) or not isinstance(variant.get("id"), str):
+                raise PlanValidationError("retake_variant_invalid")
+            ranges = _ranges([[variant.get("start"), variant.get("end")]], "retake_variant")
+            variants.append(RetakeVariant(variant["id"], ranges[0][0], ranges[0][1]))
+        if selected not in {variant.id for variant in variants}:
+            raise PlanValidationError("retake_selected_variant_unknown")
+        groups.append(RetakeGroup(item["id"], selected, tuple(variants)))
+    return tuple(groups)
+
+
+def _parse_short(value: object, *, dual_source: bool) -> ShortPlan:
+    if not isinstance(value, dict) or not isinstance(value.get("id"), str) or not value["id"].strip():
+        raise PlanValidationError("short_candidate_invalid")
+    segments = _ranges(value.get("segments"), "short_segments")
+    proof = _ranges(value.get("screen_proof_segments", []), "short_screen_proof")
+    beats = _dict_sequence(value.get("motion_beats", []), "short_motion_beats")
+    if len(beats) < 2:
+        raise PlanValidationError("short_two_motion_beats_required")
+    _validate_motion_beats(beats, label="short_motion")
+    if min(float(beat["start"]) for beat in beats) > 2.0:
+        raise PlanValidationError("short_hook_motion_must_start_by_two_seconds")
+    if dual_source and screen_proof_share(proof, segments) < 0.25:
+        raise PlanValidationError("short_screen_proof_below_25_percent")
+    return ShortPlan(value["id"].strip(), segments, proof, beats)
+
+
+def _validate_motion_beats(beats: tuple[dict[str, Any], ...], *, label: str) -> None:
+    ids: list[str] = []
+    for beat in beats:
+        try:
+            start, duration = float(beat["start"]), float(beat["dur"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PlanValidationError(f"{label}_beat_invalid") from exc
+        beat_id = beat.get("id")
+        layout = beat.get("layout")
+        if (
+            start < 0
+            or duration <= 0
+            or not isinstance(beat_id, str)
+            or not beat_id.strip()
+            or not isinstance(layout, str)
+            or not layout.strip()
+        ):
+            raise PlanValidationError(f"{label}_beat_invalid")
+        ids.append(beat_id)
+    if len(set(ids)) != len(ids):
+        raise PlanValidationError(f"{label}_beat_ids_must_be_unique")
+
+
+def _overlaps(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return left[0] < right[1] and right[0] < left[1]
+
+
+def _range_fully_covered(
+    target: tuple[float, float],
+    ranges: tuple[tuple[float, float], ...],
+) -> bool:
+    cursor = target[0]
+    for start, end in sorted(ranges):
+        if end <= cursor:
+            continue
+        if start > cursor + 0.001:
+            return False
+        cursor = max(cursor, end)
+        if cursor >= target[1] - 0.001:
+            return True
+    return False

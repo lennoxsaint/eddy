@@ -10,19 +10,68 @@ from eddy.runtime import JobManager, JobState
 def valid_plan() -> dict:
     return {
         "schema_version": "edit-plan-v3",
-        "source_hashes": {"camera.mp4": "a" * 64},
+        "source_hashes": {"camera.mp4": "a" * 64, "screen.mp4": "b" * 64},
         "protected": [{"start": 10.0, "end": 12.0, "reason": "vulnerable pause"}],
-        "body": {"keep": [[5.0, 50.0]], "drop": [[0.0, 5.0]], "retake_groups": []},
+        "editorial_review": {
+            "coverage": [[0.0, 105.0]],
+            "resolutions": [
+                {
+                    "candidate_id": "repeat-1",
+                    "action": "keep_variant",
+                    "selected_variant_id": "repeat-1-b",
+                    "reason": "The later take is complete.",
+                }
+            ],
+        },
+        "body": {
+            "keep": [[5.0, 50.0]],
+            "drop": [[0.0, 5.0]],
+            "retake_groups": [
+                {
+                    "id": "repeat-1",
+                    "selected_variant_id": "repeat-1-b",
+                    "variants": [
+                        {"id": "repeat-1-a", "start": 20.0, "end": 22.0},
+                        {"id": "repeat-1-b", "start": 24.0, "end": 26.0},
+                    ],
+                }
+            ],
+        },
         "hooks": [
             {"id": "proof", "rank": 1, "segments": [[50.0, 65.0]], "proof_assets": ["post.png"]},
             {"id": "speed", "rank": 2, "segments": [[70.0, 85.0]], "proof_assets": []},
             {"id": "cost", "rank": 3, "segments": [[90.0, 105.0]], "proof_assets": []},
         ],
         "shorts": [
-            {"id": f"short-{index}", "segments": [[float(index), float(index + 1)]]}
+            {
+                "id": f"short-{index}",
+                "segments": [[float(index), float(index + 1)]],
+                "screen_proof_segments": [[float(index), float(index) + 0.25]],
+                "motion_beats": [
+                    {"id": "hook", "start": 0.0, "dur": 0.2, "layout": "stat", "label": "HOOK"},
+                    {"id": "proof", "start": 0.5, "dur": 0.2, "layout": "stat", "label": "PROOF"},
+                ],
+            }
             for index in range(3)
         ],
-        "motion_beats": [],
+        "motion_beats": [
+            {
+                "id": "long-hook",
+                "hook_id": "*",
+                "start": 0.0,
+                "dur": 0.8,
+                "layout": "stat",
+                "value": "HOOK",
+            },
+            {
+                "id": "long-proof",
+                "hook_id": "*",
+                "start": 3.0,
+                "dur": 0.8,
+                "layout": "image",
+                "label": "PROOF",
+            },
+        ],
     }
 
 
@@ -39,6 +88,8 @@ def test_edit_plan_requires_three_ranked_hooks_and_one_body() -> None:
     assert plan.primary_hook.id == "proof"
     assert [hook.id for hook in plan.alternate_hooks] == ["speed", "cost"]
     assert plan.body.keep == ((5.0, 50.0),)
+    assert plan.body.retake_groups[0].selected_variant_id == "repeat-1-b"
+    assert plan.editorial_review.resolutions[0].candidate_id == "repeat-1"
 
 
 def test_edit_plan_rejects_packaging_and_missing_alternate() -> None:
@@ -63,10 +114,6 @@ def test_edit_plan_requires_three_to_five_shorts() -> None:
         EditPlanV3.from_dict(one_short)
 
     three_shorts = valid_plan()
-    three_shorts["shorts"] = [
-        {"id": f"s{index}", "segments": [[float(index), float(index + 1)]]}
-        for index in range(3)
-    ]
     assert len(EditPlanV3.from_dict(three_shorts).shorts) == 3
 
 
@@ -80,6 +127,50 @@ def test_edit_plan_rejects_nonfinite_ranges_and_duplicate_short_ids() -> None:
     duplicate["shorts"][1]["id"] = duplicate["shorts"][0]["id"]
     with pytest.raises(PlanValidationError, match="short_ids_must_be_unique"):
         EditPlanV3.from_dict(duplicate)
+
+
+def test_edit_plan_requires_resolved_editorial_review() -> None:
+    missing_review = valid_plan()
+    missing_review.pop("editorial_review")
+    with pytest.raises(PlanValidationError, match="editorial_review_required"):
+        EditPlanV3.from_dict(missing_review)
+
+    unresolved = valid_plan()
+    unresolved["editorial_review"]["resolutions"][0]["reason"] = ""
+    with pytest.raises(PlanValidationError, match="editorial_resolution_reason_required"):
+        EditPlanV3.from_dict(unresolved)
+
+
+def test_dual_source_short_contract_requires_screen_share_and_two_motion_beats() -> None:
+    too_little_proof = valid_plan()
+    too_little_proof["shorts"][0]["screen_proof_segments"] = [[0.0, 0.1]]
+    with pytest.raises(PlanValidationError, match="short_screen_proof_below_25_percent"):
+        EditPlanV3.from_dict(too_little_proof)
+
+    one_beat = valid_plan()
+    one_beat["shorts"][0]["motion_beats"] = one_beat["shorts"][0]["motion_beats"][:1]
+    with pytest.raises(PlanValidationError, match="short_two_motion_beats_required"):
+        EditPlanV3.from_dict(one_beat)
+
+
+def test_long_motion_plan_must_cover_every_hook() -> None:
+    no_motion = valid_plan()
+    no_motion["motion_beats"] = []
+
+    with pytest.raises(PlanValidationError, match="long_two_motion_beats_required"):
+        EditPlanV3.from_dict(no_motion)
+
+
+def test_protected_span_cannot_be_dropped_or_omitted_from_shared_body() -> None:
+    omitted = valid_plan()
+    omitted["body"]["keep"] = [[20.0, 50.0]]
+    with pytest.raises(PlanValidationError, match="protected_span_missing_from_shared_body"):
+        EditPlanV3.from_dict(omitted)
+
+    dropped = valid_plan()
+    dropped["body"]["drop"] = [[11.0, 11.5]]
+    with pytest.raises(PlanValidationError, match="body_drop_overlaps_protected_span"):
+        EditPlanV3.from_dict(dropped)
 
 
 def test_job_start_hashes_sources_and_never_writes_inside_source(tmp_path: Path) -> None:
@@ -101,7 +192,48 @@ def test_job_start_hashes_sources_and_never_writes_inside_source(tmp_path: Path)
     assert (job.snapshot / "camera.mp4").read_bytes() == b"raw-media"
 
 
-def test_red_attempt_is_quarantined_and_never_promoted(tmp_path: Path) -> None:
+def test_top_level_raw_media_excludes_nested_prior_run_artifacts(tmp_path: Path) -> None:
+    source = tmp_path / "raw"
+    source.mkdir()
+    (source / "camera.mp4").write_bytes(b"camera")
+    (source / "screen.mp4").write_bytes(b"screen")
+    prior = source / "eddy-runs" / "old" / "final"
+    prior.mkdir(parents=True)
+    (prior / "video.mp4").write_bytes(b"derived")
+    manager = JobManager(tmp_path / "runs")
+
+    job = manager.start(source)
+
+    lock = json.loads((job.run_dir / "source-lock.json").read_text())
+    assert set(lock["before"]) == {"camera.mp4", "screen.mp4"}
+    assert not (job.snapshot / "eddy-runs").exists()
+
+
+def test_host_submission_blocks_unreviewed_editorial_candidate(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "camera.mp4").write_bytes(b"raw-media")
+    manager = JobManager(tmp_path / "runs")
+    job = manager.start(source)
+    job = manager.transition(job.id, JobState.AWAITING_HOST_PLAN)
+    (job.run_dir / "editorial-ledger.json").write_text(
+        json.dumps(
+            {
+                "chunks": [{"id": "chunk-001", "start": 0.0, "end": 10.0, "text": "text"}],
+                "candidates": [
+                    {"id": "missing-repeat", "kind": "repeat", "requires_resolution": True}
+                ],
+            }
+        )
+        + "\n"
+    )
+    payload = plan_for_job(job)
+
+    with pytest.raises(PlanValidationError, match="editorial_candidate_unresolved:missing-repeat"):
+        manager.submit_plan(job.id, payload)
+
+
+def test_red_attempt_is_quarantined_and_requests_host_repair(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
     (source / "camera.mp4").write_bytes(b"raw-media")
@@ -113,16 +245,17 @@ def test_red_attempt_is_quarantined_and_never_promoted(tmp_path: Path) -> None:
     attempt.mkdir(parents=True)
     (attempt / "long-primary.mp4").write_bytes(b"proxy")
 
-    blocked = manager.record_verification(
+    repair = manager.record_verification(
         job.id,
         attempt=attempt,
         gates={"audio_effect_survival": False, "source_lock": True},
         blockers=["descript_effect_not_rendered"],
     )
 
-    assert blocked.state is JobState.BLOCKED
-    assert (blocked.run_dir / "quarantine" / "attempt-1" / "long-primary.mp4").exists()
-    assert not (blocked.run_dir / "final").exists()
+    assert repair.state is JobState.AWAITING_HOST_REPAIR
+    assert (repair.run_dir / "quarantine" / "attempt-1" / "long-primary.mp4").exists()
+    assert json.loads((repair.run_dir / "repair-packet.json").read_text())["remaining_attempts"] == 2
+    assert not (repair.run_dir / "final").exists()
 
 
 def test_missing_required_verification_gates_can_never_promote(tmp_path: Path) -> None:
@@ -135,11 +268,35 @@ def test_missing_required_verification_gates_can_never_promote(tmp_path: Path) -
     attempt.mkdir(parents=True)
     (attempt / "long-primary.mp4").write_bytes(b"candidate")
 
-    blocked = manager.record_verification(job.id, attempt=attempt, gates={}, blockers=[])
+    repair = manager.record_verification(job.id, attempt=attempt, gates={}, blockers=[])
 
-    assert blocked.state is JobState.BLOCKED
-    assert "required_gate_missing:three_long_variants" in blocked.blockers
-    assert not (blocked.run_dir / "final").exists()
+    assert repair.state is JobState.AWAITING_HOST_REPAIR
+    assert "required_gate_missing:three_long_variants" in repair.blockers
+    assert not (repair.run_dir / "final").exists()
+
+
+def test_third_failed_attempt_becomes_terminal_blocker(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "camera.mp4").write_bytes(b"raw-media")
+    manager = JobManager(tmp_path / "runs")
+    job = manager.start(source)
+
+    result = job
+    for attempt_number in range(1, 4):
+        result = manager.transition(job.id, JobState.VERIFYING)
+        attempt = job.run_dir / "work" / f"attempt-{attempt_number}"
+        attempt.mkdir(parents=True)
+        (attempt / "candidate.mp4").write_bytes(b"candidate")
+        result = manager.record_verification(
+            job.id,
+            attempt=attempt,
+            gates={},
+            blockers=["retake_clean_failed"],
+        )
+
+    assert result.state is JobState.BLOCKED
+    assert json.loads((job.run_dir / "repair-packet.json").read_text())["remaining_attempts"] == 0
 
 
 def test_cancelled_job_has_terminal_receipt(tmp_path: Path) -> None:

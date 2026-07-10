@@ -14,12 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from .plan import EditPlanV3, PlanValidationError
+from .editorial import validate_editorial_review
 
 
 class JobState(StrEnum):
     QUEUED = "queued"
     PREFLIGHTING = "preflighting"
     AWAITING_HOST_PLAN = "awaiting_host_plan"
+    AWAITING_HOST_REPAIR = "awaiting_host_repair"
     COMPILING = "compiling"
     RENDERING_PROXY = "rendering_proxy"
     ENHANCING_AUDIO = "enhancing_audio"
@@ -37,6 +39,9 @@ REQUIRED_FINAL_GATES = {
     "shorts_quality",
     "shorts_count",
     "source_lock",
+    "editorial_ledger_resolved",
+    "shorts_screen_proof",
+    "shorts_motion_activity",
     *(f"hyperframes_motion_hook_{rank}" for rank in range(1, 4)),
     *(f"descript_effect_survival_hook_{rank}" for rank in range(1, 4)),
     *(f"deterministic_qa_hook_{rank}" for rank in range(1, 4)),
@@ -105,12 +110,20 @@ class JobManager:
 
     def submit_plan(self, job_id: str, payload: dict[str, Any]) -> Job:
         job = self.load(job_id)
-        if job.state is not JobState.AWAITING_HOST_PLAN:
+        if job.state not in {JobState.AWAITING_HOST_PLAN, JobState.AWAITING_HOST_REPAIR}:
             raise RuntimeError(f"job_not_awaiting_host_plan:{job.state}")
         plan = EditPlanV3.from_dict(payload)
         lock = json.loads((job.run_dir / "source-lock.json").read_text())
         if plan.source_hashes != lock["before"]:
             raise PlanValidationError("edit_plan_source_hash_mismatch")
+        ledger_path = job.run_dir / "editorial-ledger.json"
+        if ledger_path.exists():
+            blockers = validate_editorial_review(
+                json.loads(ledger_path.read_text()),
+                plan.to_dict()["editorial_review"],
+            )
+            if blockers:
+                raise PlanValidationError(";".join(blockers))
         _write_json(job.run_dir / "edit-plan.json", plan.to_dict())
         updated = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.COMPILING)
         self._save(updated)
@@ -125,6 +138,11 @@ class JobManager:
         self._save(updated)
         _receipt(updated, "job_state_changed", state=state.value)
         return updated
+
+    def receipt(self, job_id: str, event: str, **details: Any) -> None:
+        """Append a public, secret-safe run event from deterministic pipeline stages."""
+
+        _receipt(self.load(job_id), event, **details)
 
     def claim_finalize(self, job_id: str) -> Job:
         job = self.load(job_id)
@@ -200,19 +218,34 @@ class JobManager:
             if quarantine.exists():
                 raise RuntimeError(f"quarantine_attempt_exists:{attempt.name}")
             shutil.move(str(attempt), str(quarantine))
+            attempt_number = _attempt_number(attempt.name)
+            remaining_attempts = max(0, 3 - attempt_number)
+            _write_json(
+                job.run_dir / "repair-packet.json",
+                {
+                    "schema_version": "eddy-repair-packet-v1",
+                    "attempt": attempt_number,
+                    "remaining_attempts": remaining_attempts,
+                    "gates": verified_gates,
+                    "blockers": verified_blockers,
+                    "quarantine": str(quarantine),
+                },
+            )
+            next_state = JobState.AWAITING_HOST_REPAIR if remaining_attempts else JobState.BLOCKED
             updated = Job(
                 job.id,
                 job.source,
                 job.snapshot,
                 job.run_dir,
-                JobState.BLOCKED,
+                next_state,
                 tuple(verified_blockers),
             )
             _receipt(
                 updated,
-                "blocked_attempt_quarantined",
+                "host_repair_requested" if remaining_attempts else "blocked_attempt_quarantined",
                 blockers=verified_blockers,
                 quarantine=str(quarantine),
+                remaining_attempts=remaining_attempts,
             )
         self._save(updated)
         return updated
@@ -271,7 +304,31 @@ def _source_files(source: Path) -> list[Path]:
     allowed = {".mp4", ".mov", ".mkv", ".webm", ".wav", ".m4a", ".mp3"}
     if source.is_file():
         return [source] if source.suffix.lower() in allowed else []
-    return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in allowed)
+    top_level = sorted(
+        path
+        for path in source.iterdir()
+        if path.is_file() and path.suffix.lower() in allowed
+    )
+    if top_level:
+        return top_level
+    ignored_directories = {
+        "runs",
+        "eddy-runs",
+        "final",
+        "work",
+        "output",
+        "outputs",
+        "cache",
+        "quarantine",
+        "post-production",
+    }
+    return sorted(
+        path
+        for path in source.rglob("*")
+        if path.is_file()
+        and path.suffix.lower() in allowed
+        and not ignored_directories.intersection(part.lower() for part in path.relative_to(source).parts)
+    )
 
 
 def _source_relative(source: Path, path: Path) -> str:
@@ -318,3 +375,11 @@ def _assert_inside(parent: Path, child: Path) -> None:
         child.relative_to(parent.resolve())
     except ValueError as exc:
         raise ValueError(f"path_outside_run:{child}") from exc
+
+
+def _attempt_number(name: str) -> int:
+    try:
+        number = int(name.removeprefix("attempt-"))
+    except ValueError:
+        return 3
+    return max(1, number)

@@ -1,10 +1,25 @@
 import math
+import importlib.util
 import shutil
 import subprocess
 import wave
 from pathlib import Path
 
 from eddy.audio_effect import EffectCalibration, evaluate_effect_survival
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_descript_script():
+    spec = importlib.util.spec_from_file_location(
+        "descript_studio_sound",
+        ROOT / "scripts" / "descript_studio_sound.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_wav(path: Path, samples: list[float], rate: int = 16_000) -> None:
@@ -163,3 +178,12 @@ def test_unmeasurable_changed_audio_is_blocked(tmp_path: Path, monkeypatch) -> N
 
     assert result.passed is False
     assert "descript_quality_unmeasurable" in result.blockers
+
+
+def test_descript_prompt_always_requests_full_intensity_on_every_clip() -> None:
+    descript = load_descript_script()
+
+    prompt = descript.studio_sound_prompt(100)
+
+    assert "every clip" in prompt
+    assert "100% intensity" in prompt

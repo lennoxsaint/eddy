@@ -39,6 +39,7 @@ def test_talking_head_pipeline_renders_three_shared_body_longs(tmp_path: Path, m
         "schema_version": "edit-plan-v3",
         "source_hashes": lock["before"],
         "protected": [],
+        "editorial_review": {"coverage": [[0.0, 4.0]], "resolutions": []},
         "body": {"keep": [[0.0, 1.5]], "drop": [], "retake_groups": []},
         "hooks": [
             {"id": "proof", "rank": 1, "segments": [[1.5, 2.0]], "proof_assets": []},
@@ -46,11 +47,35 @@ def test_talking_head_pipeline_renders_three_shared_body_longs(tmp_path: Path, m
             {"id": "cost", "rank": 3, "segments": [[2.5, 3.0]], "proof_assets": []},
         ],
         "shorts": [
-            {"id": "one", "segments": [[0.0, 0.5]]},
-            {"id": "two", "segments": [[0.5, 1.0]]},
-            {"id": "three", "segments": [[1.0, 1.5]]},
+            {
+                "id": short_id,
+                "segments": [[start, start + 0.5]],
+                "screen_proof_segments": [],
+                "motion_beats": [
+                    {"id": "hook", "start": 0.0, "dur": 0.1, "layout": "stat", "label": "HOOK"},
+                    {"id": "proof", "start": 0.3, "dur": 0.1, "layout": "stat", "label": "PROOF"},
+                ],
+            }
+            for short_id, start in (("one", 0.0), ("two", 0.5), ("three", 1.0))
         ],
-        "motion_beats": [],
+        "motion_beats": [
+            {
+                "id": "long-hook",
+                "hook_id": "*",
+                "start": 0.0,
+                "dur": 0.4,
+                "layout": "kinetic_hook",
+                "label": "HOOK",
+            },
+            {
+                "id": "long-proof",
+                "hook_id": "*",
+                "start": 0.6,
+                "dur": 0.4,
+                "layout": "proof_callout",
+                "label": "PROOF",
+            },
+        ],
     }
     manager.submit_plan(job.id, plan)
     monkeypatch.setenv("EDDY_FAKE_DESCRIPT", "true")
@@ -58,13 +83,14 @@ def test_talking_head_pipeline_renders_three_shared_body_longs(tmp_path: Path, m
 
     PipelineRunner(root=ROOT, manager=manager).finalize(job.id)
 
-    blocked = manager.load(job.id)
-    quarantined = blocked.run_dir / "quarantine" / "attempt-1"
-    assert blocked.state is JobState.BLOCKED
-    assert "descript_test_fixture_not_final" in blocked.blockers
-    assert not (blocked.run_dir / "final").exists()
+    repair = manager.load(job.id)
+    quarantined = repair.run_dir / "quarantine" / "attempt-1"
+    assert repair.state is JobState.AWAITING_HOST_REPAIR
+    assert "descript_test_fixture_not_final" in repair.blockers
+    assert not (repair.run_dir / "final").exists()
     assert quarantined.exists()
-    stage = blocked.run_dir / "work" / "stage-1"
-    assert len(list(stage.glob("composite-*.mp4"))) == 3
-    assert len(list(stage.glob("motioned-*.mp4"))) == 3
-    assert len(list(stage.glob("short-*-captioned.mp4"))) == 3
+    stage = repair.run_dir / "work" / "stage-1"
+    assert (stage / "body-composite.mp4").exists()
+    assert len(list(stage.glob("composite-*.mp4"))) == 1
+    assert len(list(stage.glob("motioned-*.mp4"))) == 1
+    assert len(list(stage.glob("short-*-captioned.mp4"))) == 0

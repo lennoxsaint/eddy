@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any
 
 
-SAFE_SUPPORT_FILES = {"state.json", "verification.json", "worker-error.json", "receipts.jsonl"}
+SAFE_SUPPORT_FILES = {
+    "state.json",
+    "verification.json",
+    "worker-error.json",
+    "repair-packet.json",
+    "receipts.jsonl",
+    "provider-receipts.jsonl",
+}
 SECRET_PATTERNS = (
     re.compile(rb"sk-[A-Za-z0-9_-]{8,}"),
     re.compile(rb"sk-ant-[A-Za-z0-9_-]{8,}"),
@@ -53,6 +60,33 @@ def _safe_code(value: object) -> str:
 
 
 def _safe_payload(path: Path) -> bytes:
+    if path.name == "provider-receipts.jsonl":
+        rows: list[dict[str, Any]] = []
+        for line in path.read_text(errors="replace").splitlines():
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            provider_safe: dict[str, Any] = {
+                "event": _safe_code(row.get("event", "UNKNOWN")),
+            }
+            for key in ("artifact", "provider", "status", "resolved_model"):
+                if key in row:
+                    provider_safe[key] = _safe_code(row[key])
+            if isinstance(row.get("blockers"), list):
+                provider_safe["blockers"] = [_safe_code(value) for value in row["blockers"]]
+            if isinstance(row.get("metrics"), dict):
+                provider_safe["metrics"] = {
+                    _safe_code(key): value
+                    for key, value in row["metrics"].items()
+                    if isinstance(value, (int, float, bool))
+                }
+            if "project_changed" in row:
+                provider_safe["project_changed"] = bool(row["project_changed"])
+            if isinstance(row.get("ai_credits_used"), (int, float)):
+                provider_safe["ai_credits_used"] = row["ai_credits_used"]
+            rows.append(provider_safe)
+        return "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows).encode()
     if path.name == "receipts.jsonl":
         rows = []
         for line in path.read_text(errors="replace").splitlines():
@@ -81,6 +115,15 @@ def _safe_payload(path: Path) -> bytes:
         }
     elif path.name == "verification.json":
         safe = {
+            "gates": {
+                _safe_code(key): bool(value) for key, value in payload.get("gates", {}).items()
+            },
+            "blockers": [_safe_code(item) for item in payload.get("blockers", [])],
+        }
+    elif path.name == "repair-packet.json":
+        safe = {
+            "attempt": int(payload.get("attempt", 0)),
+            "remaining_attempts": int(payload.get("remaining_attempts", 0)),
             "gates": {
                 _safe_code(key): bool(value) for key, value in payload.get("gates", {}).items()
             },

@@ -9,6 +9,7 @@ from eddy.pipeline import PipelineRunner
 from eddy.runtime import JobManager, JobState
 from eddy.service import EddyService
 from eddy.sync import check_projection, write_projection
+from test_runtime import valid_plan
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +29,50 @@ def test_cli_returns_exact_blocker_for_missing_source(tmp_path: Path, capsys) ->
     payload = json.loads(capsys.readouterr().out)
     assert result == 1
     assert "source_not_found" in payload["blocker"]
+
+
+def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, monkeypatch) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps({"schema_version": "edit-plan-v3"}))
+    calls = []
+
+    class FakeService:
+        def edit_options(self, source, *, format="youtube"):
+            calls.append(("options", source, format))
+            return {"requires_choice": False}
+
+        def host_packet(self, job_id):
+            calls.append(("packet", job_id))
+            return {"job_id": job_id}
+
+        def host_submit(self, job_id, payload):
+            calls.append(("submit", job_id, payload))
+            return {"state": "compiling"}
+
+        def finalize(self, job_id):
+            calls.append(("finalize", job_id))
+            return {"worker": "started"}
+
+        def sync_doctor(self):
+            return {}
+
+    monkeypatch.setattr(cli, "_service", lambda _root: FakeService())
+
+    assert cli.main(["options", "source-folder"]) == 0
+    capsys.readouterr()
+    assert cli.main(["packet", "job-1"]) == 0
+    capsys.readouterr()
+    assert cli.main(["submit", "job-1", str(plan_path)]) == 0
+    capsys.readouterr()
+    assert cli.main(["finalize", "job-1"]) == 0
+    capsys.readouterr()
+
+    assert calls == [
+        ("options", "source-folder", "youtube"),
+        ("packet", "job-1"),
+        ("submit", "job-1", {"schema_version": "edit-plan-v3"}),
+        ("finalize", "job-1"),
+    ]
 
 
 def test_mcp_server_exposes_every_public_tool(tmp_path: Path, monkeypatch) -> None:
@@ -117,22 +162,8 @@ def test_service_finalize_launches_worker_and_bundle_is_media_free(tmp_path: Pat
     started = service.edit_start(str(source))
     job = service.manager.load(started["job_id"])
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
-    plan = {
-        "schema_version": "edit-plan-v3",
-        "source_hashes": lock["before"],
-        "protected": [],
-        "body": {"keep": [[0.0, 1.0]], "drop": [], "retake_groups": []},
-        "hooks": [
-            {"id": "a", "rank": 1, "segments": [[1.0, 2.0]], "proof_assets": []},
-            {"id": "b", "rank": 2, "segments": [[2.0, 3.0]], "proof_assets": []},
-            {"id": "c", "rank": 3, "segments": [[3.0, 4.0]], "proof_assets": []},
-        ],
-        "shorts": [
-            {"id": f"short-{index}", "segments": [[float(index), float(index + 1)]]}
-            for index in range(3)
-        ],
-        "motion_beats": [],
-    }
+    plan = valid_plan()
+    plan["source_hashes"] = lock["before"]
     service.host_submit(job.id, plan)
     launched = []
     monkeypatch.setattr(service, "_launch_worker", lambda action, job_id: launched.append((action, job_id)))
