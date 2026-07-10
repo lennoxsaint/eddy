@@ -233,6 +233,8 @@ def lint_brief(brief: dict) -> list[str] | None:
 def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None,
                       ground: str = "#000") -> str:
     w = int(brief.get("width", 1920)); h = int(brief.get("height", 1080))
+    stat_size = 160 if h > w else 300
+    stat_width = max(320, w - 140)
     beats = brief.get("beats", [])
     dur = float(brief.get("duration") or max((float(b["start"]) + float(b.get("dur", 4.0)) for b in beats), default=6.0))
     # hud = persistent brand chrome + frameline + ring (good on dark motion-dominant hooks). Set
@@ -252,6 +254,7 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None,
 <html><head><meta charset="utf-8" />
 <style>{_CSS}
   #stage {{ width:{w}px; height:{h}px; }}
+  .stat {{ font-size:{stat_size}px; max-width:{stat_width}px; white-space:nowrap; }}
   /* cutaway = OPAQUE full-frame ground (replaces the screen); overlay path keeps #000 for the key */
   body {{ background:{ground}; }} #stage {{ background:{ground}; }}
 </style>
