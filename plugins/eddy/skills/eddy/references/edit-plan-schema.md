@@ -48,6 +48,7 @@ source evidence; it never contains generated speech or packaging.
     {
       "id": "proof-short",
       "segments": [[140.0, 170.0]],
+      "drop": [[151.2, 153.8]],
       "screen_proof_segments": [[145.0, 155.0]],
       "motion_beats": [
         {"id": "proof-hook", "start": 0.0, "dur": 1.2, "layout": "stat", "value": "46K"},
@@ -90,6 +91,9 @@ source evidence; it never contains generated speech or packaging.
   resolution with a reason. The default resolution keeps the last complete clean variant.
 - Protected moments survive every long, but protection cannot preserve more than 0.8s of silence.
 - Provide 3–5 unique, quality-gated Short candidates. If three do not clear the bar, the plan blocks.
+- A Short may declare source-time `drop` ranges for retakes that occur only inside that Short. Each
+  drop must stay inside its declared source segments, cannot erase the whole candidate or protected
+  content, and is merged with shared-body drops before the camera splice.
 - Every dual-source Short maps at least 25% of its duration to raw screen proof and declares at least
   two motion beats: an opening hook beat by 2s and a later proof beat.
 - Each long hook receives at least two host-authored HyperFrames beats through `motion_beats`.

@@ -1,5 +1,5 @@
 {
-  "canonical_commit": "1d56ba84c3cce20992126c63cd23c710ff452d2a",
+  "canonical_commit": "b09e194d7e9d13647e42acf82be31140dec1ae40",
   "files": {
     "README.md": "6979600018898143366e7ffdfb7c17a35389b927cc9913207638c080c6ab0315",
     "SKILL.md": "9d3cc417da4eed69d0bf46055b3ecf6e3b1c14596bde62bcfe7bdcd30d95f64c",
@@ -12,7 +12,7 @@
     "assets/vendor/gsap.min.js": "c3a03a345e45bc954cd48c43f11572891f5dca7a5d99348d5bc14753a728618c",
     "evals/evals.json": "9061e6dd633125f7df213a4a4e25bd5ea960a6eaa805e199e5aa33d30e9baf2f",
     "references/commands.md": "0d16a6b6ec5b486ff69bd60a0167745b3e0030e990b2b4d3d02b4254dd997b65",
-    "references/edit-plan-schema.md": "b72baa4546d19dfc0fa0ac5cb93f0cfbca1ca83ef5b7f50e60729b567ee38faa",
+    "references/edit-plan-schema.md": "49d7fb8cea2de52662c9b910a5ea2d50ea9e271dc6c4debdd5a6463b7f1cf11e",
     "references/hook-doctrine.md": "077fa891f915e4a35a9b4952abdccd413dd58bfb4064b461fd9d71f16a5e8c57",
     "references/layout-constants.md": "f22038962ed146f2074af716272543159669437f012f252236086d43671968bb",
     "references/motion-layer.md": "587c36062d5fcef2bb90184d604a607230256f8ec0a5241e66d451acce495284",
