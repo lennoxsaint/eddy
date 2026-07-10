@@ -40,6 +40,7 @@ from eddy.audio_effect import EffectCalibration, evaluate_effect_survival  # noq
 API_BASE = os.environ.get("EDDY_DESCRIPT_API_BASE", "https://descriptapi.com/v1").rstrip("/")
 MEDIA_NAME = "source-audio.wav"
 POLL_S = float(os.environ.get("EDDY_DESCRIPT_POLL_S", "5"))
+MAX_EFFECT_ATTEMPTS = 2
 
 
 def log(event: str, **kw) -> None:
@@ -266,6 +267,35 @@ def effect_survival_ok(src_wav: Path, cleaned: Path, work: Path) -> bool:
     return result.passed
 
 
+def studio_sound_with_effect_retry(
+    src_wav: Path,
+    work: Path,
+    token: str,
+    intensity: int,
+    *,
+    max_attempts: int = MAX_EFFECT_ATTEMPTS,
+) -> Path | None:
+    """Retry one fresh provider render only when the effect is missing from export."""
+
+    for attempt in range(1, max_attempts + 1):
+        attempt_work = work if attempt == 1 else work / f"retry-{attempt}"
+        attempt_work.mkdir(parents=True, exist_ok=True)
+        cleaned = attempt_work / "descript-studio-sound.m4a"
+        result = studio_sound(src_wav, cleaned, token, intensity)
+        if result is None or not parity_ok(src_wav, result):
+            return None
+        if effect_survival_ok(src_wav, result, attempt_work):
+            return result
+        if attempt < max_attempts:
+            log(
+                "descript_effect_retry",
+                failed_attempt=attempt,
+                next_attempt=attempt + 1,
+                reason="descript_effect_not_rendered",
+            )
+    return None
+
+
 def mux(video: Path, cleaned_audio: Path, out: Path) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
@@ -309,13 +339,13 @@ def main() -> int:
         else:
             src_wav = extract_wav(inp, work / MEDIA_NAME)
 
-        cleaned = work / "descript-studio-sound.m4a"
-        result = studio_sound(src_wav, cleaned, token or "", args.intensity)
-        if (
-            result is None
-            or not parity_ok(src_wav, cleaned)
-            or not effect_survival_ok(src_wav, cleaned, work)
-        ):
+        cleaned = studio_sound_with_effect_retry(
+            src_wav,
+            work,
+            token or "",
+            args.intensity,
+        )
+        if cleaned is None:
             return 3
 
         if args.audio_only:

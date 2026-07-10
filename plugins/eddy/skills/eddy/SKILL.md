@@ -98,7 +98,9 @@ eddy status <job-id>
 7. Apply real Descript Studio Sound to audio only. Require provider success, a changed project,
    private export provenance, duration parity, and a signal-changing **Effect-Survival Gate**. Keep
    echo and voice-texture scores as review diagnostics, not false promotion vetoes. If the effect did
-   not survive export, block with `descript_effect_not_rendered`; do not silently fall back.
+   not survive an export, retry once through a fresh provider render. Block with
+   `descript_effect_not_rendered` only if the second export is still unchanged; do not silently fall
+   back.
 8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
    Prove semantic collision safety before compositing.
 9. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
