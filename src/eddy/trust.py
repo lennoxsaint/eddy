@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .contract import canonical_contract
+from .runtime import REQUIRED_FINAL_GATES
 
 
 def _sha256(path: Path) -> str:
@@ -42,6 +43,7 @@ def _is_proven_owner_run(run: object, runs_root: Path | None) -> bool:
     if not declared or runs_root is None:
         return False
     run_dir = runs_root / str(run["id"])
+    final = run_dir / "final"
     try:
         state = json.loads((run_dir / "state.json").read_text())
         verification = json.loads((run_dir / "verification.json").read_text())
@@ -51,9 +53,9 @@ def _is_proven_owner_run(run: object, runs_root: Path | None) -> bool:
             for line in (run_dir / "final" / "provider-receipts.jsonl").read_text().splitlines()
             if line.strip()
         ]
+        artifact_manifest = json.loads((final / "artifact-manifest.json").read_text())
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return False
-    final = run_dir / "final"
     longs = sorted(final.glob("long-*.mp4"))
     shorts = sorted((final / "shorts").glob("*.mp4"))
     providers = {
@@ -63,6 +65,26 @@ def _is_proven_owner_run(run: object, runs_root: Path | None) -> bool:
         row for row in provider_rows
         if row.get("event") == "descript_effect_survival" and row.get("status") == "pass"
     ]
+    video_artifacts = {
+        path.relative_to(final).as_posix() for path in (*longs, *shorts)
+    }
+    provider_artifacts = {
+        str(row.get("artifact"))
+        for row in provider_rows
+        if row.get("event") == "descript_provider"
+        and row.get("access_level") == "private"
+        and row.get("provider") in {"descript_api", "descript_host_connector"}
+    }
+    effect_artifacts = {
+        str(row.get("artifact"))
+        for row in effects
+    }
+    manifested = artifact_manifest.get("files", {})
+    current_files = {
+        path.relative_to(final).as_posix(): _sha256(path)
+        for path in final.rglob("*")
+        if path.is_file() and path.name != "artifact-manifest.json"
+    }
     return (
         state.get("state") == "completed"
         and state.get("id") == run["id"]
@@ -71,14 +93,16 @@ def _is_proven_owner_run(run: object, runs_root: Path | None) -> bool:
         and 3 <= len(shorts) <= 5
         and all(path.stat().st_size > 0 for path in shorts)
         and verification.get("blockers") == []
-        and bool(verification.get("gates"))
+        and REQUIRED_FINAL_GATES <= set(verification.get("gates", {}))
         and all(verification["gates"].values())
         and source_lock.get("before") == source_lock.get("after")
         and _source_fingerprint(source_lock) == source_hash
         and _sha256(final / "qa.json") == qa_hash
         and providers <= {"descript_api", "descript_host_connector"}
         and bool(providers)
-        and len(effects) >= len(longs) + len(shorts)
+        and provider_artifacts == video_artifacts
+        and effect_artifacts == video_artifacts
+        and manifested == current_files
     )
 
 

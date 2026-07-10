@@ -7,6 +7,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,7 @@ class EddyService:
         return self._job_payload(self.manager.submit_plan(job_id, payload))
 
     def finalize(self, job_id: str) -> dict[str, Any]:
+        self._recover_stale_finalize_claim(job_id)
         job = self.manager.claim_finalize(job_id)
         try:
             self._launch_worker("finalize", job_id)
@@ -205,6 +207,31 @@ class EddyService:
                 os.killpg(pid, signal.SIGTERM)
             except (FileNotFoundError, json.JSONDecodeError, KeyError, ProcessLookupError, ValueError):
                 continue
+
+    def _recover_stale_finalize_claim(self, job_id: str) -> None:
+        job = self.manager.load(job_id)
+        claim = job.run_dir / "finalize.claim"
+        if not claim.exists():
+            return
+        marker = job.run_dir / "worker-finalize.json"
+        if marker.exists():
+            try:
+                pid = int(json.loads(marker.read_text())["pid"])
+                command = subprocess.run(
+                    ["ps", "-p", str(pid), "-o", "command="],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                ).stdout
+            except (json.JSONDecodeError, KeyError, ValueError, OSError):
+                command = ""
+            if "eddy.worker" in command and job_id in command:
+                return
+            marker.unlink(missing_ok=True)
+            claim.unlink(missing_ok=True)
+            return
+        if time.time() - claim.stat().st_mtime > 60:
+            claim.unlink(missing_ok=True)
 
     def _job_payload(self, job: Any) -> dict[str, Any]:
         if job.state is JobState.COMPLETED:

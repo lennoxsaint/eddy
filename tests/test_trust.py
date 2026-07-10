@@ -2,6 +2,7 @@ import json
 import hashlib
 from pathlib import Path
 
+from eddy.runtime import REQUIRED_FINAL_GATES
 from eddy.trust import trust_status
 
 
@@ -22,21 +23,42 @@ def proven_run(index: int, runs_root: Path, *, run_id: str | None = None) -> dic
         json.dumps({"id": job_id, "state": "completed"}) + "\n"
     )
     (run_dir / "verification.json").write_text(
-        json.dumps({"gates": {"all": True}, "blockers": []}) + "\n"
+        json.dumps({"gates": {gate: True for gate in REQUIRED_FINAL_GATES}, "blockers": []}) + "\n"
     )
     (run_dir / "source-lock.json").write_text(
         json.dumps({"before": source_map, "after": source_map}) + "\n"
     )
     receipts = []
-    for artifact_index in range(6):
+    artifacts = [
+        "long-primary.mp4",
+        "long-alternate-a.mp4",
+        "long-alternate-b.mp4",
+        "shorts/0.mp4",
+        "shorts/1.mp4",
+        "shorts/2.mp4",
+    ]
+    for artifact in artifacts:
         receipts.extend(
             [
-                {"event": "descript_provider", "provider": "descript_api"},
-                {"event": "descript_effect_survival", "status": "pass"},
+                {
+                    "event": "descript_provider",
+                    "provider": "descript_api",
+                    "access_level": "private",
+                    "artifact": artifact,
+                },
+                {"event": "descript_effect_survival", "status": "pass", "artifact": artifact},
             ]
         )
     (final / "provider-receipts.jsonl").write_text(
         "".join(json.dumps(row) + "\n" for row in receipts)
+    )
+    manifest_files = {
+        path.relative_to(final).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in final.rglob("*")
+        if path.is_file() and path.name != "artifact-manifest.json"
+    }
+    (final / "artifact-manifest.json").write_text(
+        json.dumps({"files": manifest_files}, sort_keys=True) + "\n"
     )
     source_hash = hashlib.sha256(
         json.dumps(source_map, sort_keys=True, separators=(",", ":")).encode()

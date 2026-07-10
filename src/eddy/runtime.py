@@ -68,17 +68,17 @@ class JobManager:
         job_id = uuid.uuid4().hex
         run_dir = self.runs_root / job_id
         run_dir.mkdir(parents=True)
-        hashes = {str(path): _sha256(path) for path in media}
+        hashes = {_source_relative(source, path): _sha256(path) for path in media}
         snapshot = run_dir / "source-snapshot"
         snapshot.mkdir()
         snapshot_hashes: dict[str, str] = {}
         for path in media:
-            relative = Path(path.name) if source.is_file() else path.relative_to(source)
+            relative = Path(_source_relative(source, path))
             destination = snapshot / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, destination)
-            snapshot_hashes[str(destination)] = _sha256(destination)
-        if sorted(snapshot_hashes.values()) != sorted(hashes.values()):
+            snapshot_hashes[relative.as_posix()] = _sha256(destination)
+        if snapshot_hashes != hashes:
             raise RuntimeError("source_snapshot_hash_mismatch")
         _write_json(
             run_dir / "source-lock.json",
@@ -158,10 +158,20 @@ class JobManager:
         if not attempt.is_dir():
             raise FileNotFoundError(f"attempt_missing:{attempt}")
         source_lock = json.loads((job.run_dir / "source-lock.json").read_text())
-        after = {str(path): _sha256(path) for path in _source_files(job.source)}
+        after = {
+            _source_relative(job.source, path): _sha256(path)
+            for path in _source_files(job.source)
+        }
+        snapshot_after = {
+            path.relative_to(job.snapshot).as_posix(): _sha256(path)
+            for path in _source_files(job.snapshot)
+        }
         source_lock["after"] = after
         _write_json(job.run_dir / "source-lock.json", source_lock)
-        source_green = after == source_lock["before"]
+        source_green = (
+            after == source_lock["before"]
+            and snapshot_after == source_lock.get("snapshot")
+        )
         verified_gates = {**gates, "source_lock": source_green and gates.get("source_lock", True)}
         missing_gates = sorted(REQUIRED_FINAL_GATES - set(verified_gates))
         verified_blockers = list(
@@ -177,6 +187,7 @@ class JobManager:
         )
 
         if not missing_gates and all(verified_gates.values()) and not verified_blockers:
+            _write_json(attempt / "artifact-manifest.json", {"files": _artifact_hashes(attempt)})
             final = job.run_dir / "final"
             if final.exists():
                 raise RuntimeError("final_already_exists")
@@ -261,6 +272,18 @@ def _source_files(source: Path) -> list[Path]:
     if source.is_file():
         return [source] if source.suffix.lower() in allowed else []
     return sorted(path for path in source.rglob("*") if path.is_file() and path.suffix.lower() in allowed)
+
+
+def _source_relative(source: Path, path: Path) -> str:
+    return path.name if source.is_file() else path.relative_to(source).as_posix()
+
+
+def _artifact_hashes(attempt: Path) -> dict[str, str]:
+    return {
+        path.relative_to(attempt).as_posix(): _sha256(path)
+        for path in sorted(attempt.rglob("*"))
+        if path.is_file() and path.name != "artifact-manifest.json"
+    }
 
 
 def _sha256(path: Path) -> str:

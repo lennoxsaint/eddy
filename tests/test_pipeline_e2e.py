@@ -1,4 +1,3 @@
-import hashlib
 import json
 import shutil
 import subprocess
@@ -35,10 +34,10 @@ def test_talking_head_pipeline_renders_three_shared_body_longs(tmp_path: Path, m
         for i in range(38)
     ]
     (job.run_dir / "transcript.json").write_text(json.dumps({"words": words}) + "\n")
-    digest = hashlib.sha256(camera.read_bytes()).hexdigest()
+    lock = json.loads((job.run_dir / "source-lock.json").read_text())
     plan = {
         "schema_version": "edit-plan-v3",
-        "source_hashes": {str(camera): digest},
+        "source_hashes": lock["before"],
         "protected": [],
         "body": {"keep": [[0.0, 1.5]], "drop": [], "retake_groups": []},
         "hooks": [
