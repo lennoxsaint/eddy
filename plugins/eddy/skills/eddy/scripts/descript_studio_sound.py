@@ -41,6 +41,8 @@ API_BASE = os.environ.get("EDDY_DESCRIPT_API_BASE", "https://descriptapi.com/v1"
 MEDIA_NAME = "source-audio.wav"
 POLL_S = float(os.environ.get("EDDY_DESCRIPT_POLL_S", "5"))
 MAX_EFFECT_ATTEMPTS = 2
+MAX_PROVIDER_ATTEMPTS = 3
+PROVIDER_RETRY_DELAY_S = float(os.environ.get("EDDY_DESCRIPT_RETRY_DELAY_S", "15"))
 
 
 def log(event: str, **kw) -> None:
@@ -99,6 +101,12 @@ def wait_job(job_id: str, token: str, timeout_s: int = 1800) -> dict:
         if state == "stopped":
             result = job.get("result") or {}
             if isinstance(result, dict) and result.get("status") != "success":
+                log(
+                    "descript_job_failed",
+                    job_id=job_id,
+                    status=result.get("status"),
+                    error_message=str(result.get("error_message") or "")[:500],
+                )
                 raise RuntimeError(f"descript_job_failed:{job_id}:{result.get('status')}")
             return job
         if time.monotonic() - started > timeout_s:
@@ -293,34 +301,48 @@ def studio_sound_with_effect_retry(
     intensity: int,
     *,
     max_attempts: int = MAX_EFFECT_ATTEMPTS,
+    max_provider_attempts: int = MAX_PROVIDER_ATTEMPTS,
 ) -> Path | None:
-    """Retry one fresh provider render only when the effect is missing from export."""
+    """Retry transient provider jobs separately from unchanged effect exports."""
 
-    for attempt in range(1, max_attempts + 1):
-        attempt_work = work if attempt == 1 else work / f"retry-{attempt}"
-        attempt_work.mkdir(parents=True, exist_ok=True)
-        cleaned = attempt_work / "descript-studio-sound.m4a"
-        try:
-            result = studio_sound(src_wav, cleaned, token, intensity)
-        except (RuntimeError, TimeoutError, urllib.error.URLError) as error:
-            if attempt >= max_attempts or not retryable_provider_error(error):
-                raise
-            log(
-                "descript_provider_retry",
-                failed_attempt=attempt,
-                next_attempt=attempt + 1,
-                reason=str(error).split(":", 1)[0],
-            )
-            continue
+    render_attempt = 0
+    for effect_attempt in range(1, max_attempts + 1):
+        for provider_attempt in range(1, max_provider_attempts + 1):
+            render_attempt += 1
+            attempt_work = work if render_attempt == 1 else work / f"retry-{render_attempt}"
+            attempt_work.mkdir(parents=True, exist_ok=True)
+            cleaned = attempt_work / "descript-studio-sound.m4a"
+            try:
+                result = studio_sound(src_wav, cleaned, token, intensity)
+                break
+            except (RuntimeError, TimeoutError, urllib.error.URLError) as error:
+                if (
+                    provider_attempt >= max_provider_attempts
+                    or not retryable_provider_error(error)
+                ):
+                    raise
+                retry_delay = PROVIDER_RETRY_DELAY_S * provider_attempt
+                log(
+                    "descript_provider_retry",
+                    failed_attempt=render_attempt,
+                    next_attempt=render_attempt + 1,
+                    provider_attempt=provider_attempt,
+                    max_provider_attempts=max_provider_attempts,
+                    retry_delay_s=retry_delay,
+                    reason=str(error).split(":", 1)[0],
+                )
+                time.sleep(retry_delay)
         if result is None or not parity_ok(src_wav, result):
             return None
         if effect_survival_ok(src_wav, result, attempt_work):
             return result
-        if attempt < max_attempts:
+        if effect_attempt < max_attempts:
             log(
                 "descript_effect_retry",
-                failed_attempt=attempt,
-                next_attempt=attempt + 1,
+                failed_attempt=render_attempt,
+                next_attempt=render_attempt + 1,
+                effect_attempt=effect_attempt,
+                max_effect_attempts=max_attempts,
                 reason="descript_effect_not_rendered",
             )
     return None
