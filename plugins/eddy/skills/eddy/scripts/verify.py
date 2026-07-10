@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -227,17 +228,102 @@ def word_gap_verdict(
     }
 
 
-def delivered_editorial_issues(final_words: Path) -> list[dict]:
+def _text_ngrams(text: str, size: int = 4) -> set[tuple[str, ...]]:
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    return {
+        tuple(tokens[index : index + size])
+        for index in range(len(tokens) - size + 1)
+    }
+
+
+def _has_full_variant_matching(
+    delivered: list[set[tuple[str, ...]]],
+    source: list[set[tuple[str, ...]]],
+) -> bool:
+    if len(delivered) != len(source) or len(delivered) < 2:
+        return False
+    source_match: dict[int, int] = {}
+
+    def assign(delivered_index: int, seen: set[int]) -> bool:
+        for source_index, source_fingerprint in enumerate(source):
+            if source_index in seen:
+                continue
+            if not delivered[delivered_index].intersection(source_fingerprint):
+                continue
+            seen.add(source_index)
+            previous = source_match.get(source_index)
+            if previous is None or assign(previous, seen):
+                source_match[source_index] = delivered_index
+                return True
+        return False
+
+    return all(assign(index, set()) for index in range(len(delivered)))
+
+
+def filter_resolved_intentional_repeats(
+    issues: list[dict],
+    plan: dict,
+    source_ledger: dict,
+) -> list[dict]:
+    """Remove only delivered repeats already reviewed against matching source variants."""
+
+    resolutions = {
+        item.get("candidate_id")
+        for item in plan.get("editorial_review", {}).get("resolutions", [])
+        if item.get("action") == "intentional_repeat"
+    }
+    reviewed = [
+        candidate
+        for candidate in source_ledger.get("candidates", [])
+        if candidate.get("id") in resolutions and candidate.get("kind") == "repeat"
+    ]
+    unresolved: list[dict] = []
+    for issue in issues:
+        if issue.get("kind") != "repeat":
+            unresolved.append(issue)
+            continue
+        delivered_variants = issue.get("variants", [])
+        resolved = False
+        for candidate in reviewed:
+            source_fingerprints = [
+                _text_ngrams(str(variant.get("text", "")))
+                for variant in candidate.get("variants", [])
+            ]
+            delivered_fingerprints = [
+                _text_ngrams(str(variant.get("text", "")))
+                for variant in delivered_variants
+            ]
+            if _has_full_variant_matching(delivered_fingerprints, source_fingerprints):
+                resolved = True
+                break
+        if not resolved:
+            unresolved.append(issue)
+    return unresolved
+
+
+def delivered_editorial_issues(
+    final_words: Path,
+    *,
+    plan: Path | None = None,
+    source_ledger: Path | None = None,
+) -> list[dict]:
     """Run Eddy's full editorial detector against a delivered-media transcript."""
 
     from eddy.editorial import build_editorial_ledger
 
     ledger = build_editorial_ledger(final_words)
-    return [
+    issues = [
         candidate
         for candidate in ledger["candidates"]
         if candidate.get("kind") in {"repeat", "reset_loop", "false_start"}
     ]
+    if plan and plan.exists() and source_ledger and source_ledger.exists():
+        issues = filter_resolved_intentional_repeats(
+            issues,
+            json.loads(plan.read_text()),
+            json.loads(source_ledger.read_text()),
+        )
+    return issues
 
 
 def main() -> int:
@@ -245,6 +331,7 @@ def main() -> int:
     ap.add_argument("--final", required=True)
     ap.add_argument("--segments")
     ap.add_argument("--plan")
+    ap.add_argument("--editorial-ledger")
     ap.add_argument("--sacred", help="cutlist/JSON with SOURCE-time protected spans; mapped to "
                     "final time via --segments. Protection can retain intentional meaning but "
                     "never exempts silence above 0.8s")
@@ -375,11 +462,27 @@ def main() -> int:
             cadence = word_gap_verdict(fw, sacred_final)
             gate("high_energy_cadence", cadence["pass"], **cadence)
             if args.final_words and Path(args.final_words).exists():
-                editorial_issues = delivered_editorial_issues(Path(args.final_words))
+                editorial_issues = delivered_editorial_issues(
+                    Path(args.final_words),
+                    plan=Path(args.plan) if args.plan else None,
+                    source_ledger=(
+                        Path(args.editorial_ledger)
+                        if args.editorial_ledger
+                        else None
+                    ),
+                )
             else:
                 generated_words = final.with_suffix(".verify-words.json")
                 editorial_issues = (
-                    delivered_editorial_issues(generated_words)
+                    delivered_editorial_issues(
+                        generated_words,
+                        plan=Path(args.plan) if args.plan else None,
+                        source_ledger=(
+                            Path(args.editorial_ledger)
+                            if args.editorial_ledger
+                            else None
+                        ),
+                    )
                     if generated_words.exists()
                     else []
                 )

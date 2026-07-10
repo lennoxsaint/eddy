@@ -118,7 +118,8 @@ eddy status <job-id>
 - Exactly one shared body plan feeds all three longs; only their hook segments differ.
 - Every `keep` beat and protected span survives.
 - Every delivered long and Short is retranscribed. No genuine retake, false start, reset loop, or
-  unresolved repetition survives the delivered transcript.
+  unresolved repetition survives the delivered transcript. A deliberate callback is exempt only
+  when its delivered variants match the exact source-ledger candidate reviewed as intentional.
 - Word onsets are audible; gap, silence, loudness, clipping, and A/V drift gates pass.
 - Descript duration parity and Effect-Survival Gate pass on the delivered audio.
 - Screen/camera geometry, captions, proof assets, motion collisions, Shorts source/style locks,
