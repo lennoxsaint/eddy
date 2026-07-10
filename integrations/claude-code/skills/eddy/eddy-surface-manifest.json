@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "86a7ff3a6eba0398ec442f5ad52d1023c15ef663",
+  "canonical_commit": "d552fb9be47874e955482a50f2624df3425bcdcc",
   "files": {
     "README.md": "6979600018898143366e7ffdfb7c17a35389b927cc9913207638c080c6ab0315",
-    "SKILL.md": "9d3cc417da4eed69d0bf46055b3ecf6e3b1c14596bde62bcfe7bdcd30d95f64c",
+    "SKILL.md": "a19a7bec2d6c6f5fc36c19791d38e86d557a7c9591c4b815cd0bb9c54b54aa24",
     "assets/fonts/Montserrat.ttf": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
     "assets/motion/threadify-fc/assets/fc-ring.png": "679d339e49412b4d82b92e3ab354b590237026fed829874b50c8087389e8d281",
     "assets/motion/threadify-fc/assets/threadify-needle.png": "7869587d5b29808ce0c7d7b25f28935895ddcba804802dbf28b627d136591629",

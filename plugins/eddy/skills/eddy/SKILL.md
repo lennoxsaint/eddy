@@ -98,9 +98,11 @@ eddy status <job-id>
 7. Apply real Descript Studio Sound to audio only. Require provider success, a changed project,
    private export provenance, duration parity, and a signal-changing **Effect-Survival Gate**. Keep
    echo and voice-texture scores as review diagnostics, not false promotion vetoes. If the effect did
-   not survive an export, or a retryable provider job stalls or fails, retry once through a fresh
-   private provider render. Authentication and provenance faults fail immediately. Block only after
-   the second provider attempt is red; do not silently fall back.
+   not survive an export, retry once through a fresh private render. A retryable provider failure gets
+   up to three operational attempts with backoff; authentication and provenance faults fail
+   immediately. Reuse a prior green Studio Sound result only when the exact pre-audio MP4 hash,
+   cached output hash, private provenance, and effect-survival receipt validate. Re-transcribe and QA
+   cache hits normally. Never silently substitute local processing.
 8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
    Prove semantic collision safety before compositing.
 9. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
