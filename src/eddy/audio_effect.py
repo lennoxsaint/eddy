@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import os
+import shutil
+import uuid
 import wave
 from array import array
 from dataclasses import dataclass
 from pathlib import Path
 
 from .audio_quality import reverb_tail_metrics
+
+
+EFFECT_CACHE_SCHEMA = "eddy-descript-effect-cache-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +54,113 @@ class _Pcm:
     @property
     def duration_s(self) -> float:
         return len(self.samples) / self.rate
+
+
+def store_effect_cache(
+    cache_root: Path,
+    input_media: Path,
+    output_media: Path,
+    provider_receipts: Path,
+    artifact: str,
+) -> dict[str, object]:
+    rows = [
+        json.loads(line)
+        for line in provider_receipts.read_text().splitlines()
+        if line.strip()
+    ]
+    artifact_rows = [row for row in rows if row.get("artifact") == artifact]
+    providers = [row for row in artifact_rows if row.get("event") == "descript_provider"]
+    effects = [
+        row
+        for row in artifact_rows
+        if row.get("event") == "descript_effect_survival" and row.get("status") == "pass"
+    ]
+    if not providers or not effects:
+        raise ValueError("descript_cache_green_proof_required")
+    provider = providers[-1]
+    effect = effects[-1]
+    if not _valid_provider_proof(provider) or effect.get("blockers") not in ([], ()):
+        raise ValueError("descript_cache_green_proof_invalid")
+
+    input_sha = _sha256_file(input_media)
+    output_sha = _sha256_file(output_media)
+    cache_dir = cache_root / input_sha
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached_media = cache_dir / "output.mp4"
+    partial = cache_dir / f".{uuid.uuid4().hex}.partial"
+    shutil.copy2(output_media, partial)
+    os.replace(partial, cached_media)
+    manifest: dict[str, object] = {
+        "schema_version": EFFECT_CACHE_SCHEMA,
+        "artifact": artifact,
+        "input_sha256": input_sha,
+        "output_sha256": output_sha,
+        "provider": provider,
+        "effect_survival": effect,
+    }
+    manifest_partial = cache_dir / f".{uuid.uuid4().hex}.manifest.partial"
+    manifest_partial.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    os.replace(manifest_partial, cache_dir / "manifest.json")
+    return manifest
+
+
+def restore_effect_cache(
+    cache_root: Path,
+    input_media: Path,
+    output_media: Path,
+) -> dict[str, object] | None:
+    input_sha = _sha256_file(input_media)
+    cache_dir = cache_root / input_sha
+    manifest_path = cache_dir / "manifest.json"
+    cached_media = cache_dir / "output.mp4"
+    if not manifest_path.is_file() or not cached_media.is_file():
+        return None
+    try:
+        loaded: object = json.loads(manifest_path.read_text())
+        if not isinstance(loaded, dict):
+            return None
+        manifest: dict[str, object] = loaded
+        provider = manifest["provider"]
+        effect = manifest["effect_survival"]
+        valid = (
+            manifest.get("schema_version") == EFFECT_CACHE_SCHEMA
+            and manifest.get("input_sha256") == input_sha
+            and manifest.get("output_sha256") == _sha256_file(cached_media)
+            and isinstance(provider, dict)
+            and _valid_provider_proof(provider)
+            and isinstance(effect, dict)
+            and effect.get("status") == "pass"
+            and effect.get("blockers") in ([], ())
+        )
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not valid:
+        return None
+    output_media.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(cached_media, output_media)
+    if _sha256_file(output_media) != manifest["output_sha256"]:
+        output_media.unlink(missing_ok=True)
+        return None
+    return manifest
+
+
+def _valid_provider_proof(provider: dict[str, object]) -> bool:
+    return (
+        provider.get("provider") in {"descript_api", "descript_host_connector"}
+        and provider.get("access_level") == "private"
+        and isinstance(provider.get("project_id"), str)
+        and bool(provider.get("project_id"))
+        and isinstance(provider.get("composition_id"), str)
+        and bool(provider.get("composition_id"))
+    )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def evaluate_effect_survival(

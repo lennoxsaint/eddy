@@ -1,5 +1,15 @@
 # Eddy decision log
 
+## 2026-07-10 - Exact green Studio Sound renders are reusable proof
+
+- Eddy caches a real Studio Sound output by the SHA-256 of the exact pre-audio MP4, never by title,
+  timestamp range, or source filename.
+- A cache hit requires an unchanged input hash, an unchanged cached-output hash, private Descript
+  project/composition provenance, and a green effect-survival receipt. Any missing or altered proof
+  becomes a cache miss and returns to the normal provider path.
+- Cache hits copy the proven output, re-transcribe and re-run delivered-media QA, and receipt-log the
+  original provider proof plus the current artifact mapping. Fake/local audio never enters the cache.
+
 ## 2026-07-10 - Provider retries are separate from effect retries
 
 - A stopped Descript job, timeout, or transient API error gets up to three operational attempts with

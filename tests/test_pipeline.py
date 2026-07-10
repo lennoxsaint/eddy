@@ -4,10 +4,12 @@ from pathlib import Path
 
 import pytest
 
+from eddy.audio_effect import store_effect_cache
 from eddy.pipeline import (
     PipelineRunner,
     _combine_segment_receipts,
     _concat,
+    _enhance_audio,
     _merge_short_drops,
     _splice,
     _transcribe_final,
@@ -80,6 +82,70 @@ def test_short_drops_merge_with_shared_body_drops(tmp_path: Path) -> None:
         {"span": [0.4, 0.8], "reason": "host_short_drop:short-0"},
     ]
     assert json.loads(output.read_text())["explicit_drops"] == rows
+
+
+def test_audio_enhancement_reuses_exact_green_content_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cache_root = tmp_path / "cache"
+    input_media = tmp_path / "motioned.mp4"
+    cached_output = tmp_path / "cleaned.mp4"
+    seed_receipts = tmp_path / "seed-receipts.jsonl"
+    run_receipts = tmp_path / "run-receipts.jsonl"
+    delivered = tmp_path / "delivered.mp4"
+    input_media.write_bytes(b"exact deterministic pre-audio render")
+    cached_output.write_bytes(b"same render with proven Studio Sound")
+    seed_rows = [
+        {
+            "event": "descript_provider",
+            "artifact": "long-primary.mp4",
+            "provider": "descript_api",
+            "project_id": "project-1",
+            "composition_id": "composition-1",
+            "access_level": "private",
+        },
+        {
+            "event": "descript_effect_survival",
+            "artifact": "long-primary.mp4",
+            "status": "pass",
+            "blockers": [],
+            "metrics": {"normalized_correlation": 0.84},
+        },
+    ]
+    seed_receipts.write_text("\n".join(json.dumps(row) for row in seed_rows) + "\n")
+    store_effect_cache(
+        cache_root,
+        input_media,
+        cached_output,
+        seed_receipts,
+        "long-primary.mp4",
+    )
+    monkeypatch.setattr(
+        "eddy.pipeline.subprocess.run",
+        lambda *args, **kwargs: pytest.fail("provider must not run on an exact green cache hit"),
+    )
+
+    result = _enhance_audio(
+        tmp_path,
+        input_media,
+        delivered,
+        tmp_path / "work",
+        run_receipts,
+        "long-primary.mp4",
+        cache_root,
+        fake_descript=False,
+    )
+
+    assert result.passed is True
+    assert result.cache_manifest is not None
+    assert delivered.read_bytes() == cached_output.read_bytes()
+    receipt_rows = [json.loads(line) for line in run_receipts.read_text().splitlines()]
+    assert any(row["event"] == "descript_effect_cache_hit" for row in receipt_rows)
+    assert any(
+        row["event"] == "descript_effect_survival" and row["status"] == "pass"
+        for row in receipt_rows
+    )
 
 
 def test_render_plan_compiles_editorial_resolutions_into_explicit_drops(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .audio_effect import restore_effect_cache, store_effect_cache
 from .plan import EditPlanV3, HookPlan, ShortPlan
 from .proof import measure_motion_activity, screen_proof_verdict
 from .runtime import JobManager, JobState
@@ -41,6 +42,13 @@ class RenderPlan:
     body_cutlist: Path
     body_dropfile: Path
     longs: tuple[LongRenderPlan, LongRenderPlan, LongRenderPlan]
+
+
+@dataclass(frozen=True, slots=True)
+class AudioEnhancement:
+    passed: bool
+    stderr: str
+    cache_manifest: dict[str, object] | None = None
 
 
 def discover_sources(source: Path) -> Sources:
@@ -445,27 +453,26 @@ class PipelineRunner:
 
             self.manager.transition(job_id, JobState.ENHANCING_AUDIO)
             enhanced = long_dir / item.output_name
-            audio = subprocess.run(
-                [
-                    sys.executable,
-                    str(self.root / "scripts" / "descript_studio_sound.py"),
-                    "--in",
-                    str(motioned if motion_green else composite),
-                    "--out",
-                    str(enhanced),
-                    "--work",
-                    str(stage / f"audio-{item.hook.rank}"),
-                ],
-                cwd=self.root,
-                capture_output=True,
-                text=True,
-            )
-            _append_provider_receipts(
-                audio.stderr,
+            audio_input = motioned if motion_green else composite
+            audio = _enhance_audio(
+                self.root,
+                audio_input,
+                enhanced,
+                stage / f"audio-{item.hook.rank}",
                 attempt / "provider-receipts.jsonl",
-                artifact=item.output_name,
+                item.output_name,
+                self.manager.runs_root.parent / "cache" / "descript-effects",
+                fake_descript=fake_descript,
             )
-            audio_green = audio.returncode == 0 and enhanced.exists() and not fake_descript
+            if audio.cache_manifest is not None:
+                self.manager.receipt(
+                    job_id,
+                    "descript_effect_cache_hit",
+                    artifact=item.output_name,
+                    input_sha256=audio.cache_manifest["input_sha256"],
+                    output_sha256=audio.cache_manifest["output_sha256"],
+                )
+            audio_green = audio.passed
             gates[f"descript_effect_survival_hook_{item.hook.rank}"] = audio_green
             if not audio_green:
                 blockers.append(
@@ -681,28 +688,28 @@ class PipelineRunner:
                 if not short_motion_green:
                     blockers.append(f"short_motion_failed:{short_id}")
                 short_final = shorts_dir / f"{index:02d}-{short_id}.mp4"
-                audio = subprocess.run(
-                    [
-                        sys.executable,
-                        str(self.root / "scripts" / "descript_studio_sound.py"),
-                        "--in",
-                        str(short_motioned if short_motion_green else captioned),
-                        "--out",
-                        str(short_final),
-                        "--work",
-                        str(stage / f"audio-short-{short_id}"),
-                    ],
-                    cwd=self.root,
-                    capture_output=True,
-                    text=True,
-                )
-                _append_provider_receipts(
-                    audio.stderr,
+                short_artifact = f"shorts/{index:02d}-{short_id}.mp4"
+                audio_input = short_motioned if short_motion_green else captioned
+                audio = _enhance_audio(
+                    self.root,
+                    audio_input,
+                    short_final,
+                    stage / f"audio-short-{short_id}",
                     attempt / "provider-receipts.jsonl",
-                    artifact=f"shorts/{index:02d}-{short_id}.mp4",
+                    short_artifact,
+                    self.manager.runs_root.parent / "cache" / "descript-effects",
+                    fake_descript=fake_descript,
                 )
+                if audio.cache_manifest is not None:
+                    self.manager.receipt(
+                        job_id,
+                        "descript_effect_cache_hit",
+                        artifact=short_artifact,
+                        input_sha256=audio.cache_manifest["input_sha256"],
+                        output_sha256=audio.cache_manifest["output_sha256"],
+                    )
                 short_final_words = stage / f"short-{short_id}-final-words.json"
-                if audio.returncode == 0 and not fake_descript:
+                if audio.passed:
                     _transcribe_final(self.root, short_final, short_final_words)
                 short_qa = subprocess.run(
                     [
@@ -728,11 +735,10 @@ class PipelineRunner:
                     cwd=self.root,
                     capture_output=True,
                     text=True,
-                ) if audio.returncode == 0 and not fake_descript else None
+                ) if audio.passed else None
                 if (
                     sources.screen is not None
-                    and audio.returncode == 0
-                    and not fake_descript
+                    and audio.passed
                 ):
                     proof = screen_proof_verdict(
                         short_final,
@@ -754,8 +760,7 @@ class PipelineRunner:
                 if not proof["pass"]:
                     blockers.append(f"short_screen_proof_failed:{short_id}")
                 green = bool(
-                    audio.returncode == 0
-                    and not fake_descript
+                    audio.passed
                     and short_qa is not None
                     and short_qa.returncode == 0
                     and short_motion_green
@@ -771,7 +776,7 @@ class PipelineRunner:
                     }
                 )
                 if not green:
-                    if audio.returncode != 0 and not fake_descript:
+                    if not audio.passed and not fake_descript:
                         blockers.append(_descript_failure_blocker(audio.stderr))
                     blockers.append(f"short_failed:{short_id}")
             gates["shorts_quality"] = len(short_greens) == len(plan.shorts) and all(short_greens)
@@ -822,6 +827,86 @@ def _splice(
     if no_audio:
         command.append("--no-audio")
     _run(command, cwd=root)
+
+
+def _enhance_audio(
+    root: Path,
+    input_media: Path,
+    output_media: Path,
+    work: Path,
+    provider_receipts: Path,
+    artifact: str,
+    cache_root: Path,
+    *,
+    fake_descript: bool,
+) -> AudioEnhancement:
+    if not fake_descript:
+        cached = restore_effect_cache(cache_root, input_media, output_media)
+        if cached is not None:
+            provider = cached["provider"]
+            effect = cached["effect_survival"]
+            assert isinstance(provider, dict) and isinstance(effect, dict)
+            _append_receipt_rows(
+                provider_receipts,
+                [
+                    {**provider, "artifact": artifact, "cached": True},
+                    {**effect, "artifact": artifact, "cached": True},
+                    {
+                        "event": "descript_effect_cache_hit",
+                        "artifact": artifact,
+                        "source_artifact": cached["artifact"],
+                        "input_sha256": cached["input_sha256"],
+                        "output_sha256": cached["output_sha256"],
+                    },
+                ],
+            )
+            return AudioEnhancement(True, "", cached)
+
+    audio = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "descript_studio_sound.py"),
+            "--in",
+            str(input_media),
+            "--out",
+            str(output_media),
+            "--work",
+            str(work),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    _append_provider_receipts(audio.stderr, provider_receipts, artifact=artifact)
+    passed = audio.returncode == 0 and output_media.exists() and not fake_descript
+    if passed:
+        try:
+            store_effect_cache(
+                cache_root,
+                input_media,
+                output_media,
+                provider_receipts,
+                artifact,
+            )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+            _append_receipt_rows(
+                provider_receipts,
+                [
+                    {
+                        "event": "descript_effect_cache_store_skipped",
+                        "artifact": artifact,
+                        "reason": type(error).__name__,
+                    }
+                ],
+            )
+    return AudioEnhancement(passed, audio.stderr)
+
+
+def _append_receipt_rows(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def _merge_short_drops(body_dropfile: Path, short: ShortPlan, output: Path) -> list[dict[str, Any]]:

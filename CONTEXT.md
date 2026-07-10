@@ -65,6 +65,12 @@ first two seconds, a later animated proof beat, delivered-media transcription, a
 editorial gates.
 _Avoid_: Talking head plus static card, motion-only proof
 
+**Exact Studio Sound Reuse**:
+A content-addressed reuse of a previously green private Descript output only when the complete
+pre-audio MP4 hash, cached output hash, provider provenance, and effect-survival proof all validate.
+The delivered file is still re-transcribed and rechecked.
+_Avoid_: Audio fallback, filename cache, assumed Studio Sound
+
 **Owner Channel**:
 The maintainer installation channel linked directly to canonical `main`.
 _Avoid_: Public latest, nightly release

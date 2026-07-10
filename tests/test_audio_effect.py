@@ -1,5 +1,6 @@
-import math
 import importlib.util
+import json
+import math
 import shutil
 import subprocess
 import wave
@@ -7,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from eddy.audio_effect import EffectCalibration, evaluate_effect_survival
+from eddy.audio_effect import (
+    EffectCalibration,
+    evaluate_effect_survival,
+    restore_effect_cache,
+    store_effect_cache,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +48,90 @@ def fixture_samples(count: int = 16_000) -> list[float]:
         + 0.08 * math.sin(2 * math.pi * 2_300 * index / 16_000)
         for index in range(count)
     ]
+
+
+def write_green_provider_receipts(path: Path, artifact: str = "long-primary.mp4") -> None:
+    rows = [
+        {
+            "event": "descript_provider",
+            "artifact": artifact,
+            "provider": "descript_api",
+            "project_id": "project-1",
+            "composition_id": "composition-1",
+            "access_level": "private",
+        },
+        {
+            "event": "descript_effect_survival",
+            "artifact": artifact,
+            "status": "pass",
+            "blockers": [],
+            "metrics": {"normalized_correlation": 0.84},
+        },
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+
+
+def test_effect_cache_restores_only_exact_green_input(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    input_media = tmp_path / "input.mp4"
+    output_media = tmp_path / "output.mp4"
+    receipts = tmp_path / "provider-receipts.jsonl"
+    restored = tmp_path / "restored.mp4"
+    input_media.write_bytes(b"deterministic pre-audio render")
+    output_media.write_bytes(b"same video with real Studio Sound")
+    write_green_provider_receipts(receipts)
+
+    stored = store_effect_cache(
+        cache,
+        input_media,
+        output_media,
+        receipts,
+        "long-primary.mp4",
+    )
+    hit = restore_effect_cache(cache, input_media, restored)
+
+    assert hit == stored
+    assert restored.read_bytes() == output_media.read_bytes()
+
+    changed_input = tmp_path / "changed.mp4"
+    changed_input.write_bytes(b"a different edit")
+    assert restore_effect_cache(cache, changed_input, tmp_path / "miss.mp4") is None
+
+
+def test_effect_cache_fails_closed_on_bad_proof_or_tampering(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    input_media = tmp_path / "input.mp4"
+    output_media = tmp_path / "output.mp4"
+    receipts = tmp_path / "provider-receipts.jsonl"
+    input_media.write_bytes(b"input")
+    output_media.write_bytes(b"cleaned")
+    receipts.write_text(
+        json.dumps(
+            {
+                "event": "descript_effect_survival",
+                "artifact": "long-primary.mp4",
+                "status": "failed",
+                "blockers": ["descript_effect_not_rendered"],
+            }
+        )
+        + "\n"
+    )
+
+    with pytest.raises(ValueError, match="descript_cache_green_proof_required"):
+        store_effect_cache(cache, input_media, output_media, receipts, "long-primary.mp4")
+
+    write_green_provider_receipts(receipts)
+    manifest = store_effect_cache(
+        cache,
+        input_media,
+        output_media,
+        receipts,
+        "long-primary.mp4",
+    )
+    cached_media = cache / str(manifest["input_sha256"]) / "output.mp4"
+    cached_media.write_bytes(b"tampered")
+
+    assert restore_effect_cache(cache, input_media, tmp_path / "restored.mp4") is None
 
 
 def test_identical_export_fails_effect_survival(tmp_path: Path) -> None:
