@@ -1,5 +1,5 @@
 {
-  "canonical_commit": "4b60ff213b77e6e21fda8d837faf95a65cbc8747",
+  "canonical_commit": "066ee2d7532774dcc3ef0353895f6c33bf99d7b4",
   "files": {
     "README.md": "6979600018898143366e7ffdfb7c17a35389b927cc9913207638c080c6ab0315",
     "SKILL.md": "a55f7a6cc82d799fc282cf06f1bc40603eb9a389f71f9088c356ac600d243269",
@@ -24,7 +24,7 @@
     "scripts/karaoke_ass.py": "8dfd70889e335656be9152518fc16812dc512d4bc850dfd3ee1dd8e83773987d",
     "scripts/motion_render.py": "03c9fdad2b29ee7d555195ffc8f777c07cadf046efab9b028758506d996aebc4",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",
-    "scripts/splice.py": "8f860b0aeaafc753f1520d7c5dd19c83ec787de7a818cd76402c2dd0fec817d5",
+    "scripts/splice.py": "c9405f1185f9ba79ced444ab8997836a7883cd71947e859aab464fdb414550ba",
     "scripts/transcribe.py": "6dc38ffc28b1896270ee380957092b65e6b576dba9d85b75ea9de82fdd5323ba",
     "scripts/verify.py": "0603700912825af4006739db6d089b8bf68205cafbefdf98ddeb7f72c54b4b56"
   },
