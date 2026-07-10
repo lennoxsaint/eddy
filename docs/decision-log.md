@@ -1,5 +1,15 @@
 # Eddy decision log
 
+## 2026-07-10 - Portrait motion owns a portrait type scale
+
+- HyperFrames stat beats use `160px` type inside a 1080px portrait Short while long-form landscape
+  beats retain the approved `300px` scale.
+- Motion inspection remains blocking. Eddy fixes overflow at the composition source rather than
+  bypassing `text_box_overflow` or falling back to a static captioned card.
+
+This repairs the real demo Short where `ANY MODEL` overflowed the portrait frame and prevented the
+motion overlay from rendering.
+
 ## 2026-07-10 - Missing Descript effects retry inside the audio boundary
 
 - A provider response that says Studio Sound was enabled does not override an unchanged exported
