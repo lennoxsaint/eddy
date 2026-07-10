@@ -1,47 +1,35 @@
-# Edit-plan schema — the human-readable EDL
+# EditPlanV3 schema
 
-`edit-plan.md` is the single intermediate artifact: a sectioned, timestamped beat map that doubles
-as the edit decision list and the receipt. Format modeled on Tariq's talk edit
-(`## 2. Section — [mm:ss–mm:ss] · slides/visuals`).
+`edit-plan.json` is the host-authored editorial contract consumed by `eddy_host_submit`. It selects
+source evidence; it never contains generated speech or packaging.
 
-## Structure
-
-```markdown
-# Edit plan — <slug>
-
-- source: <camera file> + <screen file> (dual-source) | <camera file> (talking-head)
-- raw duration: <mm:ss> · transcript: <path> · target: <N min or "none">
-- packaging target: "<inferred or read title>" / thumbnail: <direction>
-
-## Hook — [00:00–00:XX]
-- cold open: keep beat #<id> word-for-word — "<first line verbatim>"
-- bridge: tease reveals → #<id>, #<id>, #<id>
-- motion: <HyperFrames brief for first 60s>
-- alt cold-opens: A = #<id> · B = #<id>
-
-## 1. <Section title> — [00:XX–0X:XX] · <visual/layout note>
-- beat #<id> [mm:ss–mm:ss] keep — "<summary>"
-- beat #<id> [mm:ss–mm:ss] duplicate of #<id> → cut (reason)
-- beat #<id> [mm:ss–mm:ss] tangent → cut (reason)   ← also goes in spot-check.md
-- retake-group R#<n> [takes at mm:ss, mm:ss] → keep last (mm:ss)
-- SACRED [mm:ss–mm:ss] — vulnerability moment, do not touch
-
-## 2. <Section title> — [0X:XX–0X:XX] · <visual note>
-...
-
-## Shorts (3-5)
-- short 1: moment #<id> [mm:ss–mm:ss] — hook: "<line>"
-- short 2: ...
-
-## Cut list (executed by splice.py)
-- keep: [<start>,<end>], [<start>,<end>], ...   (in source seconds)
-- gap-tighten: gaps >0.2s → 0.1s, except sacred spans [<start>,<end>], ...
+```json
+{
+  "schema_version": "edit-plan-v3",
+  "source_hashes": {"/absolute/camera.mp4": "<sha256>"},
+  "protected": [{"start": 12.4, "end": 18.2, "reason": "vulnerable pause"}],
+  "body": {
+    "keep": [[20.0, 140.0]],
+    "drop": [[70.0, 76.0]],
+    "retake_groups": [{"id": "R1", "keep": [90.0, 98.0], "drop": [[80.0, 87.0]]}]
+  },
+  "hooks": [
+    {"id": "proof", "rank": 1, "segments": [[140.0, 175.0]], "proof_assets": ["post.png"]},
+    {"id": "speed", "rank": 2, "segments": [[180.0, 215.0]], "proof_assets": []},
+    {"id": "cost", "rank": 3, "segments": [[220.0, 255.0]], "proof_assets": []}
+  ],
+  "shorts": [],
+  "motion_beats": [{"hook_id": "proof", "start": 0.0, "end": 4.0, "kind": "proof"}]
+}
 ```
 
-## Rules
+## Invariants
 
-- Every beat has an `id`, a source-timestamp span, a class, and a one-line summary.
-- Section headers carry a timestamp range and a visual/layout note (drives the motion layer).
-- The **Cut list** at the bottom is the machine-consumable output: kept source spans + the
-  gap-tighten policy + the sacred-span exemptions. `scripts/splice.py` consumes exactly this.
-- `keep` beats and `SACRED` spans are the contract `scripts/verify.py` checks against the final cut.
+- Source hashes must exactly match the job's source lock.
+- There is one body and exactly three unique hooks ranked `1`, `2`, and `3`.
+- The rank-1 hook creates the Primary Long; ranks 2 and 3 create Alternate Longs.
+- Every range is source time with `0 <= start < end`.
+- Protected moments survive every long.
+- Shorts are empty when no candidate clears the quality bar; otherwise provide 3–5 candidates.
+- Titles, descriptions, chapters, thumbnails, publishing fields, and arbitrary timestamps outside the
+  source lock are rejected.

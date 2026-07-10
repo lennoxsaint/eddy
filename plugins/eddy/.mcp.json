@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "eddy": {
+      "title": "Eddy",
+      "description": "Start, inspect, submit, cancel, and proof-gate Eddy editing jobs.",
+      "cwd": ".",
+      "command": "python3",
+      "args": ["./scripts/eddy_plugin_mcp.py"],
+      "tool_timeout_sec": 900
+    }
+  }
+}

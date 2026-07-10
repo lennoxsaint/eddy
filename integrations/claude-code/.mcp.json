@@ -1,0 +1,6 @@
+{
+  "mcpServers": {
+    "eddy": {"command": "eddy-mcp", "args": []}
+  }
+}
+

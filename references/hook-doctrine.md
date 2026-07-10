@@ -5,20 +5,19 @@ first 60 seconds many times while the body gets one clean pass.
 
 ## Step 1 — Establish the promise BEFORE editing the hook
 
-The hook is optimized **to** the packaging (title + thumbnail). Get the packaging target first:
+The hook is optimized to the strongest honest viewer promise the footage can carry. Eddy v3.0 does
+not emit packaging assets, but it still needs an internal promise target before cutting:
 
-1. If the folder has `package-lock.json`, `decision-card.json`, or `intelligence-brief.md`, read
-   the intended title + thumbnail direction from them (Max/Tina/Theresa work). Prefer A/B variants
-   if present.
-2. Otherwise, infer a title + thumbnail direction from the transcript (what is the single most
-   curiosity-driving promise this footage can honestly make?). Write it to `packaging-target.md`.
+1. If the folder has a decision card or intelligence brief, read it as source context.
+2. Otherwise infer the strongest specific outcome, counterintuitive claim, or high-stakes proof
+   from the transcript. Write it to `viewer-promise.md`; do not generate titles or thumbnails.
 
-The packaging target is the north star. The hook must **pay off exactly that promise**.
+The viewer promise is the north star. The hook must **pay off exactly that promise**.
 
 ## Step 2 — Structure of a working opening
 
 - **0-30s cold open (hook):** land the promise immediately. No "hey guys, what's up", no slow
-  throat-clearing, no logo. Open on the sharpest, most curiosity-provoking beat that the packaging
+  throat-clearing, no logo. Open on the sharpest, most curiosity-provoking beat that the viewer
   promises. Keep the chosen hook line **word-for-word** — do not paraphrase it.
 - **30-60s preview bridge:** tease 2-3 upcoming reveals ("in the next few minutes you'll see X, Y,
   Z"). This creates micro-curiosity-gaps that pull viewers across the hook→content cliff (a large
@@ -30,7 +29,7 @@ Score the drafted 0-60s. Re-cut until it clears threshold (redo up to 3, per ver
 
 | Dimension | Question | Pass bar |
 |---|---|---|
-| Promise match | Does it deliver the exact title/thumbnail promise? | must pass |
+| Promise match | Does it deliver the exact viewer promise? | must pass |
 | Cold-open strength | Would a stranger stop scrolling in the first 3 seconds? | must pass |
 | Curiosity gap | Is there an open loop the viewer needs closed? | must pass |
 | No dead air | Zero slow intro, filler, or setup before the promise lands? | must pass |

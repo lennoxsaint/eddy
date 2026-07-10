@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Motion render — on-brand HyperFrames motion (the DEFAULT motion engine).
 
-Two modes, both render through eddy-v2's HyperFrames node runner in the `threadify-fc` identity and
-composite a keyed-alpha overlay onto a base clip. We REUSE the runner + identity; we never edit them.
+Both modes render through the supported `npx hyperframes` CLI using Eddy's pinned `threadify-fc`
+identity projection and composite a keyed-alpha overlay onto a base clip.
 
   --brief brief.json  (PREFERRED, iconography-forward): build a CUSTOM icon/image-led index.html
       (SVG icons, provider chips, framed real screenshots, stat callouts, flow diagrams — minimal
       supporting text, NO "EDDY V2" watermark) and render it via the node runner directly. This is
       the "custom animated HTML layer" — icon-led, not text-led.
-  --hook "text"       (FALLBACK): use eddy-v2's built-in text-led scaffolder (create_motion_project).
+  --hook "text"       (FALLBACK): build a minimal one-beat HyperFrames composition.
 
 Motion is iconography/image-forward (references/motion-layer.md). The overlay's black areas are keyed
 transparent so the base video shows through; the brand graphics ride on top.
@@ -39,19 +39,16 @@ from __future__ import annotations
 import argparse
 import html
 import json
-import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-EDDY_V2 = Path(os.path.expanduser("~/eddy-v2"))
-V2_PY = EDDY_V2 / ".venv" / "bin" / "python"
-V2_SRC = EDDY_V2 / "src"
-NODE_RUNNER = EDDY_V2 / "renderer" / "hyperframes-runner.mjs"
-IDENTITY_DIR = Path(os.path.expanduser("~/eddy/src/eddy/motion/identities/threadify-fc"))
+ROOT = Path(__file__).resolve().parents[1]
+IDENTITY_DIR = ROOT / "assets" / "motion" / "threadify-fc"
+GSAP_SOURCE = ROOT / "assets" / "vendor" / "gsap.min.js"
 
-# Key the black background out to alpha, then overlay (eddy-v2's composite recipe).
+# Key the black background out to alpha, then overlay.
 KEY = "colorkey=0x000000:0.10:0.12,colorchannelmixer=aa=0.94"
 
 # --- inline stroke icons (viewBox 0 0 100 100, stroke=currentColor) -----------------------------
@@ -201,7 +198,7 @@ def _timeline(beats: list[dict]) -> str:
             f'tl.to("#scene-{i} .block", {{y:-22, opacity:0, duration:0.34, ease:"power2.in"}}, {s + d - 0.34:.3f});',
             f'tl.set("#scene-{i}", {{opacity:0}}, {s + d:.3f});',
         ]
-    lines.append('window.__timelines["eddy-v2"] = tl;')
+    lines.append('window.__timelines["eddy"] = tl;')
     return "\n".join(lines)
 
 
@@ -258,9 +255,9 @@ def build_custom_html(brief: dict, needle_rel: str | None, ring_rel: str | None,
   /* cutaway = OPAQUE full-frame ground (replaces the screen); overlay path keeps #000 for the key */
   body {{ background:{ground}; }} #stage {{ background:{ground}; }}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script src="./gsap.min.js"></script>
 </head><body>
-<div id="stage" data-composition-id="eddy-v2" data-start="0" data-duration="{dur:.3f}" data-track-index="0" data-width="{w}" data-height="{h}">
+<div id="stage" data-composition-id="eddy" data-start="0" data-duration="{dur:.3f}" data-track-index="0" data-width="{w}" data-height="{h}">
   <div class="grain" data-layout-ignore></div>
   {ring}
   {chrome}
@@ -282,6 +279,9 @@ def scaffold_custom_project(project: Path, brief: dict, ground: str = "#000") ->
             shutil.copy2(src, project / f)
         elif f == "font-face.css":
             (project / f).write_text("")  # optional import must resolve
+    if not GSAP_SOURCE.exists():
+        raise RuntimeError(f"bundled_gsap_missing:{GSAP_SOURCE}")
+    shutil.copy2(GSAP_SOURCE, project / "gsap.min.js")
     assets_dir = IDENTITY_DIR / "assets"
     needle_rel = ring_rel = None
     if (assets_dir / "threadify-needle.png").exists():
@@ -295,68 +295,77 @@ def scaffold_custom_project(project: Path, brief: dict, ground: str = "#000") ->
             shutil.copy2(img, project / f"img-{i}.png")
     html_doc = build_custom_html(brief, needle_rel, ring_rel, ground)
     (project / "index.html").write_text(html_doc, encoding="utf-8")
-    return float(brief.get("duration") or max(
+    duration = float(brief.get("duration") or max(
         (float(b["start"]) + float(b.get("dur", 4.0)) for b in brief.get("beats", [])), default=6.0))
+    (project / "hyperframes.json").write_text(json.dumps({"entry": "index.html"}, indent=2) + "\n")
+    (project / "meta.json").write_text(json.dumps({"product": "Eddy", "duration": duration}, indent=2) + "\n")
+    (project / "DESIGN.md").write_text(
+        "# Eddy Motion Design\n\nPinned threadify-fc identity: quiet navy, gold accent, one visual idea at a time.\n"
+    )
+    frame = IDENTITY_DIR / "frame.md"
+    (project / "frame.md").write_text(frame.read_text() if frame.exists() else "# Eddy Frame\n")
+    storyboard = "# Storyboard\n\n" + "\n".join(
+        f"- {beat.get('start', 0)}s: {beat.get('kicker') or beat.get('label') or beat.get('layout', 'beat')}"
+        for beat in brief.get("beats", [])
+    ) + "\n"
+    (project / "storyboard.md").write_text(storyboard)
+    (project / "storyboard.html").write_text(
+        "<!doctype html><meta charset='utf-8'><title>Eddy storyboard</title><pre>"
+        + html.escape(storyboard)
+        + "</pre>\n"
+    )
+    return duration
 
 
 def render_custom_node(project: Path, out: Path, fake: bool, w: int, h: int, dur: float) -> bool:
-    """Render the custom project via the node runner directly (lint is warn-only; we skip eddy-v2's
-    strict inspect gate so a bespoke layout isn't rejected). Returns True on success."""
+    """Run the HyperFrames lint/validate/inspect contract, then render the composition."""
     if fake:
         subprocess.run(["nice", "ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
                         f"testsrc2=size={w}x{h}:rate=30:duration={dur}", "-vf",
                         "eq=brightness=-0.25:saturation=0.45", "-an", "-c:v", "libx264",
                         "-pix_fmt", "yuv420p", str(out)], check=False)
         return out.exists()
-    lint = subprocess.run(["node", str(NODE_RUNNER), "lint", str(project), "--json"],
-                          capture_output=True, text=True)
-    (project / "motion-lint.json").write_text(lint.stdout or lint.stderr or "{}")
-    r = subprocess.run(["node", str(NODE_RUNNER), "render", str(project),
-                        "--quality", "draft", "--output", str(out)],
-                       capture_output=True, text=True)
+    checks = []
+    for command, receipt in (
+        ("lint", "motion-lint.json"),
+        ("validate", "motion-validate.json"),
+        ("inspect", "motion-inspect.json"),
+    ):
+        check = subprocess.run(
+            ["npx", "hyperframes", command, str(project), "--json"],
+            capture_output=True,
+            text=True,
+        )
+        (project / receipt).write_text(check.stdout or check.stderr or "{}")
+        checks.append(check.returncode == 0)
+    if not all(checks):
+        return False
+    r = subprocess.run(
+        [
+            "npx", "hyperframes", "render", str(project), "--quality", "draft",
+            "--strict", "--workers", "1", "--output", str(out),
+        ],
+        capture_output=True,
+        text=True,
+    )
     if r.returncode != 0 or not out.exists():
         print((r.stderr or r.stdout)[-2500:], file=sys.stderr)
         return False
     return True
 
 
-# --- eddy-v2 text scaffolder (fallback) ---------------------------------------------------------
-_RUNNER = r"""
-import shutil, sys
-from pathlib import Path
-from eddy_v2.motion import create_motion_project, run_hyperframes
-from eddy_v2.receipts import Receipts
-
-run_dir = Path(sys.argv[1]); identity = sys.argv[2]; hook = sys.argv[3]
-portrait = sys.argv[4] == "1"; duration = float(sys.argv[5]); out_path = Path(sys.argv[6])
-run_dir.mkdir(parents=True, exist_ok=True)
-receipts = Receipts(run_dir / "motion-receipts.jsonl")
-project = create_motion_project(run_dir, identity, hook, portrait=portrait,
-                                duration_s=duration, plan=None, receipts=receipts)
-overlay = run_hyperframes(project, receipts, portrait=portrait)
-out_path.parent.mkdir(parents=True, exist_ok=True)
-shutil.copy2(overlay, out_path)
-print("OVERLAY " + str(out_path))
-"""
-
-
 def render_hook_scaffolder(run_dir: str, identity: str, hook: str, portrait: bool,
                            duration: float, out: Path, fake: bool) -> bool:
-    if not V2_PY.exists():
-        print(f"ERROR: eddy-v2 venv python not found at {V2_PY}", file=sys.stderr)
-        return False
-    env = dict(os.environ)
-    env["PYTHONPATH"] = str(V2_SRC) + os.pathsep + env.get("PYTHONPATH", "")
-    if fake:
-        env["EDDY_V2_FAKE_HYPERFRAMES"] = "1"
-    proc = subprocess.run(
-        [str(V2_PY), "-c", _RUNNER, run_dir, identity, hook,
-         "1" if portrait else "0", str(duration), str(out)],
-        capture_output=True, text=True, env=env)
-    if proc.returncode != 0 or not out.exists():
-        print(proc.stderr[-3000:], file=sys.stderr)
-        return False
-    return True
+    project = Path(run_dir) / "project"
+    width, height = ((1080, 1920) if portrait else (1920, 1080))
+    brief = {
+        "width": width,
+        "height": height,
+        "duration": duration,
+        "beats": [{"start": 0.0, "dur": duration, "layout": "stat", "label": hook}],
+    }
+    actual_duration = scaffold_custom_project(project, brief)
+    return render_custom_node(project, out, fake, width, height, actual_duration)
 
 
 def probe_wh(path: Path) -> tuple[int, int]:
@@ -410,7 +419,7 @@ def composite(base: Path, overlay: Path, out: Path) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser(description="HyperFrames motion render (default engine).")
     ap.add_argument("--brief", help="brief.json → custom icon-led layer (preferred)")
-    ap.add_argument("--hook", help="text → eddy-v2 text scaffolder (fallback)")
+    ap.add_argument("--hook", help="text → minimal one-beat HyperFrames composition (fallback)")
     ap.add_argument("--run-dir", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--identity", default="threadify-fc")

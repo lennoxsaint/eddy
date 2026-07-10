@@ -1,6 +1,6 @@
 # The editing SOP (source of truth)
 
-The canonical 6-step edit, in order, with V3's corrections applied. This is the contract Lennox
+The canonical six-step edit, in order. This is the contract Lennox
 gave; obey it exactly, but let taste fill the gaps between steps.
 
 ## The 6 steps (do in order)

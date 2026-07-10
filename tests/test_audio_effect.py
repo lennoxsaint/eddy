@@ -1,0 +1,128 @@
+import math
+import shutil
+import subprocess
+import wave
+from pathlib import Path
+
+from eddy.audio_effect import EffectCalibration, evaluate_effect_survival
+
+
+def write_wav(path: Path, samples: list[float], rate: int = 16_000) -> None:
+    pcm = bytearray()
+    for sample in samples:
+        value = max(-32768, min(32767, int(sample * 32767)))
+        pcm.extend(value.to_bytes(2, "little", signed=True))
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(bytes(pcm))
+
+
+def fixture_samples(count: int = 16_000) -> list[float]:
+    return [
+        0.45 * math.sin(2 * math.pi * 220 * index / 16_000)
+        + 0.08 * math.sin(2 * math.pi * 2_300 * index / 16_000)
+        for index in range(count)
+    ]
+
+
+def test_identical_export_fails_effect_survival(tmp_path: Path) -> None:
+    source = tmp_path / "source.wav"
+    exported = tmp_path / "exported.wav"
+    write_wav(source, fixture_samples())
+    exported.write_bytes(source.read_bytes())
+
+    result = evaluate_effect_survival(source, exported, EffectCalibration.default())
+
+    assert result.passed is False
+    assert "descript_effect_not_rendered" in result.blockers
+    assert result.metrics["normalized_correlation"] > 0.9999
+
+
+def test_gain_only_export_does_not_count_as_studio_sound(tmp_path: Path) -> None:
+    source = tmp_path / "source.wav"
+    exported = tmp_path / "exported.wav"
+    samples = fixture_samples()
+    write_wav(source, samples)
+    write_wav(exported, [sample * 0.8 for sample in samples])
+
+    result = evaluate_effect_survival(source, exported, EffectCalibration.default())
+
+    assert result.passed is False
+    assert "descript_effect_not_rendered" in result.blockers
+
+
+def test_codec_roundtrip_without_effect_does_not_count_as_studio_sound(tmp_path: Path) -> None:
+    if not shutil.which("ffmpeg"):
+        return
+    source = tmp_path / "source.wav"
+    encoded = tmp_path / "encoded.m4a"
+    decoded = tmp_path / "decoded.wav"
+    write_wav(source, fixture_samples(64_000), rate=16_000)
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(source), "-c:a", "aac", str(encoded)],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error", "-i", str(encoded), "-ac", "1", "-ar",
+            "16000", "-c:a", "pcm_s16le", str(decoded),
+        ],
+        check=True,
+    )
+
+    result = evaluate_effect_survival(source, decoded, EffectCalibration.default())
+
+    assert result.passed is False
+    assert "descript_effect_not_rendered" in result.blockers
+
+
+def test_changed_same_duration_audio_passes_effect_survival(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source.wav"
+    exported = tmp_path / "exported.wav"
+    samples = fixture_samples()
+    write_wav(source, samples)
+    write_wav(exported, [sample - 0.08 * math.sin(2 * math.pi * 2_300 * i / 16_000) for i, sample in enumerate(samples)])
+    monkeypatch.setattr(
+        "eddy.audio_effect.reverb_tail_metrics",
+        lambda path: {"measurable": True, "echo_score": 0.02},
+    )
+
+    result = evaluate_effect_survival(source, exported, EffectCalibration.default())
+
+    assert result.passed is True
+    assert result.blockers == ()
+    assert result.metrics["duration_delta_s"] == 0.0
+
+
+def test_changed_but_echoey_audio_fails_studio_quality(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source.wav"
+    exported = tmp_path / "exported.wav"
+    samples = fixture_samples()
+    write_wav(source, samples)
+    write_wav(exported, [sample - 0.08 * math.sin(2 * math.pi * 2_300 * i / 16_000) for i, sample in enumerate(samples)])
+    monkeypatch.setattr(
+        "eddy.audio_effect.reverb_tail_metrics",
+        lambda path: {"measurable": True, "echo_score": 0.68},
+    )
+
+    result = evaluate_effect_survival(source, exported, EffectCalibration.default())
+
+    assert result.passed is False
+    assert "descript_quality_not_studio_sound" in result.blockers
+
+
+def test_duration_shift_and_malformed_audio_fail_closed(tmp_path: Path) -> None:
+    source = tmp_path / "source.wav"
+    short = tmp_path / "short.wav"
+    malformed = tmp_path / "malformed.wav"
+    write_wav(source, fixture_samples(64_000))
+    write_wav(short, fixture_samples(32_000))
+    malformed.write_text("not audio")
+
+    shifted = evaluate_effect_survival(source, short, EffectCalibration.default())
+    invalid = evaluate_effect_survival(source, malformed, EffectCalibration.default())
+
+    assert "descript_duration_parity_failed" in shifted.blockers
+    assert invalid.blockers == ("descript_export_invalid",)

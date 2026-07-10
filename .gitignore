@@ -7,6 +7,14 @@ DESCRIPT_API_KEY*
 __pycache__/
 *.pyc
 .venv/
+.venv.broken-*/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
 
 # run artifacts / scratch
 runs/
@@ -19,6 +27,7 @@ audio/
 caption-states/
 proxy.mp4
 final/
+dogfood/runs/
 
 # os
 .DS_Store

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Descript Studio Sound — audio only, self-contained.
 
-Distilled from eddy-v2 `src/eddy_v2/audio.py`. The ONLY thing in Eddy V3 that talks to Descript,
+Distilled from the proven legacy audio path. This is the only Eddy component that talks to Descript,
 and it only ever touches audio: extract WAV -> Descript Studio Sound -> parity check -> mux back
 into the video. Never changes timing, content, or layout.
 
@@ -15,7 +15,7 @@ Env:
   EDDY_DESCRIPT_POLL_S        optional poll interval seconds (default 5)
   EDDY_FAKE_DESCRIPT=1        offline local ffmpeg approximation (dev only; NOT real Studio Sound)
 
-Exit codes: 0 ok · 2 missing key · 3 parity failed · 4 api/other error
+Exit codes: 0 ok · 2 missing key · 3 parity/effect-survival failed · 4 api/other error
 """
 from __future__ import annotations
 
@@ -28,6 +28,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from eddy.audio_effect import EffectCalibration, evaluate_effect_survival  # noqa: E402
 
 API_BASE = os.environ.get("EDDY_DESCRIPT_API_BASE", "https://descriptapi.com/v1").rstrip("/")
 MEDIA_NAME = "source-audio.wav"
@@ -119,7 +124,7 @@ def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | Non
         + ". Do not remove words, change timing, add captions, or alter content."
     )
     import_payload = {
-        "project_name": f"Eddy V3 Studio Sound {int(time.time())}",
+        "project_name": f"Eddy Studio Sound {int(time.time())}",
         "add_media": {MEDIA_NAME: {"content_type": "audio/wav", "file_size": wav.stat().st_size}},
         "add_compositions": [{"name": "Studio Sound Audio", "clips": [{"media": MEDIA_NAME}]}],
     }
@@ -164,6 +169,26 @@ def parity_ok(src_wav: Path, cleaned: Path) -> bool:
     return ok
 
 
+def effect_survival_ok(src_wav: Path, cleaned: Path, work: Path) -> bool:
+    decoded = work / "descript-export-proof.wav"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(cleaned), "-vn", "-ac", "1", "-ar", "48000",
+            "-c:a", "pcm_s16le", str(decoded),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    result = evaluate_effect_survival(src_wav, decoded, EffectCalibration.default())
+    log(
+        "descript_effect_survival",
+        status="pass" if result.passed else "failed",
+        blockers=list(result.blockers),
+        metrics=result.metrics,
+    )
+    return result.passed
+
+
 def mux(video: Path, cleaned_audio: Path, out: Path) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
@@ -205,7 +230,11 @@ def main() -> int:
 
         cleaned = work / "descript-studio-sound.m4a"
         result = studio_sound(src_wav, cleaned, token or "", args.intensity)
-        if result is None or not parity_ok(src_wav, cleaned):
+        if (
+            result is None
+            or not parity_ok(src_wav, cleaned)
+            or not effect_survival_ok(src_wav, cleaned, work)
+        ):
             return 3
 
         if args.audio_only:

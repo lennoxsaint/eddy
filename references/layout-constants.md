@@ -1,6 +1,6 @@
 # Frozen layout constants — never re-derive
 
-These are V1's proven, Yassy-approved numbers (`~/eddy/src/eddy/render/layout.py`). The model must
+These are the proven, Yassy-approved legacy layout numbers now frozen in Eddy. The model must
 NOT recompute geometry per run — `scripts/composite_render.py` reads these. They are the look Lennox
 already approved.
 

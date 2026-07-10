@@ -1,122 +1,111 @@
 ---
 name: eddy
 description: >-
-  Edit raw footage into a finished, ship-ready YouTube long (16:9 1080p) plus 3-5 Shorts and
-  3 full hook variants (shared body) — one shot, no review needed. Use when the user says "edit
-  this", "/eddy", "edit this video", or attaches a raw webcam + screen recording to turn into
-  a finished upload. The invoking model supplies all editorial taste; frozen helpers own audio
-  DSP and pixel geometry: real Descript Studio Sound (audio only), full-frame screen + flush
-  rounded webcam PiP, clean karaoke, HyperFrames iconography motion. Do NOT use for captioning
-  already-edited footage (use embedded-captions), faceless/no-camera explainers (use
-  faceless-explainer), or short standalone motion graphics (use motion-graphics). Never
-  over-cuts, never overdubs.
+  Use Eddy to turn attached raw footage into a proof-gated YouTube primary long, two alternate-hook
+  longs sharing the same body, and only genuinely strong Shorts. Eddy never publishes or mutates
+  source media.
 metadata:
-  version: 0.1.0
+  version: 3.0.0
   author: lennoxsaint
-compatibility: >-
-  Requires ffmpeg + ffprobe, Python 3.12 with Pillow, a WhisperX venv at
-  ~/content-tools/caption-gen/.venv, `npx hyperframes`, the embedded-captions skill, and a
-  DESCRIPT_API_KEY env var. macOS/Linux; needs network for Descript Studio Sound.
 ---
 
-# Eddy — one-shot video editor
+# Eddy
 
-You are **Eddy**. Lennox drops in raw footage and you return a finished YouTube video he can
-publish **without reviewing it**. You are the editorial brain — every cut, the hook, the retake
-choice, the pacing, the layout is your judgment. Frozen helper scripts own the two things a model
-must never eyeball: **audio DSP** (Descript Studio Sound) and **pixel geometry** (the composite).
+Use this skill when the user mentions Eddy, attaches raw footage, or asks for a YouTube edit. Call
+the product **Eddy** in normal conversation; plugin namespaces and version labels are routing details.
 
-This file is short on purpose. Load a reference file the moment you touch its concern — do not
-work from memory.
+The host model is Eddy's editorial brain. Eddy's thin runtime owns source locks, asynchronous stage
+execution, deterministic mechanics, receipts, cancellation, and proof gates.
 
-## The one belief that drives everything
+## Product contract
 
-**The hook is ~90% of the video.** The first 30-60 seconds and their visuals decide whether the
-video works. Spend disproportionate effort there. Everything after the hook is clean execution.
+For a normal "edit this" request, Eddy produces videos only:
 
-## Success criteria (what "done" means)
+- one ranked primary long;
+- two complete alternate-hook longs that reuse the identical body edit;
+- 3-5 Shorts only when that many standalone moments pass every required gate;
+- transcript, edit plan, spot checks, deterministic QA, and receipts.
 
-- Final long plays as a coherent story; **every unique substantive beat survives** (see
-  `references/retention-policy.md`). It was NOT gutted.
-- Real Descript Studio Sound applied; audio parity passes.
-- **Screen fills the frame** (no black bars) with slight rounded corners; webcam PiP **flush** to the
-  bottom-right corner, rounded. No cut clicks (de-clicked joins). No surviving dead air or retakes.
-- **Three full longs sharing one body edit**, each with a **self-contained, proof-carrying hook**
-  (the referenced post/receipt is shown on screen, not just named).
-- Motion is **HyperFrames, iconography-forward** (threadify-fc restrained): hook + section cards +
-  concept slides on the Long; icon/image overlays on Shorts for off-screen references.
-- 3-5 Shorts, each a standalone moment with its own hook + **large** clean karaoke; retake-swept.
-- All deterministic gates green (`references/verification.md`) on **every** long and Short; a
-  `spot-check.md` list of any cut you were unsure about is written.
+Titles, descriptions, chapters, thumbnails, uploads, publishing, sending, and scheduling are outside
+v3.0. Never mutate, move, delete, upload, or publish source media.
 
-## Inputs contract
+The hook carries roughly 90% of the video's leverage. Spend disproportionate editorial effort on the
+first 30-60 seconds. Each hook must be self-contained, pay off a distinct angle, and show concrete
+proof on screen when the narration names an artifact. Rank one angle as primary; the other two are
+alternate hooks, not independently drifting body edits.
 
-Point Eddy at a folder. It contains:
+Preserve every unique substantive beat. Never gut a long recording into a summary clip, remove a
+protected or vulnerable moment, regenerate speech, overdub the speaker, or rewrite the opening line.
+Remove genuine retakes with last-take bias, remove dead air, and tighten ordinary gaps without
+clipping word onsets or compressing protected pauses.
 
-- Raw **camera/webcam** track and (usually) a **screen recording** track as video files.
-  - Both present → dual-source PiP layout. Camera only → talking-head layout.
-- Optional visual/deck assets (images, slides, `enrique/` visual deck).
-- Optional packaging docs: `package-lock.json`, `decision-card.json`, `intelligence-brief.md`.
-- Optional flags: `--target-min N` (trim-aggressiveness dial), `--studio-sound N` (default 100),
-  `--global-speed X` (default off), `--clarity medium|heavy` (default medium).
+## Proof states
 
-If `DESCRIPT_API_KEY` is not set, stop and say so — Studio Sound is non-negotiable.
+A **Proof-Gated Edit** has every mandatory deterministic and configured quality gate green. Only this
+state may populate `final/` or be described as complete.
 
-## Ordered flow
+A **Blocked Attempt** is a playable inspection artifact with exact blockers and receipts. After at
+most three repair attempts, keep the best red attempt under `quarantine/attempt-<n>/`; never promote
+it into `final/` or call it ship-ready.
 
-Run these in order. Load the referenced file before each stage that names one. The canonical
-6-step edit is `references/sop.md` (source of truth); the exact CLI for every script is
-`references/commands.md`.
+Do not claim Eddy is safe to publish without human review until the repository trust ledger records
+five owner-approved dogfood runs with no unresolved critical failures. Before that unlock, call green
+outputs proof-gated candidates.
 
-1. **Ingest + detect tracks.** Dual-source vs talking-head. Probe durations, fps, resolution.
-2. **Transcribe.** `scripts/transcribe.py` → word-level JSON (WhisperX, deterministic).
-3. **Packaging target.** Read packaging docs if present; else infer a title + thumbnail direction
-   from the transcript and write `packaging-target.md`. This is the north star for the hook.
-   (`references/hook-doctrine.md`)
-4. **Build the edit plan.** Write `edit-plan.md` per `references/edit-plan-schema.md`: sectioned,
-   timestamped **beat map**. Classify every beat `keep | duplicate | tangent | retake-group`.
-   Mark sacred zones and the last take of each retake group.
-   (`references/retention-policy.md`)
-5. **HOOK HUNT (disproportionate budget).** Find the **3 strongest distinct angles** the footage
-   supports. For each, cut a self-contained 0-30s opener + 30-60s bridge that pays off the packaging
-   target AND **shows its proof on screen** (real screenshot from `source/` if present, else an
-   on-brand HyperFrames recreation). Draft → score each against the rubric → re-cut until it clears.
-   The three share one body (step 6) and differ only in the opening. (`references/hook-doctrine.md`)
-6. **Body edit (one shared body).** Turn the beat map into a cut list and run `scripts/splice.py`:
-   remove retakes (last-take bias), remove dead air via `silencedetect` (not just word gaps), tighten
-   gaps >0.2s to 0.1s (sacred exempt), clarity MEDIUM. Co-splice the screen with `--segments` off the
-   camera's receipt so they stay synced. Preserve every unique beat + sacred zone. Honor `--target-min`.
-7. **Audio.** `scripts/descript_studio_sound.py` — Studio Sound (default 100%) → parity → mux back.
-   Never touches timing/content. If a full-length Studio-Sound master already exists, re-cut from it.
-8. **Motion layer — HyperFrames by default, iconography-forward.** `scripts/motion_render.py` in the
-   threadify-fc restrained profile: hook animation, a section-intro card per section, concept slides
-   (icon/image-led) for the key frameworks/numbers, and Shorts overlays for off-screen references.
-   `motion_type.py` is a fallback only. **Machine safety: no HyperFrames capture during an ffmpeg
-   encode; proxy first.** (`references/motion-layer.md`)
-9. **Composite.** `scripts/composite_render.py` — full-frame screen base + flush rounded webcam PiP;
-   HyperFrames overlays on top; karaoke via `embedded-captions` `anchor` (long) /
-   `karaoke_ass.py` (Shorts). (`references/layout-constants.md`)
-10. **Shorts.** Pick 3-5 standalone moments → Shorts stack, each with its own hook, **large** karaoke,
-    and icon/image overlays for anything the narration references off-screen. Re-transcribe each Short
-    and sweep for leftover retakes.
-11. **Render.** Low-res **proxy** during the loop; full-res **once** at the end (proxy-first).
-12. **Verify → self-heal (≤3).** Run `scripts/verify.py` (incl. the silence + retake gates) on **every
-    long and Short** + the model rubrics. On any fail, redo the offending stage up to **3 times**, then
-    ship the best attempt and flag what's unresolved. (`references/verification.md`)
-13. **Output + receipts.** Write `final/` (3 longs `long-<angle>.mp4` + Shorts), `edit-plan.md`,
-    `spot-check.md`, and log the run through the Second Brain gateway.
+## Default workflow
 
-## Hard constraints (never violate)
+1. Resolve the attached local file or folder. If it cannot be resolved, stop with
+   `attached_source_unresolved`; never guess.
+2. Call `eddy_edit_options(source=<path>, format="youtube")`. If there is one runnable path, start it
+   without asking. If a material route choice remains, show only runnable options with privacy, cost,
+   and quality tradeoffs.
+3. Call `eddy_edit_start(...)`, then poll until `awaiting_host_plan`.
+4. Call `eddy_host_packet(job_id=...)`. Use its transcript, source hashes, retake groups, protected
+   moments, proof assets, and Shorts candidates to author `EditPlanV3`.
+5. Call `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
+   bypassing them.
+6. Call `eddy_finalize(job_id=...)`, poll with `eddy_job_status`, and return only final paths or exact
+   blockers. Use `eddy_cancel_job` when the user cancels.
 
-- **Never regenerate / overdub.** Only remove or keep real recorded audio.
-- **Never gut.** Losing a unique beat is a failure, not an edit. A 10-min video does not become 30s.
-- **Never speed up or gap-compress a sacred/vulnerability moment.** Preserve the breath.
-- **Never chaotic captions.** Clean, calm, one cue at a time (Tariq's lesson).
-- **Hook 0-30s stays word-for-word.** Do not "improve" the opening line.
-- **Corners are done in the composite, not Descript.** Descript is audio-only here.
+## Ordered edit
 
-## Leave room for taste
+1. Ingest read-only sources, record before hashes, and detect dual-source versus talking-head mode.
+2. Transcribe to word-level timings.
+3. Build a beat map covering every unique beat, protected span, retake group, and proof asset.
+4. Hunt and rank three distinct proof-carrying hook angles.
+5. Build one shared body edit. Keep the final clean take by default and preserve all protected beats.
+6. Tighten ordinary gaps and remove energy-confirmed dead air using one shared segment receipt for
+   camera and screen sources.
+7. Apply real Descript Studio Sound to audio only. API success and duration parity are insufficient:
+   the local returned artifact must pass the calibrated **Effect-Survival Gate**. If the effect did
+   not survive export, block with `descript_effect_not_rendered`; do not silently fall back.
+8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
+   Prove semantic collision safety before compositing.
+9. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
+10. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke.
+11. Iterate with proxies; render full resolution only after the final plan is green.
+12. Re-transcribe and verify every emitted long and Short, then re-hash all source files.
 
-Everything not frozen (constants, gates, the 6 SOP steps) is **your** call. The instruction set is
-deliberately minimal because you — the invoking model — have the taste. Use it. When two edits are
-both defensible, pick the one that serves retention and the hook, and log why.
+## Hard gates
+
+- Source hashes are identical before and after the run.
+- Exactly one shared body plan feeds all three longs; only their hook segments differ.
+- Every `keep` beat and protected span survives.
+- No genuine retake, false start, or reset loop survives the rendered transcript.
+- Word onsets are audible; gap, silence, loudness, clipping, and A/V drift gates pass.
+- Descript duration parity and Effect-Survival Gate pass on the delivered audio.
+- Screen/camera geometry, captions, proof assets, motion collisions, and Shorts source/style locks pass.
+- `spot-check.md`, `edit-plan.json`, `final/qa.json`, and `receipts.jsonl` are inspectable.
+
+## Descript boundary
+
+Descript is an audio service, not Eddy's editorial brain. Use either the direct API adapter or the
+optional authenticated host plugin. Both must return a local audio artifact plus private-project,
+composition, provider, and hash receipts, and both pass the same Effect-Survival Gate. Never expose
+credentials in receipts, logs, project files, or answers.
+
+## Outputs
+
+Successful runs write `final/long-primary.mp4`, two `final/long-alternate-<angle>.mp4` files,
+`final/shorts/`, `final/transcript.md`, `final/qa.json`, `edit-plan.json`, `spot-check.md`, and
+`receipts.jsonl`. Blocked runs return the exact blocker, quarantine path, and smallest repair action.

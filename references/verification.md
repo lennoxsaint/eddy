@@ -1,9 +1,9 @@
 # Verification + self-heal (≤3)
 
 Work is not done until emitted behaviour is checked. Two layers: deterministic gates (machine) and
-model rubrics (you). On any failure, redo the offending stage up to **3 times**, then ship the best
-attempt and record what's unresolved in `spot-check.md`. Bounded on purpose — V1's unbounded loop
-plateaued and stalled.
+model rubrics (you). On any failure, redo the offending stage up to **3 times**. If a required gate
+is still red, quarantine the best playable render as a **Blocked Attempt** with exact blockers; never
+promote it to `final/` or call it ship-ready.
 
 ## Deterministic gates (`scripts/verify.py`)
 
@@ -44,20 +44,21 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
   references ("as I said earlier" when that beat was cut), lost context? Fix.
 - **Gutting check** — did any sacred or grounded beat get cut or compressed? Restore it.
 
-## Receipts (trust without review)
+## Receipts
 
 - `edit-plan.md` — the beat map + section structure (also the human-readable EDL).
 - Every cut logged with a one-line reason.
-- `spot-check.md` — cuts you were unsure about (timestamp + reason) for optional after-the-fact
-  review. This is the artifact that lets Lennox ship without watching the whole thing.
+- `spot-check.md` — cuts you were unsure about (timestamp + reason) for review. The no-review claim
+  remains locked until five diverse owner-approved dogfoods are green.
 - Final Second Brain run log through the canonical gateway.
 
 ## Setup failures & fallbacks (degrade gracefully, don't abort)
 
 Autonomy means never stalling on a non-essential layer. On a stage failure:
 
-- **`DESCRIPT_API_KEY` missing / Studio Sound fails** — HARD stop for the final long (Studio Sound
-  is non-negotiable). Report clearly and halt; do not ship the raw or the dev-only
+- **`DESCRIPT_API_KEY` missing / Studio Sound fails** — HARD stop for every final long. API success
+  and duration parity do not count unless the calibrated Effect-Survival Gate also passes. Report
+  clearly and halt; do not ship the raw or the dev-only
   `EDDY_FAKE_DESCRIPT` audio as final.
 - **No screen-recording track** — switch to the talking-head layout (`composite_render.py th` /
   `short --face`). Not an error.
@@ -72,5 +73,6 @@ Autonomy means never stalling on a non-essential layer. On a stage failure:
 
 ## Definition of shippable
 
-All deterministic gates green, all model rubrics addressed (or the residual honestly flagged), and
-`spot-check.md` written. Then — and only then — do the full-res render and hand off.
+All deterministic gates green, all model rubrics addressed, and `spot-check.md` written. Then — and
+only then — promote the full-resolution artifacts into `final/`. Residual mandatory failures produce
+a Blocked Attempt instead.

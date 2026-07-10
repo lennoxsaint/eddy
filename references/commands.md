@@ -43,7 +43,8 @@ python3 scripts/descript_studio_sound.py --in edited.mp4 --out edited_ss.mp4 [--
 # audio-only variant (input already a WAV):
 python3 scripts/descript_studio_sound.py --in edited.wav --out clean.m4a --audio-only
 ```
-Extract WAV → Studio Sound → parity (±1%/1s) → mux back. Exit 2 = key missing, 3 = parity failed.
+Extract WAV → Studio Sound → parity (±1%/1s) → calibrated Effect-Survival Gate → mux back.
+Exit 2 = key missing; exit 3 = parity or effect-survival failure.
 
 ## 4. Composite (rounded-corner layout + Shorts)
 
@@ -94,8 +95,9 @@ python3 scripts/motion_render.py --run-dir work/mo-hook --hook "Codex with any m
 python3 scripts/motion_render.py --run-dir work/mo1 --hook "..." --out overlay.mp4 [--portrait] [--duration N]
 # GPU-free dry run to validate mechanics: add --fake
 ```
-Reuses eddy-v2's proven scaffolder + runner (`~/eddy-v2`), threadify-fc identity, **restrained
-profile** (see `motion-layer.md`). Output is a black-bg MP4 keyed to alpha, composited over the base.
+Uses the bundled threadify-fc identity and supported `npx hyperframes` lint → validate → inspect →
+render contract. It has no dependency on a separate Eddy checkout. Output is a black-bg MP4 keyed
+to alpha and composited over the base.
 - **Machine safety (hard rule):** the real render drives a headless Chromium via `npx hyperframes`.
   **Never run it during an ffmpeg encode** — render motion first, composite after. Validate with
   `--fake` first (zero GPU). Proxy in the loop; only the final pass is full-res.

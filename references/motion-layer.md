@@ -26,7 +26,7 @@ should be a **visual representation of the words being spoken** — icons, scree
 receipts, product chrome — with text as a supporting label at most, never the lead.
 
 - **Default engine — HyperFrames (`scripts/motion_render.py`).** HTML → video via the
-  `~/eddy-v2` runner, in the **`threadify-fc` identity, restrained profile** (palette + Avenir/Space
+  bundled HyperFrames runner, in the **`threadify-fc` identity, restrained profile** (palette + Avenir/Space
   Mono type + brand atoms; allow `receipt_print`, `ledger`, `card_handoff`, section-intro cards,
   icon/image concept slides; **disallow** the FWED mascot, the fire register, `type_slam`, and the
   `cursor_press` CTA — this is a tutorial, not a launch video). Every off-screen reference the

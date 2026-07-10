@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lennox-eddy"
+version = "3.0.0"
+description = "Skill-first, proof-gated video editing runtime"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = ["Pillow>=10", "numpy>=1.26,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.11"]
+mcp = ["mcp>=1.0"]
+
+[project.scripts]
+eddy = "eddy.cli:main"
+eddy-mcp = "eddy.mcp_server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/karaoke_ass.py" = ["E401", "E702"]
+"scripts/motion_type.py" = ["E401", "E702", "F401"]
+"scripts/motion_render.py" = ["E702"]
+"scripts/verify.py" = ["F841"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["eddy"]
+
+[tool.coverage.run]
+source = ["eddy"]
+
+[tool.coverage.report]
+fail_under = 80
