@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 ENV_FRAME_S = 0.010
 BAND_LO_HZ = 300.0
@@ -85,7 +86,7 @@ def reverb_tail_metrics(wav_path: Path, max_seconds: float = 120.0) -> dict[str,
     }
 
 
-def _read_mono(path: Path, max_seconds: float) -> tuple[np.ndarray, int] | None:
+def _read_mono(path: Path, max_seconds: float) -> tuple[NDArray[np.float64], int] | None:
     try:
         with wave.open(str(path), "rb") as handle:
             channels = max(1, handle.getnchannels())
@@ -105,21 +106,20 @@ def _read_mono(path: Path, max_seconds: float) -> tuple[np.ndarray, int] | None:
     return samples, int(rate)
 
 
-def _bandpass_fft(samples: np.ndarray, rate: int) -> np.ndarray:
+def _bandpass_fft(samples: NDArray[np.float64], rate: int) -> NDArray[np.float64]:
     count = len(samples)
     padded = 1 << max(4, (count - 1).bit_length())
     spectrum = np.fft.rfft(samples, n=padded)
     frequencies = np.fft.rfftfreq(padded, 1.0 / rate)
     spectrum[(frequencies < BAND_LO_HZ) | (frequencies > BAND_HI_HZ)] = 0
-    return np.fft.irfft(spectrum, n=padded)[:count]
+    return np.asarray(np.fft.irfft(spectrum, n=padded)[:count], dtype=np.float64)
 
 
-def _envelope_db(samples: np.ndarray, rate: int) -> np.ndarray:
+def _envelope_db(samples: NDArray[np.float64], rate: int) -> NDArray[np.float64]:
     frame_size = max(1, int(rate * ENV_FRAME_S))
     usable = (len(samples) // frame_size) * frame_size
     if usable == 0:
-        return np.array([])
+        return np.array([], dtype=np.float64)
     frames = samples[:usable].reshape(-1, frame_size)
     rms = np.sqrt(np.mean(frames**2, axis=1))
-    return 20.0 * np.log10(rms + 1e-10)
-
+    return np.asarray(20.0 * np.log10(rms + 1e-10), dtype=np.float64)
