@@ -6,7 +6,7 @@ source evidence; it never contains generated speech or packaging.
 ```json
 {
   "schema_version": "edit-plan-v3",
-  "source_hashes": {"/absolute/camera.mp4": "<sha256>"},
+  "source_hashes": {"camera.mp4": "<sha256>"},
   "protected": [{"start": 12.4, "end": 18.2, "reason": "vulnerable pause"}],
   "body": {
     "keep": [[20.0, 140.0]],
@@ -29,7 +29,7 @@ source evidence; it never contains generated speech or packaging.
 
 ## Invariants
 
-- Source hashes must exactly match the job's source lock.
+- Source hashes use source-relative paths and must exactly match the job's source lock.
 - There is one body and exactly three unique hooks ranked `1`, `2`, and `3`.
 - The rank-1 hook creates the Primary Long; ranks 2 and 3 create Alternate Longs.
 - Every range is source time with `0 <= start < end`.
