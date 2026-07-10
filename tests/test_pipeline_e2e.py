@@ -25,14 +25,14 @@ def test_delivered_gap_repair_targets_only_outliers(tmp_path: Path) -> None:
                 "words": [
                     {"word": "one", "start": 0.0, "end": 0.1},
                     {"word": "two", "start": 0.25, "end": 0.35},
-                    {"word": "three", "start": 0.75, "end": 0.85},
+                    {"word": "three", "start": 1.25, "end": 1.35},
                 ]
             }
         )
         + "\n"
     )
 
-    assert _delivered_gap_violations(transcript) == [[0.35, 0.75]]
+    assert _delivered_gap_violations(transcript) == [[0.35, 1.25]]
 
 
 def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
@@ -47,7 +47,7 @@ def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
             {
                 "words": [
                     {"word": "one", "start": 0.0, "end": 0.1},
-                    {"word": "two", "start": 0.7, "end": 0.8},
+                    {"word": "two", "start": 1.0, "end": 1.1},
                 ]
             }
         )
@@ -68,19 +68,29 @@ def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
     ) -> None:
         assert source == media
         assert transcript == words
-        assert json.loads(cutlist.read_text())["keep"] == [[0.0, 1.0]]
+        assert json.loads(cutlist.read_text())["keep"] == [[0.0, 1.2]]
         output.write_bytes(b"after")
         output.with_name(f"{output.stem}.segments.json").write_text(
             json.dumps({"segments": [[0.0, 0.2], [0.6, 1.0]]}) + "\n"
         )
 
-    monkeypatch.setattr(pipeline, "_media_duration", lambda path: 1.0)
+    monkeypatch.setattr(pipeline, "_media_duration", lambda path: 1.2)
     monkeypatch.setattr(pipeline, "_splice", fake_splice)
-    monkeypatch.setattr(
-        pipeline,
-        "_transcribe_final",
-        lambda root, path, output: transcribed.append(path),
-    )
+    def fake_transcribe(root: Path, path: Path, output: Path) -> None:
+        transcribed.append(path)
+        output.write_text(
+            json.dumps(
+                {
+                    "words": [
+                        {"word": "one", "start": 0.0, "end": 0.1},
+                        {"word": "two", "start": 0.2, "end": 0.3},
+                    ]
+                }
+            )
+            + "\n"
+        )
+
+    monkeypatch.setattr(pipeline, "_transcribe_final", fake_transcribe)
 
     repaired = _repair_delivered_cadence(
         tmp_path,
@@ -96,8 +106,66 @@ def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
     assert repaired is True
     assert media.read_bytes() == b"after"
     assert row["event"] == "post_descript_cadence_repair"
+    assert row["pass"] == 1
+    assert row["violations_after"] == []
     assert row["before_sha256"] != row["output_sha256"]
     assert transcribed == [media]
+
+
+def test_delivered_cadence_repair_stops_when_violation_count_does_not_improve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path
+    work = tmp_path / "work"
+    work.mkdir()
+    media = work / "long-primary.mp4"
+    media.write_bytes(b"before")
+    words = work / "long-primary.words.json"
+    words.write_text(
+        json.dumps(
+            {
+                "words": [
+                    {"word": "one", "start": 0.0, "end": 0.1},
+                    {"word": "two", "start": 1.0, "end": 1.1},
+                ]
+            }
+        )
+        + "\n"
+    )
+    receipts = tmp_path / "receipts.jsonl"
+    splice_calls: list[Path] = []
+
+    def fake_splice(
+        root: Path,
+        source: Path,
+        transcript: Path,
+        cutlist: Path,
+        output: Path,
+    ) -> None:
+        splice_calls.append(output)
+        output.write_bytes(b"after")
+        output.with_name(f"{output.stem}.segments.json").write_text(
+            json.dumps({"segments": [[0.0, 1.2]]}) + "\n"
+        )
+
+    monkeypatch.setattr(pipeline, "_media_duration", lambda path: 1.2)
+    monkeypatch.setattr(pipeline, "_splice", fake_splice)
+    monkeypatch.setattr(pipeline, "_transcribe_final", lambda root, path, output: None)
+
+    repaired = _repair_delivered_cadence(
+        root,
+        media,
+        words,
+        work,
+        label="long-primary",
+        receipts=receipts,
+        artifact="long-primary",
+    )
+
+    rows = [json.loads(line) for line in receipts.read_text().splitlines()]
+    assert repaired is True
+    assert len(splice_calls) == 1
+    assert rows[0]["status"] == "no_progress"
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")

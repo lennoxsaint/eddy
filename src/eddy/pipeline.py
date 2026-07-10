@@ -19,6 +19,7 @@ from .runtime import JobManager, JobState
 
 DELIVERED_GAP_HARD_MAX = 0.28
 DELIVERED_GAP_ALIGNMENT_TOLERANCE = 0.02
+MAX_DELIVERED_CADENCE_PASSES = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -861,12 +862,16 @@ def _delivered_gap_violations(
 ) -> list[list[float]]:
     payload = json.loads(transcript.read_text())
     words = payload.get("words", [])
-    violations: list[list[float]] = []
+    gaps: list[list[float]] = []
     for left, right in zip(words, words[1:], strict=False):
         start, end = float(left["end"]), float(right["start"])
-        if end - start > hard_max + alignment_tolerance:
-            violations.append([round(start, 3), round(end, 3)])
-    return violations
+        if end > start:
+            gaps.append([round(start, 3), round(end, 3)])
+    durations = sorted(end - start for start, end in gaps)
+    percentile_index = max(0, int(len(durations) * 0.95) - 1)
+    p95 = durations[percentile_index] if durations else 0.0
+    ceiling = hard_max + alignment_tolerance if p95 > hard_max + alignment_tolerance else 0.8
+    return [gap for gap in gaps if gap[1] - gap[0] > ceiling]
 
 
 def _repair_delivered_cadence(
@@ -879,38 +884,46 @@ def _repair_delivered_cadence(
     receipts: Path,
     artifact: str,
 ) -> bool:
-    violations = _delivered_gap_violations(final_words)
-    if not violations:
-        return False
-    duration = _media_duration(media)
-    cutlist = work / f"{label}-delivered-cadence-cutlist.json"
-    repaired = work / f"{label}-delivered-cadence.mp4"
-    _write_json(
-        cutlist,
-        {
-            "keep": [[0.0, duration]],
-            "sacred": [],
-            "gap_tighten": {"threshold": 0.2, "target": 0.1},
-        },
-    )
-    before_sha256 = _sha256_file(media)
-    _splice(root, media, final_words, cutlist, repaired)
-    repair_segments = repaired.with_name(f"{repaired.stem}.segments.json")
-    os.replace(repaired, media)
-    _append_receipt(
-        receipts,
-        {
-            "event": "post_descript_cadence_repair",
-            "status": "pass",
-            "artifact": artifact,
-            "violations_before": violations,
-            "before_sha256": before_sha256,
-            "output_sha256": _sha256_file(media),
-            "segments_receipt": str(repair_segments.relative_to(work.parent)),
-        },
-    )
-    _transcribe_final(root, media, final_words)
-    return True
+    repaired_any = False
+    for pass_number in range(1, MAX_DELIVERED_CADENCE_PASSES + 1):
+        violations = _delivered_gap_violations(final_words)
+        if not violations:
+            break
+        duration = _media_duration(media)
+        cutlist = work / f"{label}-delivered-cadence-{pass_number}-cutlist.json"
+        repaired = work / f"{label}-delivered-cadence-{pass_number}.mp4"
+        _write_json(
+            cutlist,
+            {
+                "keep": [[0.0, duration]],
+                "sacred": [],
+                "gap_tighten": {"threshold": 0.2, "target": 0.1},
+            },
+        )
+        before_sha256 = _sha256_file(media)
+        _splice(root, media, final_words, cutlist, repaired)
+        repair_segments = repaired.with_name(f"{repaired.stem}.segments.json")
+        os.replace(repaired, media)
+        _transcribe_final(root, media, final_words)
+        after_violations = _delivered_gap_violations(final_words)
+        _append_receipt(
+            receipts,
+            {
+                "event": "post_descript_cadence_repair",
+                "status": "pass" if len(after_violations) < len(violations) else "no_progress",
+                "artifact": artifact,
+                "pass": pass_number,
+                "violations_before": violations,
+                "violations_after": after_violations,
+                "before_sha256": before_sha256,
+                "output_sha256": _sha256_file(media),
+                "segments_receipt": str(repair_segments.relative_to(work.parent)),
+            },
+        )
+        repaired_any = True
+        if len(after_violations) >= len(violations):
+            break
+    return repaired_any
 
 
 def _media_duration(path: Path) -> float:

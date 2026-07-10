@@ -476,18 +476,31 @@ def test_delivered_editorial_truth_catches_repeat_and_reset_loop(tmp_path: Path)
     assert {item["kind"] for item in issues} >= {"repeat", "reset_loop", "false_start"}
 
 
-def test_delivered_gap_gate_enforces_point_two_eight_ceiling() -> None:
+def test_delivered_gap_gate_blocks_extreme_outlier() -> None:
     verify = _load_script("verify")
     words = [
         {"word": "one", "start": 0.0, "end": 0.1},
         {"word": "two", "start": 0.2, "end": 0.3},
-        {"word": "three", "start": 0.7, "end": 0.8},
+        {"word": "three", "start": 1.2, "end": 1.3},
     ]
 
     verdict = verify.word_gap_verdict(words, [], hard_max=0.28)
 
     assert verdict["pass"] is False
-    assert verdict["violations"] == [[0.3, 0.7]]
+    assert verdict["violations"] == [[0.3, 1.2]]
+
+
+def test_delivered_gap_gate_blocks_slow_p95() -> None:
+    verify = _load_script("verify")
+    words = [
+        {"word": f"w{index}", "start": index * 0.5, "end": index * 0.5 + 0.1}
+        for index in range(20)
+    ]
+
+    verdict = verify.word_gap_verdict(words, [], hard_max=0.28)
+
+    assert verdict["pass"] is False
+    assert verdict["slow_overall"] is True
 
 
 def test_delivered_gap_gate_allows_transcript_alignment_jitter() -> None:
@@ -501,6 +514,7 @@ def test_delivered_gap_gate_allows_transcript_alignment_jitter() -> None:
 
     assert verdict["pass"] is True
     assert verdict["alignment_tolerance_s"] == 0.02
+    assert verdict["slow_overall"] is False
 
 
 def test_delivered_av_drift_gate_compares_stream_durations() -> None:
