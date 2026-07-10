@@ -1,5 +1,5 @@
 {
-  "canonical_commit": "aa8204f3b7a1cc0097cedb1a177b04de78727da9",
+  "canonical_commit": "1488369ffd00bc2b7f3d8ed19299246370f6850b",
   "files": {
     "README.md": "8f0664b106f69857c19b4ee6fb31ffaa66a71daa8817031814d4aa4455d9198a",
     "SKILL.md": "01899eff9b26c7f24f57ce354cb966154004255d4f131a503a1b931479e7398f",
@@ -20,7 +20,7 @@
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
     "references/verification.md": "a8f6453ac7926609b5e586f2a105ecbada4be3fe923b853a5841d567498d7ef1",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
-    "scripts/descript_studio_sound.py": "c63f46d17c8725e9b5bd9c6272562f273bc932bf4424611510ce56de83bdbb3b",
+    "scripts/descript_studio_sound.py": "e17af07bf5e7b4e61126ca1aaba56cc939ddc468cde4c16977d2589297141c71",
     "scripts/karaoke_ass.py": "8dfd70889e335656be9152518fc16812dc512d4bc850dfd3ee1dd8e83773987d",
     "scripts/motion_render.py": "03c9fdad2b29ee7d555195ffc8f777c07cadf046efab9b028758506d996aebc4",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",

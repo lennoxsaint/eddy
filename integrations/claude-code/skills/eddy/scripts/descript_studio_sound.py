@@ -157,7 +157,7 @@ def host_connector_sound(wav: Path, out: Path, command: str) -> Path:
     if payload["source_sha256"] != sha256(wav) or payload["output_sha256"] != sha256(out):
         raise RuntimeError("descript_host_connector_hash_mismatch")
     log(
-        "descript_host_connector_done",
+        "descript_provider",
         provider=payload["provider"],
         project_id=payload["project_id"],
         composition_id=payload["composition_id"],
@@ -209,6 +209,13 @@ def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | Non
         raise RuntimeError("descript_publish_missing_download_url")
     with urllib.request.urlopen(str(download_url), timeout=300) as r:
         out.write_bytes(r.read())
+    log(
+        "descript_provider",
+        provider="descript_api",
+        project_id=project_id,
+        composition_id=composition_id,
+        access_level="private",
+    )
     log("descript_download_done", out=str(out), bytes=out.stat().st_size)
     return out
 
