@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "3793c835f48f37451bf8c55caf01e3ae4fadee57",
+  "canonical_commit": "1d56ba84c3cce20992126c63cd23c710ff452d2a",
   "files": {
     "README.md": "6979600018898143366e7ffdfb7c17a35389b927cc9913207638c080c6ab0315",
-    "SKILL.md": "7a2d89c5475052237352a407434f3b1cd0c69708ed9b77a5f8c9ef311a808162",
+    "SKILL.md": "9d3cc417da4eed69d0bf46055b3ecf6e3b1c14596bde62bcfe7bdcd30d95f64c",
     "assets/fonts/Montserrat.ttf": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
     "assets/motion/threadify-fc/assets/fc-ring.png": "679d339e49412b4d82b92e3ab354b590237026fed829874b50c8087389e8d281",
     "assets/motion/threadify-fc/assets/threadify-needle.png": "7869587d5b29808ce0c7d7b25f28935895ddcba804802dbf28b627d136591629",
@@ -20,7 +20,7 @@
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
     "references/verification.md": "de81f436ca023b5a62c117c6112758569c1478c7d7b0e456e0a6970a100e4071",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
-    "scripts/descript_studio_sound.py": "1162f9d9907a833287a965f2029bb04b87e0fe358b26af385c9a7ad26a374de9",
+    "scripts/descript_studio_sound.py": "fd3234f9003ca2fc8e9c04ff0acb55de0181f644393d95272bf956d4afb3b6be",
     "scripts/karaoke_ass.py": "8dfd70889e335656be9152518fc16812dc512d4bc850dfd3ee1dd8e83773987d",
     "scripts/motion_render.py": "1e45655ae5cc355867fda2cea4e45f03876c6c2b2727104cfcedb039c28d33ca",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",
