@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from eddy.sync import CANONICAL_SURFACES, build_manifest, check_projection
+from eddy.sync import CANONICAL_SURFACES, build_manifest, check_projection, write_projection
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,8 +19,8 @@ def test_projection_check_reports_changed_file(tmp_path: Path) -> None:
     source = tmp_path / "source"
     projection = tmp_path / "projection"
     source.mkdir()
-    projection.mkdir()
     (source / "SKILL.md").write_text("canonical\n")
+    write_projection(source, projection, canonical_commit="abc123", files=("SKILL.md",))
     (projection / "SKILL.md").write_text("drifted\n")
 
     result = check_projection(source, projection, files=("SKILL.md",))
@@ -28,3 +28,22 @@ def test_projection_check_reports_changed_file(tmp_path: Path) -> None:
     assert result.ok is False
     assert result.changed == ("SKILL.md",)
 
+
+def test_projection_check_rejects_stale_files_and_manifest_commit(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    projection = tmp_path / "projection"
+    source.mkdir()
+    (source / "SKILL.md").write_text("canonical\n")
+    write_projection(source, projection, canonical_commit="old", files=("SKILL.md",))
+    (projection / "stale.txt").write_text("stale\n")
+
+    result = check_projection(
+        source,
+        projection,
+        files=("SKILL.md",),
+        canonical_commit="current",
+    )
+
+    assert result.ok is False
+    assert result.extra == ("stale.txt",)
+    assert result.manifest_commit_matches is False

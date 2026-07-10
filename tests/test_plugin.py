@@ -36,3 +36,31 @@ def test_bootstrap_tracks_stable_tags_and_dry_run_does_not_mutate(tmp_path: Path
     assert result["latest_tag"] == "v3.0.0"
     assert result["mutated"] is False
     assert not (tmp_path / "plugin-state.json").exists()
+
+
+def test_plugin_install_is_not_editable_before_atomic_move() -> None:
+    bootstrap = BOOTSTRAP.read_text()
+
+    assert '"-e", f"{candidate_source}[mcp]"' not in bootstrap
+    assert '"pip", "install", f"{candidate_source}[mcp]"' in bootstrap
+    assert "stable_tag_commit_mismatch" in bootstrap
+    assert "active_commit" in bootstrap
+
+
+def test_plugin_uses_healthy_active_install_when_tag_lookup_is_offline(
+    tmp_path: Path, monkeypatch
+) -> None:
+    bootstrap = load_bootstrap()
+    bootstrap.write_state({"active_tag": "v3.0.0", "status": "active"}, tmp_path)
+    monkeypatch.setattr(
+        bootstrap,
+        "latest_stable_tag",
+        lambda repo_url: (_ for _ in ()).throw(RuntimeError("network_offline")),
+    )
+    monkeypatch.setattr(bootstrap, "active_install_healthy", lambda root: True)
+
+    result = bootstrap.ensure_latest_stable(home=tmp_path)
+
+    assert result["status"] == "offline_fallback"
+    assert result["ok"] is True
+    assert result["active_tag"] == "v3.0.0"

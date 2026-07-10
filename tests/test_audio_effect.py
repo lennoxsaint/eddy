@@ -126,3 +126,40 @@ def test_duration_shift_and_malformed_audio_fail_closed(tmp_path: Path) -> None:
 
     assert "descript_duration_parity_failed" in shifted.blockers
     assert invalid.blockers == ("descript_export_invalid",)
+
+
+def test_polarity_inversion_is_not_mistaken_for_studio_sound(tmp_path: Path, monkeypatch) -> None:
+    samples = fixture_samples(64_000)
+    source = tmp_path / "source.wav"
+    exported = tmp_path / "inverted.wav"
+    write_wav(source, samples)
+    write_wav(exported, [-sample for sample in samples])
+    monkeypatch.setattr(
+        "eddy.audio_effect.reverb_tail_metrics",
+        lambda path: {"measurable": True, "echo_score": 0.01},
+    )
+
+    result = evaluate_effect_survival(source, exported, EffectCalibration.default())
+
+    assert result.passed is False
+    assert "descript_effect_not_rendered" in result.blockers
+
+
+def test_unmeasurable_changed_audio_is_blocked(tmp_path: Path, monkeypatch) -> None:
+    samples = fixture_samples(64_000)
+    source = tmp_path / "source.wav"
+    exported = tmp_path / "changed.wav"
+    write_wav(source, samples)
+    write_wav(
+        exported,
+        [sample * (0.7 if index % 2 else 0.3) for index, sample in enumerate(samples)],
+    )
+    monkeypatch.setattr(
+        "eddy.audio_effect.reverb_tail_metrics",
+        lambda path: {"measurable": False, "echo_score": 0.0},
+    )
+
+    result = evaluate_effect_survival(source, exported, EffectCalibration.default())
+
+    assert result.passed is False
+    assert "descript_quality_unmeasurable" in result.blockers

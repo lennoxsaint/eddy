@@ -96,9 +96,11 @@ def evaluate_effect_survival(
     blockers: list[str] = []
     if duration_delta > duration_tolerance:
         blockers.append("descript_duration_parity_failed")
-    if correlation > calibration.max_normalized_source_correlation:
+    if abs(correlation) > calibration.max_normalized_source_correlation:
         blockers.append("descript_effect_not_rendered")
-    if quality["measurable"] and float(quality["echo_score"]) > calibration.max_echo_score:
+    if not quality["measurable"]:
+        blockers.append("descript_quality_unmeasurable")
+    elif float(quality["echo_score"]) > calibration.max_echo_score:
         blockers.append("descript_quality_not_studio_sound")
     return EffectSurvivalResult(not blockers, tuple(blockers), metrics)
 

@@ -81,6 +81,14 @@ def latest_stable_tag(repo_url: str = REPO_URL) -> str:
     return select_latest_stable_tag(result.stdout)
 
 
+def resolve_tag_commit(repo_url: str, tag: str) -> str:
+    result = check(["git", "ls-remote", "--tags", "--refs", repo_url, f"refs/tags/{tag}"], timeout=60)
+    rows = [line.split() for line in result.stdout.splitlines() if line.split()]
+    if len(rows) != 1 or len(rows[0][0]) != 40:
+        raise RuntimeError(f"stable_tag_commit_unresolved:{tag}")
+    return rows[0][0]
+
+
 def home_root(home: Path | None = None) -> Path:
     return Path(home or (Path.home() / ".eddy")).expanduser().resolve()
 
@@ -109,6 +117,18 @@ def active_state(home: Path | None = None) -> dict:
         return json.loads(path.read_text())
     except json.JSONDecodeError:
         return {"status": "state_unreadable", "path": str(path)}
+
+
+def active_install_healthy(root: Path) -> bool:
+    py = venv_python(root / "venv")
+    source = root / "source"
+    if not py.exists() or not source.exists():
+        return False
+    result = run(
+        [str(py), "-c", "import eddy, eddy.cli, eddy.mcp_server"],
+        timeout=30,
+    )
+    return result.returncode == 0
 
 
 def write_state(payload: dict, home: Path | None = None) -> None:
@@ -146,6 +166,7 @@ def install_candidate(
     tag: str,
     root: Path,
     python: str,
+    expected_commit: str,
 ) -> dict:
     receipts: list[dict] = []
     tmp_root = Path(tempfile.mkdtemp(prefix="plugin-update-", dir=str(root)))
@@ -158,10 +179,13 @@ def install_candidate(
                 timeout=240,
             ).as_receipt()
         )
+        actual_commit = check(["git", "rev-parse", "HEAD"], cwd=candidate_source).stdout.strip()
+        if actual_commit != expected_commit:
+            raise RuntimeError(f"stable_tag_commit_mismatch:{tag}:{expected_commit}:{actual_commit}")
         receipts.append(check([python, "-m", "venv", str(candidate_venv)], timeout=240).as_receipt())
         py = venv_python(candidate_venv)
         receipts.append(check([str(py), "-m", "pip", "install", "--upgrade", "pip"], timeout=300).as_receipt())
-        receipts.append(check([str(py), "-m", "pip", "install", "-e", f"{candidate_source}[mcp]"], timeout=900).as_receipt())
+        receipts.append(check([str(py), "-m", "pip", "install", f"{candidate_source}[mcp]"], timeout=900).as_receipt())
         receipts.append(
             check(
                 [
@@ -177,6 +201,7 @@ def install_candidate(
             "source": str(candidate_source),
             "venv": str(candidate_venv),
             "receipts": receipts,
+            "commit": actual_commit,
         }
     except Exception:
         shutil.rmtree(tmp_root, ignore_errors=True)
@@ -210,6 +235,7 @@ def swap_active(root: Path, candidate: dict, tag: str, repo_url: str, receipts: 
             "state_version": STATE_VERSION,
             "status": "active",
             "active_tag": tag,
+            "active_commit": candidate["commit"],
             "repo_url": repo_url,
             "updated_at": utc_now(),
             "source": str(active_source),
@@ -238,11 +264,23 @@ def ensure_latest_stable(
 ) -> dict:
     root = home_root(home)
     root.mkdir(parents=True, exist_ok=True)
-    selected_tag = tag or latest_stable_tag(repo_url)
     state = active_state(root)
     active_tag = state.get("active_tag")
     active_py = venv_python(root / "venv")
     active_source = root / "source"
+    try:
+        selected_tag = tag or latest_stable_tag(repo_url)
+    except Exception as exc:
+        if active_tag and active_install_healthy(root):
+            return {
+                **state,
+                "status": "offline_fallback",
+                "ok": True,
+                "mutated": False,
+                "blocker": str(exc),
+                "active_tag": active_tag,
+            }
+        raise
     payload = {
         "state_version": STATE_VERSION,
         "repo_url": repo_url,
@@ -253,10 +291,6 @@ def ensure_latest_stable(
         "checked_at": utc_now(),
         "mutated": False,
     }
-    if active_tag == selected_tag and active_source.exists() and active_py.exists():
-        payload.update({"status": "up_to_date", "ok": True})
-        write_state({**state, **payload, "status": "active"}, root)
-        return payload
     if dry_run:
         payload.update(
             {
@@ -272,6 +306,27 @@ def ensure_latest_stable(
             }
         )
         return payload
+    try:
+        expected_commit = resolve_tag_commit(repo_url, selected_tag)
+    except Exception as exc:
+        if active_tag and active_install_healthy(root):
+            return {
+                **state,
+                **payload,
+                "status": "offline_fallback",
+                "ok": True,
+                "mutated": False,
+                "blocker": str(exc),
+            }
+        raise
+    if (
+        active_tag == selected_tag
+        and state.get("active_commit") == expected_commit
+        and active_install_healthy(root)
+    ):
+        payload.update({"status": "up_to_date", "ok": True, "active_commit": expected_commit})
+        write_state({**state, **payload, "status": "active"}, root)
+        return payload
     with update_lock(root):
         try:
             candidate = install_candidate(
@@ -279,6 +334,7 @@ def ensure_latest_stable(
                 tag=selected_tag,
                 root=root,
                 python=python or sys.executable,
+                expected_commit=expected_commit,
             )
             receipts = list(candidate.get("receipts", []))
             result = swap_active(root, candidate, selected_tag, repo_url, receipts)

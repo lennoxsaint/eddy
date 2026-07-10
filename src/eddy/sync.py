@@ -45,6 +45,8 @@ class ProjectionCheck:
     ok: bool
     missing: tuple[str, ...]
     changed: tuple[str, ...]
+    extra: tuple[str, ...]
+    manifest_commit_matches: bool
 
 
 def _sha256(path: Path) -> str:
@@ -74,17 +76,48 @@ def check_projection(
     projection: Path,
     *,
     files: Iterable[str] = CANONICAL_SURFACES,
+    canonical_commit: str | None = None,
 ) -> ProjectionCheck:
+    selected = tuple(files)
     missing: list[str] = []
     changed: list[str] = []
-    for relative in files:
+    for relative in selected:
         expected = source / relative
         actual = projection / relative
         if not actual.exists():
             missing.append(relative)
         elif _sha256(expected) != _sha256(actual):
             changed.append(relative)
-    return ProjectionCheck(not missing and not changed, tuple(missing), tuple(changed))
+    expected_files = set(selected) | {"eddy-surface-manifest.json"}
+    actual_files = {
+        path.relative_to(projection).as_posix()
+        for path in projection.rglob("*")
+        if path.is_file()
+    }
+    extra = sorted(actual_files - expected_files)
+    manifest_path = projection / "eddy-surface-manifest.json"
+    manifest_commit_matches = False
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            manifest_commit_matches = (
+                canonical_commit is None or manifest.get("canonical_commit") == canonical_commit
+            ) and manifest.get("files") == build_manifest(
+                source,
+                canonical_commit=str(manifest.get("canonical_commit", "")),
+                files=selected,
+            )["files"]
+        except (json.JSONDecodeError, OSError):
+            manifest_commit_matches = False
+    else:
+        missing.append("eddy-surface-manifest.json")
+    return ProjectionCheck(
+        not missing and not changed and not extra and manifest_commit_matches,
+        tuple(missing),
+        tuple(changed),
+        tuple(extra),
+        manifest_commit_matches,
+    )
 
 
 def write_projection(
@@ -95,6 +128,8 @@ def write_projection(
     files: Iterable[str] = CANONICAL_SURFACES,
 ) -> Path:
     selected = tuple(files)
+    if projection.exists():
+        shutil.rmtree(projection)
     for relative in selected:
         destination = projection / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from eddy import cli, mcp_server, worker
 from eddy.pipeline import PipelineRunner
 from eddy.runtime import JobManager, JobState
@@ -74,6 +76,40 @@ def test_worker_prepare_uses_pipeline_runner(tmp_path: Path, monkeypatch) -> Non
     assert manager.load(job.id).state is JobState.AWAITING_HOST_PLAN
 
 
+def test_worker_failure_quarantines_partial_attempt(tmp_path: Path, monkeypatch) -> None:
+    runs = tmp_path / "runs"
+    source = tmp_path / "camera.mp4"
+    source.write_bytes(b"raw")
+    manager = JobManager(runs)
+    job = manager.start(source)
+    attempt = job.run_dir / "work" / "attempt-1"
+    attempt.mkdir(parents=True)
+    (attempt / "partial.mp4").write_bytes(b"partial")
+
+    def fail_finalize(self, job_id: str) -> None:
+        raise RuntimeError("render_crashed")
+
+    monkeypatch.setattr(PipelineRunner, "finalize", fail_finalize)
+    result = worker.main(
+        [
+            "finalize",
+            "--runs-root",
+            str(runs),
+            "--canonical-root",
+            str(ROOT),
+            "--job-id",
+            job.id,
+        ]
+    )
+
+    blocked = manager.load(job.id)
+    assert result == 1
+    assert blocked.state is JobState.BLOCKED
+    assert "worker_failed:render_crashed" in blocked.blockers
+    assert (job.run_dir / "quarantine" / "attempt-1" / "partial.mp4").exists()
+    assert not attempt.exists()
+
+
 def test_service_finalize_launches_worker_and_bundle_is_media_free(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "camera.mp4"
     source.write_bytes(b"raw")
@@ -91,7 +127,10 @@ def test_service_finalize_launches_worker_and_bundle_is_media_free(tmp_path: Pat
             {"id": "b", "rank": 2, "segments": [[2.0, 3.0]], "proof_assets": []},
             {"id": "c", "rank": 3, "segments": [[3.0, 4.0]], "proof_assets": []},
         ],
-        "shorts": [],
+        "shorts": [
+            {"id": f"short-{index}", "segments": [[float(index), float(index + 1)]]}
+            for index in range(3)
+        ],
         "motion_beats": [],
     }
     service.host_submit(job.id, plan)
@@ -105,6 +144,20 @@ def test_service_finalize_launches_worker_and_bundle_is_media_free(tmp_path: Pat
     assert launched == [("finalize", job.id)]
     assert Path(bundle["bundle"]).exists()
     assert bundle["media_included"] is False
+
+    with pytest.raises(RuntimeError, match="finalize_already_claimed"):
+        service.finalize(job.id)
+
+
+def test_job_payload_names_candidate_proof_state(tmp_path: Path) -> None:
+    source = tmp_path / "camera.mp4"
+    source.write_bytes(b"raw")
+    service = EddyService(tmp_path / "runs", auto_prepare=False)
+
+    started = service.edit_start(str(source))
+
+    assert started["proof_state"] == "candidate"
+    assert started["owner_approved"] is False
 
 
 def test_write_projection_creates_a_matching_manifest(tmp_path: Path) -> None:

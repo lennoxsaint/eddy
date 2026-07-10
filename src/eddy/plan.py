@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -75,7 +76,7 @@ class EditPlanV3:
         body = BodyPlan(
             keep=_ranges(raw_body.get("keep"), "body_keep"),
             drop=_ranges(raw_body.get("drop", []), "body_drop"),
-            retake_groups=tuple(raw_body.get("retake_groups", [])),
+            retake_groups=_dict_sequence(raw_body.get("retake_groups", []), "retake_groups"),
         )
         if not body.keep:
             raise PlanValidationError("shared_body_keep_required")
@@ -87,8 +88,8 @@ class EditPlanV3:
             raise PlanValidationError("source_hash_invalid")
 
         shorts = payload.get("shorts", [])
-        if not isinstance(shorts, list) or (shorts and not 3 <= len(shorts) <= 5):
-            raise PlanValidationError("shorts_count_must_be_zero_or_3_to_5")
+        if not isinstance(shorts, list) or not 3 <= len(shorts) <= 5:
+            raise PlanValidationError("shorts_count_must_be_3_to_5")
         if any(
             not isinstance(item, dict)
             or not isinstance(item.get("id"), str)
@@ -96,15 +97,31 @@ class EditPlanV3:
             for item in shorts
         ):
             raise PlanValidationError("short_candidate_invalid")
+        short_ids = [str(item["id"]).strip() for item in shorts]
+        if any(not short_id for short_id in short_ids) or len(set(short_ids)) != len(short_ids):
+            raise PlanValidationError("short_ids_must_be_unique")
+
+        protected = _dict_sequence(payload.get("protected", []), "protected")
+        for item in protected:
+            try:
+                start, end = float(item["start"]), float(item["end"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise PlanValidationError("protected_range_invalid") from exc
+            if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+                raise PlanValidationError("protected_range_invalid")
+            if not isinstance(item.get("reason"), str) or not item["reason"].strip():
+                raise PlanValidationError("protected_reason_required")
+
+        motion_beats = _dict_sequence(payload.get("motion_beats", []), "motion_beats")
 
         return cls(
             schema_version="edit-plan-v3",
             source_hashes=dict(hashes),
-            protected=tuple(payload.get("protected", [])),
+            protected=protected,
             body=body,
             hooks=hooks,  # type: ignore[arg-type]
             shorts=tuple(shorts),
-            motion_beats=tuple(payload.get("motion_beats", [])),
+            motion_beats=motion_beats,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -144,11 +161,20 @@ def _ranges(value: object, label: str) -> tuple[tuple[float, float], ...]:
     for item in value:
         if not isinstance(item, list) or len(item) != 2:
             raise PlanValidationError(f"{label}_range_invalid")
-        start, end = float(item[0]), float(item[1])
-        if start < 0 or end <= start:
+        try:
+            start, end = float(item[0]), float(item[1])
+        except (TypeError, ValueError) as exc:
+            raise PlanValidationError(f"{label}_range_invalid") from exc
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
             raise PlanValidationError(f"{label}_range_invalid")
         parsed.append((start, end))
     return tuple(parsed)
+
+
+def _dict_sequence(value: object, label: str) -> tuple[dict[str, Any], ...]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise PlanValidationError(f"{label}_must_be_object_list")
+    return tuple(value)
 
 
 def _parse_hook(value: object) -> HookPlan:

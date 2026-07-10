@@ -31,6 +31,16 @@ class JobState(StrEnum):
 
 
 TERMINAL_STATES = {JobState.COMPLETED, JobState.BLOCKED, JobState.CANCELLED}
+REQUIRED_FINAL_GATES = {
+    "three_long_variants",
+    "shared_body",
+    "shorts_quality",
+    "shorts_count",
+    "source_lock",
+    *(f"hyperframes_motion_hook_{rank}" for rank in range(1, 4)),
+    *(f"descript_effect_survival_hook_{rank}" for rank in range(1, 4)),
+    *(f"deterministic_qa_hook_{rank}" for rank in range(1, 4)),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +110,20 @@ class JobManager:
         _receipt(updated, "job_state_changed", state=state.value)
         return updated
 
+    def claim_finalize(self, job_id: str) -> Job:
+        job = self.load(job_id)
+        if job.state is not JobState.COMPILING:
+            raise RuntimeError(f"job_not_compiled:{job.state}")
+        claim = job.run_dir / "finalize.claim"
+        try:
+            descriptor = os.open(claim, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError as exc:
+            raise RuntimeError("finalize_already_claimed") from exc
+        os.write(descriptor, datetime.now(UTC).isoformat().encode())
+        os.close(descriptor)
+        _receipt(job, "finalize_claimed")
+        return job
+
     def record_verification(
         self,
         job_id: str,
@@ -119,13 +143,20 @@ class JobManager:
         _write_json(job.run_dir / "source-lock.json", source_lock)
         source_green = after == source_lock["before"]
         verified_gates = {**gates, "source_lock": source_green and gates.get("source_lock", True)}
-        verified_blockers = list(dict.fromkeys(blockers + ([] if source_green else ["source_hash_changed"])))
+        missing_gates = sorted(REQUIRED_FINAL_GATES - set(verified_gates))
+        verified_blockers = list(
+            dict.fromkeys(
+                blockers
+                + ([] if source_green else ["source_hash_changed"])
+                + [f"required_gate_missing:{gate}" for gate in missing_gates]
+            )
+        )
         _write_json(
             job.run_dir / "verification.json",
             {"gates": verified_gates, "blockers": verified_blockers},
         )
 
-        if all(verified_gates.values()) and not verified_blockers:
+        if not missing_gates and all(verified_gates.values()) and not verified_blockers:
             final = job.run_dir / "final"
             if final.exists():
                 raise RuntimeError("final_already_exists")
@@ -158,10 +189,37 @@ class JobManager:
         job = self.load(job_id)
         if job.state in TERMINAL_STATES:
             return job
+        quarantined = self.quarantine_attempts(job_id)
         cancelled = Job(job.id, job.source, job.run_dir, JobState.CANCELLED)
         self._save(cancelled)
-        _receipt(cancelled, "job_cancelled")
+        _receipt(cancelled, "job_cancelled", quarantine=quarantined)
         return cancelled
+
+    def quarantine_attempts(self, job_id: str) -> list[str]:
+        job = self.load(job_id)
+        quarantine_root = job.run_dir / "quarantine"
+        work_root = job.run_dir / "work"
+        quarantined: list[str] = []
+        for attempt in sorted(work_root.glob("attempt-*")) if work_root.exists() else ():
+            destination = quarantine_root / attempt.name
+            quarantine_root.mkdir(parents=True, exist_ok=True)
+            if destination.exists():
+                continue
+            shutil.move(str(attempt), str(destination))
+            quarantined.append(str(destination))
+        return quarantined
+
+    def block(self, job_id: str, blocker: str) -> Job:
+        """Block a job and quarantine every partial candidate attempt."""
+
+        job = self.load(job_id)
+        if job.state in TERMINAL_STATES:
+            return job
+        quarantined = self.quarantine_attempts(job_id)
+        blocked = Job(job.id, job.source, job.run_dir, JobState.BLOCKED, (blocker,))
+        self._save(blocked)
+        _receipt(blocked, "blocked_attempt_quarantined", blockers=[blocker], quarantine=quarantined)
+        return blocked
 
     def _save(self, job: Job) -> None:
         _write_json(

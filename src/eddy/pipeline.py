@@ -152,6 +152,8 @@ class PipelineRunner:
         blockers: list[str] = []
         qa_rows: list[dict[str, Any]] = []
         long_dir = attempt
+        fake_descript = os.environ.get("EDDY_FAKE_DESCRIPT") == "1"
+        fake_hyperframes = os.environ.get("EDDY_FAKE_HYPERFRAMES") == "1"
         for item in render_plan.longs:
             camera_hook = stage / f"hook-camera-{item.hook.rank}.mp4"
             _splice(self.root, sources.camera, transcript, item.hook_cutlist, camera_hook)
@@ -219,7 +221,7 @@ class PipelineRunner:
                 "--composite-out",
                 str(motioned),
             ]
-            if os.environ.get("EDDY_FAKE_HYPERFRAMES") == "1":
+            if fake_hyperframes:
                 motion_command.append("--fake")
             motion = subprocess.run(
                 motion_command,
@@ -227,10 +229,14 @@ class PipelineRunner:
                 capture_output=True,
                 text=True,
             )
-            motion_green = motion.returncode == 0 and motioned.exists()
+            motion_green = motion.returncode == 0 and motioned.exists() and not fake_hyperframes
             gates[f"hyperframes_motion_hook_{item.hook.rank}"] = motion_green
             if not motion_green:
-                blockers.append("hyperframes_motion_failed")
+                blockers.append(
+                    "hyperframes_test_fixture_not_final"
+                    if fake_hyperframes
+                    else "hyperframes_motion_failed"
+                )
 
             self.manager.transition(job_id, JobState.ENHANCING_AUDIO)
             enhanced = long_dir / item.output_name
@@ -249,10 +255,14 @@ class PipelineRunner:
                 capture_output=True,
                 text=True,
             )
-            audio_green = audio.returncode == 0 and enhanced.exists()
+            audio_green = audio.returncode == 0 and enhanced.exists() and not fake_descript
             gates[f"descript_effect_survival_hook_{item.hook.rank}"] = audio_green
             if not audio_green:
-                blockers.append("descript_effect_not_rendered")
+                blockers.append(
+                    "descript_test_fixture_not_final"
+                    if fake_descript
+                    else "descript_effect_not_rendered"
+                )
             if audio_green:
                 final_words = stage / f"final-words-{item.hook.rank}.json"
                 _write_final_words(transcript, item.hook, plan, final_words)
@@ -395,15 +405,17 @@ class PipelineRunner:
                     capture_output=True,
                     text=True,
                 ) if audio.returncode == 0 else None
-                green = audio.returncode == 0 and short_qa is not None and short_qa.returncode == 0
+                green = (
+                    audio.returncode == 0
+                    and not fake_descript
+                    and short_qa is not None
+                    and short_qa.returncode == 0
+                )
                 short_greens.append(green)
                 if not green:
                     blockers.append(f"short_failed:{short_id}")
             gates["shorts_quality"] = len(short_greens) == len(plan.shorts) and all(short_greens)
             gates["shorts_count"] = 3 <= len(short_greens) <= 5
-        else:
-            gates["shorts_quality"] = True
-            gates["shorts_count"] = True
         _write_json(attempt / "qa.json", {"longs": qa_rows, "gates": gates, "blockers": blockers})
         _write_transcript_markdown(transcript, attempt / "transcript.md")
         (attempt / "spot-check.md").write_text(

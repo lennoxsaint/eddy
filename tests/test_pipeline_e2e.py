@@ -59,9 +59,13 @@ def test_talking_head_pipeline_renders_three_shared_body_longs(tmp_path: Path, m
 
     PipelineRunner(root=ROOT, manager=manager).finalize(job.id)
 
-    completed = manager.load(job.id)
-    assert completed.state is JobState.COMPLETED
-    assert (completed.run_dir / "final" / "long-primary.mp4").stat().st_size > 0
-    assert (completed.run_dir / "final" / "long-alternate-speed.mp4").stat().st_size > 0
-    assert (completed.run_dir / "final" / "long-alternate-cost.mp4").stat().st_size > 0
-    assert len(list((completed.run_dir / "final" / "shorts").glob("*.mp4"))) == 3
+    blocked = manager.load(job.id)
+    quarantined = blocked.run_dir / "quarantine" / "attempt-1"
+    assert blocked.state is JobState.BLOCKED
+    assert "descript_test_fixture_not_final" in blocked.blockers
+    assert not (blocked.run_dir / "final").exists()
+    assert quarantined.exists()
+    stage = blocked.run_dir / "work" / "stage-1"
+    assert len(list(stage.glob("composite-*.mp4"))) == 3
+    assert len(list(stage.glob("motioned-*.mp4"))) == 3
+    assert len(list(stage.glob("short-*-captioned.mp4"))) == 3

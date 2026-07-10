@@ -27,10 +27,11 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - detached worker must persist an exact blocker
         job = manager.load(args.job_id)
         if job.state not in {JobState.BLOCKED, JobState.CANCELLED, JobState.COMPLETED}:
-            blocked = JobState.BLOCKED
-            manager.transition(args.job_id, blocked)
+            manager.block(args.job_id, f"worker_failed:{exc}")
             state_path = job.run_dir / "worker-error.json"
             state_path.write_text(json.dumps({"blocker": str(exc), "action": args.action}, indent=2) + "\n")
+        elif job.state is JobState.CANCELLED:
+            manager.quarantine_attempts(args.job_id)
         return 1
     return 0
 

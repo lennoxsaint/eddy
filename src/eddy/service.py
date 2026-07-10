@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -87,13 +88,12 @@ class EddyService:
         return self._job_payload(self.manager.submit_plan(job_id, payload))
 
     def finalize(self, job_id: str) -> dict[str, Any]:
-        job = self.manager.load(job_id)
-        if job.state is not JobState.COMPILING:
-            raise RuntimeError(f"job_not_compiled:{job.state}")
+        job = self.manager.claim_finalize(job_id)
         self._launch_worker("finalize", job_id)
         return {**self._job_payload(job), "worker": "started"}
 
     def cancel_job(self, job_id: str) -> dict[str, Any]:
+        self._terminate_worker(job_id)
         return self._job_payload(self.manager.cancel(job_id))
 
     def support_bundle(self, job_id: str, output: str | None = None) -> dict[str, Any]:
@@ -122,12 +122,19 @@ class EddyService:
             if not path.exists():
                 projections[relative] = {"exists": False, "ok": False}
                 continue
-            result = check_projection(self.canonical_root, path, files=CANONICAL_SURFACES)
+            result = check_projection(
+                self.canonical_root,
+                path,
+                files=CANONICAL_SURFACES,
+                canonical_commit=commit,
+            )
             projections[relative] = {
                 "exists": True,
                 "ok": result.ok,
                 "missing": list(result.missing),
                 "changed": list(result.changed),
+                "extra": list(result.extra),
+                "manifest_commit_matches": result.manifest_commit_matches,
             }
         return {
             "product": canonical_contract().product_name,
@@ -147,7 +154,7 @@ class EddyService:
         source_root = self.canonical_root / "src"
         environment["PYTHONPATH"] = str(source_root) + os.pathsep + environment.get("PYTHONPATH", "")
         with log_path.open("ab") as log:
-            subprocess.Popen(
+            process = subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
@@ -167,15 +174,40 @@ class EddyService:
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
+        (job.run_dir / f"worker-{action}.json").write_text(
+            json.dumps({"pid": process.pid, "action": action}, sort_keys=True) + "\n"
+        )
 
-    @staticmethod
-    def _job_payload(job: Any) -> dict[str, Any]:
+    def _terminate_worker(self, job_id: str) -> None:
+        job = self.manager.load(job_id)
+        for path in job.run_dir.glob("worker-*.json"):
+            try:
+                payload = json.loads(path.read_text())
+                pid = int(payload["pid"])
+                os.killpg(pid, signal.SIGTERM)
+            except (FileNotFoundError, json.JSONDecodeError, KeyError, ProcessLookupError, ValueError):
+                continue
+
+    def _job_payload(self, job: Any) -> dict[str, Any]:
+        if job.state is JobState.COMPLETED:
+            proof_state = "final_qa_passed"
+        elif job.state is JobState.BLOCKED and (job.run_dir / "quarantine").exists():
+            proof_state = "quarantined"
+        elif job.state is JobState.BLOCKED:
+            proof_state = "blocked_before_candidate"
+        else:
+            proof_state = "candidate"
+        owner_approved = _owner_approved(
+            self.canonical_root / "dogfood" / "trust-ledger.json", job.id
+        )
         return {
             "job_id": job.id,
             "state": job.state.value,
             "source": str(job.source),
             "run_dir": str(job.run_dir),
             "blockers": list(job.blockers),
+            "proof_state": proof_state,
+            "owner_approved": owner_approved,
         }
 
 
@@ -188,3 +220,17 @@ def _git_commit(root: Path) -> str:
         check=False,
     )
     return result.stdout.strip() if result.returncode == 0 else "UNKNOWN"
+
+
+def _owner_approved(ledger: Path, job_id: str) -> bool:
+    if not ledger.exists():
+        return False
+    try:
+        payload = json.loads(ledger.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+    return any(
+        row.get("id") == job_id and row.get("owner_approved") is True
+        for row in payload.get("runs", [])
+        if isinstance(row, dict)
+    )

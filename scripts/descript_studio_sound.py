@@ -13,6 +13,7 @@ Env:
   DESCRIPT_API_KEY            required (Bearer token). Fails loud if missing.
   EDDY_DESCRIPT_API_BASE      optional override (default https://descriptapi.com/v1)
   EDDY_DESCRIPT_POLL_S        optional poll interval seconds (default 5)
+  EDDY_DESCRIPT_CONNECTOR     optional host connector command; receives input/output/receipt args
   EDDY_FAKE_DESCRIPT=1        offline local ffmpeg approximation (dev only; NOT real Studio Sound)
 
 Exit codes: 0 ok · 2 missing key · 3 parity/effect-survival failed · 4 api/other error
@@ -20,8 +21,10 @@ Exit codes: 0 ok · 2 missing key · 3 parity/effect-survival failed · 4 api/ot
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -115,9 +118,60 @@ def fake_studio_sound(wav: Path, out: Path) -> Path:
     return out
 
 
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def host_connector_sound(wav: Path, out: Path, command: str) -> Path:
+    """Invoke an authenticated host adapter without exposing its credentials to Eddy."""
+
+    receipt = out.with_suffix(out.suffix + ".provider.json")
+    result = subprocess.run(
+        [
+            *shlex.split(command),
+            "--input-wav",
+            str(wav),
+            "--output-audio",
+            str(out),
+            "--receipt",
+            str(receipt),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"descript_host_connector_failed:{result.stderr[-500:]}")
+    if not out.exists() or not receipt.exists():
+        raise RuntimeError("descript_host_connector_artifact_missing")
+    payload = json.loads(receipt.read_text())
+    required = ("provider", "project_id", "composition_id", "source_sha256", "output_sha256")
+    if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
+        raise RuntimeError("descript_host_connector_receipt_invalid")
+    if payload["provider"] != "descript_host_connector" or payload.get("access_level") != "private":
+        raise RuntimeError("descript_host_connector_provenance_invalid")
+    if payload["source_sha256"] != sha256(wav) or payload["output_sha256"] != sha256(out):
+        raise RuntimeError("descript_host_connector_hash_mismatch")
+    log(
+        "descript_host_connector_done",
+        provider=payload["provider"],
+        project_id=payload["project_id"],
+        composition_id=payload["composition_id"],
+        access_level="private",
+    )
+    return out
+
+
 def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | None:
     if os.environ.get("EDDY_FAKE_DESCRIPT"):
         return fake_studio_sound(wav, out)
+    connector = os.environ.get("EDDY_DESCRIPT_CONNECTOR")
+    if connector:
+        return host_connector_sound(wav, out, connector)
     prompt = (
         "Apply Studio Sound to the imported audio"
         + (f" at {intensity}% intensity" if intensity != 100 else "")
@@ -211,7 +265,11 @@ def main() -> int:
     args = ap.parse_args()
 
     token = os.environ.get("DESCRIPT_API_KEY")
-    if not token and not os.environ.get("EDDY_FAKE_DESCRIPT"):
+    if (
+        not token
+        and not os.environ.get("EDDY_FAKE_DESCRIPT")
+        and not os.environ.get("EDDY_DESCRIPT_CONNECTOR")
+    ):
         log("blocked", reason="DESCRIPT_API_KEY missing")
         print("ERROR: DESCRIPT_API_KEY is not set. Studio Sound is non-negotiable — export the "
               "key (or set EDDY_FAKE_DESCRIPT=1 for a dev-only offline approximation).",

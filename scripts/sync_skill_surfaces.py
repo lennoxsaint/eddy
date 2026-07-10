@@ -32,19 +32,27 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     results = []
+    canonical_commit = commit()
     for projection in PROJECTIONS:
         if args.check:
-            result = check_projection(ROOT, projection, files=CANONICAL_SURFACES)
+            result = check_projection(
+                ROOT,
+                projection,
+                files=CANONICAL_SURFACES,
+                canonical_commit=canonical_commit,
+            )
             results.append(
                 {
                     "path": str(projection),
                     "ok": result.ok,
                     "missing": list(result.missing),
                     "changed": list(result.changed),
+                    "extra": list(result.extra),
+                    "manifest_commit_matches": result.manifest_commit_matches,
                 }
             )
         else:
-            manifest = write_projection(ROOT, projection, canonical_commit=commit())
+            manifest = write_projection(ROOT, projection, canonical_commit=canonical_commit)
             results.append({"path": str(projection), "ok": True, "manifest": str(manifest)})
     payload = {"status": "pass" if all(item["ok"] for item in results) else "failed", "results": results}
     print(json.dumps(payload, indent=2, sort_keys=True))
@@ -53,4 +61,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
