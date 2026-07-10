@@ -43,4 +43,3 @@ _Avoid_: Public latest, nightly release
 **Stable Channel**:
 The external installation channel that advances only to green immutable tags.
 _Avoid_: Main, automatic development build
-

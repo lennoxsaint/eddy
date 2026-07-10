@@ -23,4 +23,3 @@ def canonical_contract() -> EddyContract:
     """Return the immutable v3.0 owner-approved contract."""
 
     return EddyContract()
-

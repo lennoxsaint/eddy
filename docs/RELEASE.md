@@ -26,4 +26,3 @@ Before the identity swap, preserve the dirty legacy checkout, add a migration po
 rename it `eddy-legacy`, and archive it. Then rename this repository to `eddy`, make it public, update
 every explicit URL/action/remote, apply branch protection, and only then publish `v3.0.0` after the
 required gates. Do not rely on GitHub redirects because the old repository name is being reused.
-

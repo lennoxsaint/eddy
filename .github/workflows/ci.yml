@@ -22,4 +22,3 @@ jobs:
       - run: mypy src/eddy
       - run: pytest -q --cov=eddy --cov-report=term-missing
       - run: python scripts/sync_skill_surfaces.py --check
-
