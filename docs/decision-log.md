@@ -1,5 +1,16 @@
 # Eddy decision log
 
+## 2026-07-10 - Descript operational failures retry before editorial repair
+
+- A timeout, failed provider job, transient API status, missing import/publish result, or no-change
+  agent result gets one fresh private Descript attempt inside the audio boundary.
+- Authentication, authorization, connector provenance, and hash failures do not retry.
+- Provider retries, effect retries, and terminal errors are preserved in artifact-scoped receipts;
+  provider timeouts are no longer mislabeled as `descript_effect_not_rendered`.
+
+This prevents a transient Descript job from consuming an entire editorial repair attempt after the
+video edit, motion, and earlier audio outputs are already green.
+
 ## 2026-07-10 - Delivered callbacks inherit exact source-ledger resolutions
 
 - Delivered-media retranscription remains the final editorial source of truth.

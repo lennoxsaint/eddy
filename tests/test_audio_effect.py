@@ -5,6 +5,8 @@ import subprocess
 import wave
 from pathlib import Path
 
+import pytest
+
 from eddy.audio_effect import EffectCalibration, evaluate_effect_survival
 
 
@@ -267,3 +269,60 @@ def test_descript_effect_retry_stops_after_second_unchanged_export(
 
     assert result is None
     assert len(calls) == 2
+
+
+def test_descript_provider_timeout_retries_once(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    calls: list[Path] = []
+
+    def fake_studio_sound(
+        wav: Path,
+        out: Path,
+        token: str,
+        intensity: int,
+    ) -> Path:
+        calls.append(out)
+        if len(calls) == 1:
+            raise RuntimeError("descript_job_timeout:job-id")
+        out.write_bytes(b"cleaned")
+        return out
+
+    monkeypatch.setattr(descript, "studio_sound", fake_studio_sound)
+    monkeypatch.setattr(descript, "parity_ok", lambda source, cleaned: True)
+    monkeypatch.setattr(descript, "effect_survival_ok", lambda source, cleaned, work: True)
+
+    result = descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
+
+    assert result == tmp_path / "work/retry-2/descript-studio-sound.m4a"
+    assert len(calls) == 2
+    assert '"event": "descript_provider_retry"' in capsys.readouterr().err
+
+
+def test_descript_auth_failure_does_not_retry(tmp_path: Path, monkeypatch) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    calls = 0
+
+    def fake_studio_sound(
+        wav: Path,
+        out: Path,
+        token: str,
+        intensity: int,
+    ) -> Path:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("descript_api_failed:/jobs/agent:401")
+
+    monkeypatch.setattr(descript, "studio_sound", fake_studio_sound)
+
+    with pytest.raises(RuntimeError, match="descript_api_failed"):
+        descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
+
+    assert calls == 1

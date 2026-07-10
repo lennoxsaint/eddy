@@ -8,6 +8,7 @@ import pytest
 import eddy.pipeline as pipeline
 from eddy.pipeline import (
     PipelineRunner,
+    _descript_failure_blocker,
     _delivered_gap_violations,
     _repair_delivered_cadence,
 )
@@ -33,6 +34,26 @@ def test_delivered_gap_repair_targets_only_outliers(tmp_path: Path) -> None:
     )
 
     assert _delivered_gap_violations(transcript) == [[0.35, 1.25]]
+
+
+def test_descript_failure_blocker_distinguishes_provider_timeout() -> None:
+    stderr = json.dumps(
+        {"event": "error", "error": "descript_job_timeout:job-id"}
+    )
+
+    assert _descript_failure_blocker(stderr) == "descript_provider_timeout"
+
+
+def test_descript_failure_blocker_keeps_effect_survival_reason() -> None:
+    stderr = json.dumps(
+        {
+            "event": "descript_effect_survival",
+            "status": "failed",
+            "blockers": ["descript_effect_not_rendered"],
+        }
+    )
+
+    assert _descript_failure_blocker(stderr) == "descript_effect_not_rendered"
 
 
 def test_delivered_cadence_repair_replaces_media_and_writes_receipt(

@@ -267,6 +267,25 @@ def effect_survival_ok(src_wav: Path, cleaned: Path, work: Path) -> bool:
     return result.passed
 
 
+def retryable_provider_error(error: BaseException) -> bool:
+    reason = str(error)
+    if reason.startswith("descript_api_failed:"):
+        try:
+            status = int(reason.rsplit(":", 1)[1])
+        except (IndexError, ValueError):
+            return False
+        return status in {408, 409, 425, 429, 500, 502, 503, 504}
+    return isinstance(error, (TimeoutError, urllib.error.URLError)) or reason.startswith(
+        (
+            "descript_job_timeout:",
+            "descript_job_failed:",
+            "descript_import_missing_",
+            "descript_publish_missing_",
+            "descript_agent_made_no_change",
+        )
+    )
+
+
 def studio_sound_with_effect_retry(
     src_wav: Path,
     work: Path,
@@ -281,7 +300,18 @@ def studio_sound_with_effect_retry(
         attempt_work = work if attempt == 1 else work / f"retry-{attempt}"
         attempt_work.mkdir(parents=True, exist_ok=True)
         cleaned = attempt_work / "descript-studio-sound.m4a"
-        result = studio_sound(src_wav, cleaned, token, intensity)
+        try:
+            result = studio_sound(src_wav, cleaned, token, intensity)
+        except (RuntimeError, TimeoutError, urllib.error.URLError) as error:
+            if attempt >= max_attempts or not retryable_provider_error(error):
+                raise
+            log(
+                "descript_provider_retry",
+                failed_attempt=attempt,
+                next_attempt=attempt + 1,
+                reason=str(error).split(":", 1)[0],
+            )
+            continue
         if result is None or not parity_ok(src_wav, result):
             return None
         if effect_survival_ok(src_wav, result, attempt_work):

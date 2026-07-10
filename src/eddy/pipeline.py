@@ -471,7 +471,7 @@ class PipelineRunner:
                 blockers.append(
                     "descript_test_fixture_not_final"
                     if fake_descript
-                    else "descript_effect_not_rendered"
+                    else _descript_failure_blocker(audio.stderr)
                 )
                 fatal_audio_failure = True
                 break
@@ -759,6 +759,8 @@ class PipelineRunner:
                     }
                 )
                 if not green:
+                    if audio.returncode != 0 and not fake_descript:
+                        blockers.append(_descript_failure_blocker(audio.stderr))
                     blockers.append(f"short_failed:{short_id}")
             gates["shorts_quality"] = len(short_greens) == len(plan.shorts) and all(short_greens)
             gates["shorts_count"] = 3 <= len(short_greens) <= 5
@@ -977,7 +979,10 @@ def _append_provider_receipts(stderr: str, output: Path, *, artifact: str) -> No
         "descript_provider",
         "descript_agent_result",
         "descript_effect_survival",
+        "descript_effect_retry",
+        "descript_provider_retry",
         "audio_parity",
+        "error",
     }
     rows: list[dict[str, Any]] = []
     for line in stderr.splitlines():
@@ -993,6 +998,30 @@ def _append_provider_receipts(stderr: str, output: Path, *, artifact: str) -> No
     with output.open("a") as handle:
         for row in rows:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def _descript_failure_blocker(stderr: str) -> str:
+    rows: list[dict[str, Any]] = []
+    for line in stderr.splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    for row in reversed(rows):
+        if row.get("event") == "descript_effect_survival":
+            blockers = row.get("blockers")
+            if isinstance(blockers, list) and blockers:
+                return str(blockers[0])
+        if row.get("event") == "audio_parity" and row.get("status") == "failed":
+            return "descript_duration_parity_failed"
+        if row.get("event") == "error":
+            error = str(row.get("error", ""))
+            if "timeout" in error:
+                return "descript_provider_timeout"
+            return "descript_provider_failed"
+    return "descript_effect_not_rendered"
 
 
 def _transcribe_final(root: Path, media: Path, output: Path) -> None:
