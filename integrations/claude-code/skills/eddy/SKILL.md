@@ -106,7 +106,9 @@ eddy status <job-id>
     dual-source Short needs at least 25% verified raw-screen proof plus two animated HyperFrames
     beats: an opening hook beat by 2s and a later supporting proof beat.
 11. Iterate with proxies; render full resolution only after the final plan is green.
-12. Re-transcribe and verify every emitted long and Short, then re-hash all source files.
+12. Re-transcribe every emitted long and Short. If Studio Sound exposes delivered word gaps above
+    the cadence ceiling, tighten those gaps once without changing words, re-transcribe, verify, then
+    re-hash all source files.
 
 ## Hard gates
 
