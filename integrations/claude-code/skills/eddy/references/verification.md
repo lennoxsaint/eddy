@@ -10,11 +10,15 @@ promote it to `final/` or call it ship-ready.
 Run the gate suite on **every emitted file — each long AND each Short**, not just the primary long.
 
 - **Audio parity** — Studio Sound output duration within ±1% or 1s of the audio it was given
-  (Descript must not have changed timing). Fail → re-run or fall back per the script.
+  (Descript must not have changed timing). Fail → re-run or block; no raw/local fallback is final.
+- **A/V duration sync** (`av_sync_duration`) — delivered audio and video stream durations differ by
+  no more than 80ms. Eddy preserves source-relative segment timestamps so frame rounding cannot
+  accumulate one extra video frame at every cut.
 - **Gap band** — post-edit median/P95/max gaps within `layout-constants.md` band; no gap over hard
   max (0.28s) outside sacred spans.
 - **Max internal silence** (`max_internal_silence_ok`) — `silencedetect` on the **rendered** file:
-  no silence longer than `--max-deadair` (1.5s). This is the deterministic catch for the dead-air
+  no unprotected silence longer than `--max-deadair` (0.28s). Protected content may retain meaning,
+  but `protected_pause_ceiling` blocks any protected silence above 0.8s. This catches the dead-air
   that word-only tightening missed (the 16s / 4s survivors). Runs on the source-of-truth audio, not
   the segment receipt.
 - **Speech ratio** (`speech_ratio_ok`) — 1 − (total silence / duration) ≥ floor; a low ratio means
@@ -23,6 +27,12 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
   output) and pass its words as `--final-words`; flags adjacent duplicate 4-gram phrases (a leftover
   retake said twice). If it fires, review each flag — real retake → re-cut; genuine repetition →
   override. This is the machine half of the retake sweep; do it for **Shorts too**.
+- **Delivered editorial truth** (`delivered_editorial_truth`) — run the same repeat, reset-loop, and
+  false-start detector over every delivered-media transcript. Any unresolved survivor blocks.
+- **Evidence-bearing Short** — source-mapped screen proof covers at least 25% of a dual-source Short
+  and three overlay-free delivered-frame samples match transformed raw screen frames. Its hook and
+  supporting proof beats each show at least three perceptual states at 10 fps and stay frozen for
+  less than 80% of their duration.
 - **Beat completeness** — every `keep` beat id from `edit-plan.md` is present in the final cut.
   Losing one is a hard fail.
 - **Protected count** — `protected_count` (sacred spans) preserved end-to-end.

@@ -23,6 +23,8 @@ import sys
 from pathlib import Path
 
 HARD_MAX_GAP = 0.28  # unprotected gap ceiling (layout-constants.md)
+PROTECTED_PAUSE_CEILING = 0.8
+AV_DRIFT_CEILING = 0.08
 
 
 def probe(path: Path) -> dict:
@@ -50,10 +52,27 @@ def has_audio(info: dict) -> bool:
     return any(s.get("codec_type") == "audio" for s in info.get("streams", []))
 
 
+def av_duration_drift(info: dict) -> float:
+    """Absolute delivered video/audio duration difference, or infinity when unprovable."""
+
+    durations: dict[str, float] = {}
+    for stream in info.get("streams", []):
+        kind = stream.get("codec_type")
+        if kind not in {"video", "audio"} or kind in durations:
+            continue
+        try:
+            durations[kind] = float(stream["duration"])
+        except (KeyError, TypeError, ValueError):
+            continue
+    if set(durations) != {"video", "audio"}:
+        return float("inf")
+    return abs(durations["video"] - durations["audio"])
+
+
 def silence_stats(path: Path, noise_db: float, min_dur: float) -> tuple[float, float, list[list[float]]]:
     """(max_silence, total_silence, spans) in the FINAL render — catches dead air a cut missed."""
     proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-i", str(path),
+        ["ffmpeg", "-hide_banner", "-i", str(path), "-vn",
          "-af", f"silencedetect=noise={noise_db}dB:d={min_dur:.3f}", "-f", "null", "-"],
         capture_output=True, text=True)
     spans: list[list[float]] = []
@@ -116,8 +135,6 @@ def src_to_final(src_t: float, segments: list[list[float]]) -> float | None:
     """Map a SOURCE-time instant to its FINAL-render time through the kept sub-segments."""
     acc = 0.0
     for s, e in segments:
-        if src_t < s:
-            return round(acc, 3)
         if s <= src_t <= e:
             return round(acc + (src_t - s), 3)
         acc += e - s
@@ -139,14 +156,83 @@ def _in_windows(t: float, windows: list[list[float]], pad: float = 0.75) -> bool
     return any(a - pad <= t <= b + pad for a, b in windows)
 
 
+def apply_protected_pause_ceiling(
+    silence_spans: list[list[float]],
+    protected_windows: list[list[float]],
+    *,
+    ceiling: float = PROTECTED_PAUSE_CEILING,
+) -> tuple[list[list[float]], list[list[float]]]:
+    """Exempt only short protected breaths; long protected silence remains a blocker."""
+
+    kept: list[list[float]] = []
+    violations: list[list[float]] = []
+    for span in silence_spans:
+        midpoint = (span[0] + span[1]) / 2
+        if _in_windows(midpoint, protected_windows):
+            if span[1] - span[0] > ceiling:
+                violations.append(span)
+            continue
+        kept.append(span)
+    return kept, violations
+
+
+def word_gap_verdict(
+    words: list[dict],
+    protected_windows: list[list[float]],
+    *,
+    hard_max: float = HARD_MAX_GAP,
+) -> dict:
+    """Verify the delivered-word cadence without allowing protection to hide dead air."""
+
+    gaps: list[list[float]] = []
+    protected_violations: list[list[float]] = []
+    ordinary_violations: list[list[float]] = []
+    for left, right in zip(words, words[1:], strict=False):
+        start, end = float(left["end"]), float(right["start"])
+        if end <= start:
+            continue
+        gap = [round(start, 3), round(end, 3)]
+        gaps.append(gap)
+        midpoint = (start + end) / 2.0
+        if _in_windows(midpoint, protected_windows, pad=0.0):
+            if end - start > PROTECTED_PAUSE_CEILING:
+                protected_violations.append(gap)
+        elif end - start > hard_max:
+            ordinary_violations.append(gap)
+    durations = sorted(end - start for start, end in gaps)
+    percentile_index = max(0, int(len(durations) * 0.95) - 1)
+    p95 = durations[percentile_index] if durations else 0.0
+    return {
+        "pass": not ordinary_violations and not protected_violations,
+        "hard_max_s": hard_max,
+        "protected_ceiling_s": PROTECTED_PAUSE_CEILING,
+        "p95_s": round(p95, 3),
+        "violations": ordinary_violations,
+        "protected_violations": protected_violations,
+    }
+
+
+def delivered_editorial_issues(final_words: Path) -> list[dict]:
+    """Run Eddy's full editorial detector against a delivered-media transcript."""
+
+    from eddy.editorial import build_editorial_ledger
+
+    ledger = build_editorial_ledger(final_words)
+    return [
+        candidate
+        for candidate in ledger["candidates"]
+        if candidate.get("kind") in {"repeat", "reset_loop", "false_start"}
+    ]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Deterministic verification gates.")
     ap.add_argument("--final", required=True)
     ap.add_argument("--segments")
     ap.add_argument("--plan")
-    ap.add_argument("--sacred", help="cutlist/JSON with SOURCE-time 'sacred' spans to EXEMPT from the "
-                    "silence + retake gates (intentional pauses, instructional/rhetorical repeats); "
-                    "mapped to final time via --segments")
+    ap.add_argument("--sacred", help="cutlist/JSON with SOURCE-time protected spans; mapped to "
+                    "final time via --segments. Protection can retain intentional meaning but "
+                    "never exempts silence above 0.8s")
     ap.add_argument("--source-audio")
     ap.add_argument("--expect-w", type=int, default=1920)
     ap.add_argument("--expect-h", type=int, default=1080)
@@ -157,7 +243,8 @@ def main() -> int:
                     help="near-duplicate window (s) for the retake gate. On the FINAL render a surviving "
                          "retake is adjacent (gap collapsed), so keep it small (~5s, >= splice's window) "
                          "to catch survivors without false-flagging legit recurrence")
-    ap.add_argument("--max-deadair", type=float, default=1.5, help="largest allowed silence in the final (s)")
+    ap.add_argument("--max-deadair", type=float, default=HARD_MAX_GAP,
+                    help="largest allowed unprotected silence in the final (s)")
     ap.add_argument("--min-speech-ratio", type=float, default=0.45)
     ap.add_argument("--silence-db", type=float, default=-30.0)
     args = ap.parse_args()
@@ -188,6 +275,14 @@ def main() -> int:
 
     # Has audio (Studio Sound muxed)
     gate("has_audio", has_audio(info))
+    if has_audio(info):
+        av_drift = av_duration_drift(info)
+        gate(
+            "av_sync_duration",
+            av_drift <= AV_DRIFT_CEILING,
+            drift_s=round(av_drift, 3),
+            ceiling_s=AV_DRIFT_CEILING,
+        )
 
     # Audio parity vs source (if provided)
     if args.source_audio and Path(args.source_audio).exists():
@@ -224,8 +319,11 @@ def main() -> int:
     if has_audio(info):
         max_sil, total_sil, sil_spans = silence_stats(final, args.silence_db, min(0.3, args.max_deadair))
         # exempt sacred windows (an intentional pause, e.g. a real-time demo, is not dead air).
+        protected_violations: list[list[float]] = []
         if sacred_final:
-            sil_spans = [p for p in sil_spans if not _in_windows((p[0] + p[1]) / 2, sacred_final)]
+            sil_spans, protected_violations = apply_protected_pause_ceiling(
+                sil_spans, sacred_final
+            )
             durs = [e - s for s, e in sil_spans]
             max_sil, total_sil = (max(durs) if durs else 0.0), sum(durs)
         fin = duration(final)
@@ -236,6 +334,12 @@ def main() -> int:
              at=(round(worst[0], 1) if worst else None))
         gate("speech_ratio_ok", speech_ratio >= args.min_speech_ratio,
              speech_ratio=speech_ratio, floor=args.min_speech_ratio)
+        gate(
+            "protected_pause_ceiling",
+            not protected_violations,
+            ceiling_s=PROTECTED_PAUSE_CEILING,
+            violations=protected_violations,
+        )
 
     # Retake scan: flag adjacent duplicate phrases (leftover retakes) in the FINAL render. NEVER
     # skipped — if no --final-words was supplied we auto re-transcribe the render (transcribe.py /
@@ -253,10 +357,36 @@ def main() -> int:
             if sacred_final:
                 flagged = [f for f in flagged if not _in_windows(f["again_s"], sacred_final)]
             gate("retake_repeat_scan", not flagged, flagged=flagged[:12], count=len(flagged))
+            cadence = word_gap_verdict(fw, sacred_final)
+            gate("high_energy_cadence", cadence["pass"], **cadence)
+            if args.final_words and Path(args.final_words).exists():
+                editorial_issues = delivered_editorial_issues(Path(args.final_words))
+            else:
+                generated_words = final.with_suffix(".verify-words.json")
+                editorial_issues = (
+                    delivered_editorial_issues(generated_words)
+                    if generated_words.exists()
+                    else []
+                )
+            gate(
+                "delivered_editorial_truth",
+                not editorial_issues,
+                issues=editorial_issues[:12],
+                count=len(editorial_issues),
+            )
 
     passed = all(g["pass"] for g in gates)
     # Blocking gates that are safety-critical — name them explicitly for the self-heal loop.
-    blocking = {"max_internal_silence_ok", "retake_repeat_scan", "layout_resolution", "has_audio"}
+    blocking = {
+        "max_internal_silence_ok",
+        "protected_pause_ceiling",
+        "retake_repeat_scan",
+        "high_energy_cadence",
+        "delivered_editorial_truth",
+        "layout_resolution",
+        "has_audio",
+        "av_sync_duration",
+    }
     failed_blocking = [g["gate"] for g in gates if not g["pass"] and g["gate"] in blocking]
     verdict = {"pass": passed, "gates": gates, "failed_blocking": failed_blocking,
                "ran": len(gates), "note": "model rubrics (hook/cohesion/gutting) judged separately"}

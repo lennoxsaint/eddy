@@ -105,6 +105,14 @@ def wait_job(job_id: str, token: str, timeout_s: int = 1800) -> dict:
         time.sleep(POLL_S)
 
 
+def studio_sound_prompt(intensity: int) -> str:
+    return (
+        f"Add Studio Sound to every clip at {intensity}% intensity. "
+        "Confirm Studio Sound is enabled on the complete source audio before finishing. "
+        "Do not remove words, change timing, add captions, or alter content."
+    )
+
+
 def fake_studio_sound(wav: Path, out: Path) -> Path:
     """Dev-only offline approximation. NOT real Studio Sound — never ship this output."""
     log("descript_fake", note="local ffmpeg approximation, not real studio sound")
@@ -172,11 +180,7 @@ def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | Non
     connector = os.environ.get("EDDY_DESCRIPT_CONNECTOR")
     if connector:
         return host_connector_sound(wav, out, connector)
-    prompt = (
-        "Apply Studio Sound to the imported audio"
-        + (f" at {intensity}% intensity" if intensity != 100 else "")
-        + ". Do not remove words, change timing, add captions, or alter content."
-    )
+    prompt = studio_sound_prompt(intensity)
     import_payload = {
         "project_name": f"Eddy Studio Sound {int(time.time())}",
         "add_media": {MEDIA_NAME: {"content_type": "audio/wav", "file_size": wav.stat().st_size}},
@@ -198,7 +202,19 @@ def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | Non
     agent = api("POST", "/jobs/agent", token,
                 {"project_id": project_id, "composition_id": composition_id, "prompt": prompt})
     log("descript_agent_started", job_id=agent.get("job_id"))
-    wait_job(str(agent["job_id"]), token)
+    agent_job = wait_job(str(agent["job_id"]), token)
+    agent_result = agent_job.get("result") or {}
+    log(
+        "descript_agent_result",
+        job_id=agent.get("job_id"),
+        status=agent_result.get("status"),
+        project_changed=bool(agent_result.get("project_changed")),
+        agent_response=str(agent_result.get("agent_response") or "")[:500],
+        ai_credits_used=agent_result.get("ai_credits_used"),
+        resolved_model=agent_result.get("resolved_model") or agent_job.get("resolved_model"),
+    )
+    if not agent_result.get("project_changed"):
+        raise RuntimeError("descript_agent_made_no_change")
 
     pub = api("POST", "/jobs/publish", token,
               {"project_id": project_id, "composition_id": composition_id,

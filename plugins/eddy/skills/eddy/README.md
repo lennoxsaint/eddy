@@ -23,13 +23,30 @@ eddy sync-doctor
 ## Workflow
 
 ```text
-eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3
--> eddy_host_submit -> eddy_finalize -> completed | blocked
+eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3
+-> eddy_host_submit -> eddy_finalize -> completed | awaiting_host_repair | blocked
+```
+
+The CLI provides the same recovery path when MCP is unavailable:
+
+```bash
+eddy options <source>
+eddy edit <source>
+eddy packet <job-id>
+eddy submit <job-id> edit-plan.json
+eddy finalize <job-id>
 ```
 
 The host model owns editorial taste. Eddy owns source locks, deterministic media mechanics,
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full
 product contract.
+
+Preflight writes an Editorial Review Ledger. Final verification retranscribes every emitted video;
+source-plan timing never substitutes for delivered-media proof.
+
+If the source folder contains top-level media, Eddy locks only those files. Nested prior run outputs
+are excluded, preventing an old `eddy-runs/` folder from being mistaken for fresh camera or screen
+footage. Quality transcripts are cached only by the camera SHA-256 and every reuse is receipted.
 
 ## v3.0 boundary
 

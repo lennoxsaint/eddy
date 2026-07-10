@@ -60,29 +60,50 @@ outputs proof-gated candidates.
    without asking. If a material route choice remains, show only runnable options with privacy, cost,
    and quality tradeoffs.
 3. Call `eddy_edit_start(...)`, then poll until `awaiting_host_plan`.
-4. Call `eddy_host_packet(job_id=...)`. Use its transcript, source hashes, retake groups, protected
-   moments, proof assets, and Shorts candidates to author `EditPlanV3`.
+4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
+   Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
+   screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
 5. Call `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
    bypassing them.
 6. Call `eddy_finalize(job_id=...)`, poll with `eddy_job_status`, and return only final paths or exact
    blockers. Use `eddy_cancel_job` when the user cancels.
 
+If MCP tools are unavailable, continue automatically through the equivalent CLI commands; do not
+make the user restart the edit:
+
+```bash
+eddy options <source>
+eddy edit <source>
+eddy packet <job-id>
+eddy submit <job-id> edit-plan.json
+eddy finalize <job-id>
+eddy status <job-id>
+```
+
 ## Ordered edit
 
 1. Ingest read-only sources, record before hashes, and detect dual-source versus talking-head mode.
-2. Transcribe to word-level timings.
-3. Build a beat map covering every unique beat, protected span, retake group, and proof asset.
+   When top-level media exists, it is the exclusive source set; nested `runs/`, `eddy-runs/`,
+   `work/`, `final/`, cache, and quarantine artifacts are never re-ingested as raw footage.
+2. Transcribe to word-level timings and measure every audio silence above 0.8 seconds. Reuse only a
+   transcript cache keyed by the immutable camera SHA-256 and receipt every cache hit or miss.
+3. Build the Editorial Review Ledger. Review every chunk; resolve every repeat, reset loop, false
+   start, unfinished clause, separated retake, and long gap. Keep the last complete clean take by
+   default. Intentional repetition requires a recorded reason.
 4. Hunt and rank three distinct proof-carrying hook angles.
 5. Build one shared body edit. Keep the final clean take by default and preserve all protected beats.
-6. Tighten ordinary gaps and remove energy-confirmed dead air using one shared segment receipt for
-   camera and screen sources.
+6. Compile all body drops, non-selected retake variants, hook removals, and Short removals into
+   explicit splices. Tighten gaps above 0.2s to 0.1s, preserve word-onset pre-roll, cap unprotected
+   delivered gaps at 0.28s, and cap protected silence at 0.8s. Reuse one shared body receipt.
 7. Apply real Descript Studio Sound to audio only. API success and duration parity are insufficient:
    the local returned artifact must pass the calibrated **Effect-Survival Gate**. If the effect did
    not survive export, block with `descript_effect_not_rendered`; do not silently fall back.
 8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
    Prove semantic collision safety before compositing.
 9. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
-10. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke.
+10. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke. A
+    dual-source Short needs at least 25% verified raw-screen proof plus two animated HyperFrames
+    beats: an opening hook beat by 2s and a later supporting proof beat.
 11. Iterate with proxies; render full resolution only after the final plan is green.
 12. Re-transcribe and verify every emitted long and Short, then re-hash all source files.
 
@@ -91,10 +112,12 @@ outputs proof-gated candidates.
 - Source hashes are identical before and after the run.
 - Exactly one shared body plan feeds all three longs; only their hook segments differ.
 - Every `keep` beat and protected span survives.
-- No genuine retake, false start, or reset loop survives the rendered transcript.
+- Every delivered long and Short is retranscribed. No genuine retake, false start, reset loop, or
+  unresolved repetition survives the delivered transcript.
 - Word onsets are audible; gap, silence, loudness, clipping, and A/V drift gates pass.
 - Descript duration parity and Effect-Survival Gate pass on the delivered audio.
-- Screen/camera geometry, captions, proof assets, motion collisions, and Shorts source/style locks pass.
+- Screen/camera geometry, captions, proof assets, motion collisions, Shorts source/style locks,
+  25% source-mapped screen proof, and motion activity at 10 fps pass.
 - `spot-check.md`, `edit-plan.json`, `final/qa.json`, and `receipts.jsonl` are inspectable.
 
 ## Descript boundary

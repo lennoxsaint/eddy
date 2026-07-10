@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "b75c2a4d3a3205189bf97b04e317b3681e99b377",
+  "canonical_commit": "94e3b649614e55b60cd55ccb9315e25a77dd3fa4",
   "files": {
-    "README.md": "8f0664b106f69857c19b4ee6fb31ffaa66a71daa8817031814d4aa4455d9198a",
-    "SKILL.md": "01899eff9b26c7f24f57ce354cb966154004255d4f131a503a1b931479e7398f",
+    "README.md": "6979600018898143366e7ffdfb7c17a35389b927cc9913207638c080c6ab0315",
+    "SKILL.md": "e5302f5f2a94212f04803edf78ff8f995eafc91f1d0b3cb17898f60fbb236781",
     "assets/fonts/Montserrat.ttf": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
     "assets/motion/threadify-fc/assets/fc-ring.png": "679d339e49412b4d82b92e3ab354b590237026fed829874b50c8087389e8d281",
     "assets/motion/threadify-fc/assets/threadify-needle.png": "7869587d5b29808ce0c7d7b25f28935895ddcba804802dbf28b627d136591629",
@@ -11,22 +11,22 @@
     "assets/motion/threadify-fc/identity.css": "9088e99f565ae3aebd6f1afafc3d2b57aad89bc081ada8ca208f4abd08d5cfb9",
     "assets/vendor/gsap.min.js": "c3a03a345e45bc954cd48c43f11572891f5dca7a5d99348d5bc14753a728618c",
     "evals/evals.json": "9061e6dd633125f7df213a4a4e25bd5ea960a6eaa805e199e5aa33d30e9baf2f",
-    "references/commands.md": "73ccf6adcb6d1a28c4e70b9ce05922ba52dd1ff6072910eab6c0e04754f3ac86",
-    "references/edit-plan-schema.md": "06330dca002e2a5b50dfb6e2296d6df1516d5ee099d9cc177b11acaa5124d19b",
+    "references/commands.md": "0d16a6b6ec5b486ff69bd60a0167745b3e0030e990b2b4d3d02b4254dd997b65",
+    "references/edit-plan-schema.md": "b72baa4546d19dfc0fa0ac5cb93f0cfbca1ca83ef5b7f50e60729b567ee38faa",
     "references/hook-doctrine.md": "077fa891f915e4a35a9b4952abdccd413dd58bfb4064b461fd9d71f16a5e8c57",
-    "references/layout-constants.md": "25a9738cc54e6d2dfee5862fb1c081a429086c007c4f226820705df54c998b41",
+    "references/layout-constants.md": "f22038962ed146f2074af716272543159669437f012f252236086d43671968bb",
     "references/motion-layer.md": "587c36062d5fcef2bb90184d604a607230256f8ec0a5241e66d451acce495284",
     "references/retention-policy.md": "edc5973a55792b6afab4fe49a0ff3c3cca979cdce7ef9b1fae50d2fa8732b664",
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
-    "references/verification.md": "a8f6453ac7926609b5e586f2a105ecbada4be3fe923b853a5841d567498d7ef1",
+    "references/verification.md": "de81f436ca023b5a62c117c6112758569c1478c7d7b0e456e0a6970a100e4071",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
-    "scripts/descript_studio_sound.py": "e17af07bf5e7b4e61126ca1aaba56cc939ddc468cde4c16977d2589297141c71",
+    "scripts/descript_studio_sound.py": "b1d727a2bf50b3ea40d15a142bbd734d3c1a8084aa5210c2075885761febea0b",
     "scripts/karaoke_ass.py": "8dfd70889e335656be9152518fc16812dc512d4bc850dfd3ee1dd8e83773987d",
     "scripts/motion_render.py": "03c9fdad2b29ee7d555195ffc8f777c07cadf046efab9b028758506d996aebc4",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",
-    "scripts/splice.py": "4fb3f7731446feb1e3a9145db77755aaa91912483099a83ff26f0d517f17a96e",
+    "scripts/splice.py": "8f860b0aeaafc753f1520d7c5dd19c83ec787de7a818cd76402c2dd0fec817d5",
     "scripts/transcribe.py": "6dc38ffc28b1896270ee380957092b65e6b576dba9d85b75ea9de82fdd5323ba",
-    "scripts/verify.py": "c0b5ca39171e69fc38afcc2e0a00d87d05e9831fd0be54bd6dd5a1a64974fd72"
+    "scripts/verify.py": "0603700912825af4006739db6d089b8bf68205cafbefdf98ddeb7f72c54b4b56"
   },
   "schema_version": "eddy-surface-manifest-v1"
 }

@@ -53,7 +53,8 @@ Rendered by `embedded-captions` `anchor` (clean, non-chaotic). Match this style:
 ## Gap band (pacing gates)
 
 - Median gap target **0.12-0.20s**, P95 **≤0.22s**, hard max **0.28s** for unprotected gaps.
-- Word-gap tightening (SOP step 4): only gaps **>0.2s → 0.1s**; sacred pauses exempt.
+- Word-gap tightening (SOP step 4): only gaps **>0.2s → 0.1s**. Preserve 60ms of pre-onset audio.
+  Protected pauses may retain meaning but never more than **0.8s** of silence.
 
 ## Studio Sound
 

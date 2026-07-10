@@ -15,13 +15,15 @@ non-zero on failure. Use `python3`.
 python3 scripts/transcribe.py --in <camera_or_mixed>.mp4 --out transcript.json [--model large-v3] [--lang en]
 ```
 Output: `{language, duration, words:[{word,start,end,score}], segments:[...]}`.
+The V3 runtime stores quality transcripts at `~/.eddy/cache/transcripts/<camera-sha256>.json` and
+receipts `transcript_cache_hit` or `transcript_cache_miss_filled` in the canonical run.
 
 ## 2. Splice (execute the cut list + tighten gaps)
 
 ```
 python3 scripts/splice.py --in <source>.mp4 --words transcript.json --cutlist cutlist.json \
   --out edited.mp4 [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.012] [--silence-db -30] \
-  [--scale 1920x1080] [--segments prior.segments.json]
+  [--max-gap 0.28] [--scale 1920x1080] [--segments prior.segments.json]
 ```
 `cutlist.json`: `{"keep":[[s,e],...], "sacred":[[s,e],...], "gap_tighten":{"threshold":0.2,"target":0.1}}`.
 Writes `edited.segments.json` (receipt: exact sub-segments used).
@@ -29,6 +31,8 @@ Writes `edited.segments.json` (receipt: exact sub-segments used).
 a long silence with NO transcribed words is still tightened (fixes the survivors). `--silence-db` is
 the noise floor. `--xfade` (~12ms) is a length-preserving de-click fade at each join (kills the cut
 click without desyncing audio from the frame-select'd video).
+Word intervals are subtracted from audio-silence detections, and 60ms of pre-onset audio is retained
+at each tightened join. Protected spans may keep a short meaningful pause, never more than 0.8s.
 `--scale WxH` downscales each cut segment during the splice — use it to cut a **4K screen track
 directly at 1080p** (lighter/safer encode; the composite scales to 1080p anyway).
 **Co-splicing a screen track:** splice the **camera first** (it has audio → it owns the
@@ -65,12 +69,14 @@ Karaoke is NOT burned here — add it with `embedded-captions` `anchor`.
 ```
 python3 scripts/verify.py --final long.mp4 [--segments edited.segments.json] [--plan edit-plan.json] \
   [--source-audio source.wav] [--expect-w 1920] [--expect-h 1080] \
-  [--final-words final.words.json] [--max-deadair 1.5] [--min-speech-ratio 0.45] [--silence-db -30]
+  [--final-words final.words.json] [--max-deadair 0.28] [--min-speech-ratio 0.45] [--silence-db -30]
 ```
 Prints a JSON verdict `{pass, gates:[...]}`. Exit 1 = a gate failed. New gates:
 `max_internal_silence_ok` (silencedetect the rendered file — catches dead air a cut missed),
-`speech_ratio_ok`, and `retake_repeat_scan` (needs `--final-words`: **re-transcribe the final render**
-with `transcribe.py`, pass its words here; flags adjacent duplicate phrases = leftover retakes).
+`speech_ratio_ok`, `protected_pause_ceiling`, `high_energy_cadence`,
+`delivered_editorial_truth`, and `retake_repeat_scan` (needs `--final-words`: **re-transcribe the
+final render** with `transcribe.py`, pass its words here; flags duplicate phrases, reset loops, and
+false starts).
 **Run this on every long AND every Short.** Model rubrics (hook/cohesion/gutting) are judged by you.
 
 ## 6. Karaoke (Shorts caption strip)

@@ -39,6 +39,10 @@ from pathlib import Path
 
 # V1 cut-safety handles (seconds) — layout-constants.md
 MIN_BOUNDARY_HANDLE = 0.10
+PROTECTED_PAUSE_CEILING = 0.8
+WORD_ONSET_HANDLE = 0.06
+MAX_WORD_PROTECTION = 1.0
+SEEK_PREROLL = 0.1
 
 
 def load(path: str) -> dict:
@@ -56,7 +60,7 @@ def detect_silences(src: Path, noise_db: float, min_dur: float) -> list[list[flo
     long wordless gaps the word-only tightener missed. Audio-only decode — cheap even on 75 min.
     """
     proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-i", str(src),
+        ["ffmpeg", "-hide_banner", "-i", str(src), "-vn",
          "-af", f"silencedetect=noise={noise_db}dB:d={min_dur:.3f}", "-f", "null", "-"],
         capture_output=True, text=True)
     spans: list[list[float]] = []
@@ -86,6 +90,30 @@ def _merge(intervals: list[list[float]]) -> list[list[float]]:
         else:
             merged.append([a, b])
     return merged
+
+
+def _subtract_intervals(
+    intervals: list[list[float]],
+    protected: list[list[float]],
+) -> list[list[float]]:
+    result = intervals
+    for protected_start, protected_end in protected:
+        updated: list[list[float]] = []
+        for start, end in result:
+            if protected_end <= start or protected_start >= end:
+                updated.append([start, end])
+                continue
+            if protected_start > start:
+                updated.append([start, protected_start])
+            if protected_end < end:
+                updated.append([protected_end, end])
+        result = updated
+    return result
+
+
+def _word_protection(word: dict) -> list[float]:
+    start, end = float(word["start"]), float(word["end"])
+    return [start, min(end, start + MAX_WORD_PROTECTION)]
 
 
 def _norm(word: str) -> str:
@@ -150,7 +178,8 @@ def span_gaps(span_start: float, span_end: float, inside: list[dict],
               silences: list[list[float]], sacred: list[list[float]],
               threshold: float) -> list[list[float]]:
     """Every stretch inside [span_start,span_end] that should be tightened: word-gaps AND detected
-    silences (incl. leading/trailing), > threshold, whose midpoint is not sacred. Merged + sorted."""
+    silences (incl. leading/trailing), > threshold. Protection may retain a short pause, but it can
+    never hide silence above the protected-pause ceiling. Merged + sorted."""
     gaps: list[list[float]] = []
     if inside:
         if inside[0]["start"] - span_start > threshold:
@@ -165,13 +194,24 @@ def span_gaps(span_start: float, span_end: float, inside: list[dict],
         a, b = max(ss, span_start), min(se, span_end)
         if b - a > threshold:
             gaps.append([a, b])
-    gaps = [g for g in gaps if not in_any((g[0] + g[1]) / 2.0, sacred)]
+    gaps = _subtract_intervals(
+        _merge(gaps),
+        [_word_protection(word) for word in inside],
+    )
+    gaps = [
+        gap
+        for gap in gaps
+        if not (
+            in_any((gap[0] + gap[1]) / 2.0, sacred)
+            and gap[1] - gap[0] <= PROTECTED_PAUSE_CEILING
+        )
+    ]
     return _merge(gaps)
 
 
 def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[list[float]],
                      threshold: float, target: float,
-                     silences: list[list[float]], max_gap: float = 0.6) -> list[list[float]]:
+                     silences: list[list[float]], max_gap: float = 0.28) -> list[list[float]]:
     """Within each kept span, cap every dead-air stretch > threshold to `target` (unless sacred).
 
     Dead air = word-gaps OR silencedetect spans (so a span with no words is still tightened).
@@ -182,19 +222,103 @@ def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[li
     """
     eff_threshold = min(threshold, max_gap)
     keep_len = min(target, max_gap)
+    onset_handle = min(WORD_ONSET_HANDLE, keep_len)
+    trailing_handle = max(0.0, keep_len - onset_handle)
     segments: list[list[float]] = []
     for span_start, span_end in keep:
         inside = [w for w in words if w["start"] >= span_start - 1e-6 and w["end"] <= span_end + 1e-6]
         seg_start = span_start
         for g0, g1 in span_gaps(span_start, span_end, inside, silences, sacred, eff_threshold):
-            keep_until = g0 + keep_len
+            keep_until = g0 + trailing_handle
             if keep_until > seg_start + 1e-6:
                 segments.append([seg_start, keep_until])
-            seg_start = g1
+            seg_start = max(keep_until, g1 - onset_handle)
         if span_end > seg_start + 1e-6:
             segments.append([seg_start, span_end])
     # drop zero/negative-length segments
     return [[round(s, 3), round(e, 3)] for s, e in segments if e - s > 0.02]
+
+
+def build_audio_filter(segments: list[list[float]], xfade: float) -> tuple[str, str]:
+    """Build an O(frames + segments) audio splice graph for this FFmpeg build.
+
+    ``aselect`` is intentionally not used: the macOS FFmpeg build used for Eddy routes frames with
+    a zero/NaN selection result instead of dropping them. ``asegment`` decodes once and sends each
+    audio frame to exactly one interval. Odd outputs are the requested keep spans; even outputs are
+    discarded. This avoids the old N-way ``atrim`` fan-out that made a 329-cut edit appear stalled.
+    """
+    normalized = _merge([list(segment) for segment in segments])
+    if not normalized:
+        raise ValueError("audio splice requires at least one segment")
+    boundaries = [point for segment in normalized for point in segment]
+    if any(end <= start for start, end in normalized):
+        raise ValueError("audio splice segments must have positive duration")
+
+    output_count = len(boundaries) + 1
+    outputs = "".join(f"[as{i}]" for i in range(output_count))
+    timestamps = "|".join(f"{point:.3f}" for point in boundaries)
+    filters = [f"[0:a]asegment=timestamps={timestamps}{outputs}"]
+    keep_labels: list[str] = []
+    for output_index in range(output_count):
+        if output_index % 2 == 0:
+            filters.append(f"[as{output_index}]anullsink")
+            continue
+        segment_index = output_index // 2
+        start, end = normalized[segment_index]
+        duration = end - start
+        fade_duration = max(0.001, min(xfade, duration / 3.0))
+        keep_label = f"ak{segment_index}"
+        keep_labels.append(f"[{keep_label}]")
+        filters.append(
+            f"[as{output_index}]asetpts=PTS-STARTPTS,"
+            f"afade=t=in:st=0:d={fade_duration:.4f},"
+            f"afade=t=out:st={max(0.0, duration - fade_duration):.4f}:d={fade_duration:.4f}"
+            f"[{keep_label}]"
+        )
+
+    if len(keep_labels) == 1:
+        filters.append(
+            f"{keep_labels[0]}adeclick=w=55:o=75:a=2:t=2:b=2:m=s[aout]"
+        )
+    else:
+        filters.append(
+            f"{''.join(keep_labels)}concat=n={len(keep_labels)}:v=0:a=1,"
+            "adeclick=w=55:o=75:a=2:t=2:b=2:m=s[aout]"
+        )
+    return ";".join(filters), "[aout]"
+
+
+def localize_segments(
+    segments: list[list[float]],
+    *,
+    seek_preroll: float = SEEK_PREROLL,
+) -> tuple[float, float, list[list[float]]]:
+    """Translate source-time segments into a bounded, accurately-seeked decode window."""
+    normalized = _merge([list(segment) for segment in segments])
+    if not normalized:
+        raise ValueError("splice requires at least one segment")
+    seek_start = max(0.0, normalized[0][0] - seek_preroll)
+    seek_end = normalized[-1][1] + seek_preroll
+    localized = [
+        [round(start - seek_start, 6), round(end - seek_start, 6)]
+        for start, end in normalized
+    ]
+    return seek_start, seek_end - seek_start, localized
+
+
+def build_video_timeline(segments: list[list[float]]) -> tuple[str, str]:
+    """Return a frame selector and gapless PTS expression that preserve source durations."""
+    selectors: list[str] = []
+    for start, end in segments:
+        condition = f"gte(T,{start:.6f})*lt(T,{end:.6f})"
+        selectors.append(condition.replace("T", "t"))
+    removed_terms = [f"{segments[0][0]:.6f}"]
+    for previous, current in zip(segments, segments[1:], strict=False):
+        gap = current[0] - previous[1]
+        if gap > 1e-9:
+            removed_terms.append(f"{gap:.6f}*gte(T,{current[0]:.6f})")
+    timeline = f"(T-({'+'.join(removed_terms)}))/TB"
+    return "+".join(selectors), timeline
 
 
 def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
@@ -222,6 +346,8 @@ def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
     out.parent.mkdir(parents=True, exist_ok=True)
     vtmp = out.with_suffix(".vonly.mp4")
     atmp = out.with_suffix(".aonly.m4a")
+    seek_start, seek_duration, local_segments = localize_segments(segments)
+    input_args = ["-ss", f"{seek_start:.6f}"] if seek_start > 0 else []
 
     def ff(cmd: list[str], what: str) -> None:
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -230,7 +356,10 @@ def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
             raise RuntimeError(f"ffmpeg splice {what} failed")
 
     # VIDEO: one decode, per-frame keep-test (select), re-stamp to drop gaps. fps normalizes CFR.
-    expr = "+".join(f"between(t,{s:.3f},{e:.3f})" for s, e in segments)
+    # End-exclusive selection prevents a duplicated frame at joins. The PTS expression maps every
+    # kept frame to its source-relative position inside the gapless output, so frame rounding cannot
+    # accumulate one whole frame of duration at every cut.
+    expr, video_pts = build_video_timeline(local_segments)
     if scale:
         sw, sh = scale
         vscale = (f",scale={sw}:{sh}:force_original_aspect_ratio=decrease,"
@@ -240,26 +369,20 @@ def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
     # no_audio: video-only output (e.g. a co-spliced SCREEN track whose audio the composite discards).
     # Skips the audio + mux passes entirely — the expensive part on a 4K screen decode.
     vtarget = out if no_audio else vtmp
-    ff(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-an",
-        "-vf", f"fps={fps},select='{expr}',setpts=N/FRAME_RATE/TB{vscale}",
+    ff(["ffmpeg", "-y", *input_args, "-i", str(src), "-t", f"{seek_duration:.6f}",
+        "-map", "0:v:0", "-an",
+        "-vf", f"fps={fps},select='{expr}',setpts='{video_pts}'{vscale}",
+        "-fps_mode", "vfr",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
         "-movflags", "+faststart", str(vtarget)], "video")
     if no_audio:
         return
 
-    # AUDIO: atrim each kept span + a short in/out fade (de-click) + concat (aselect doesn't drop
-    # frames in this ffmpeg build). Audio only — no video decode, no cross-stream sync — so hundreds
-    # of segments stay cheap. The fade is capped at dur/3 so very short segments don't over-fade.
-    aparts = []
-    for i, (s, e) in enumerate(segments):
-        dur = e - s
-        fd = max(0.001, min(xfade, dur / 3.0))
-        aparts.append(
-            f"[0:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS,"
-            f"afade=t=in:st=0:d={fd:.4f},afade=t=out:st={max(0.0, dur - fd):.4f}:d={fd:.4f}[a{i}]")
-    alabels = "".join(f"[a{i}]" for i in range(len(segments)))
-    afc = ";".join(aparts + [f"{alabels}concat=n={len(segments)}:v=0:a=1[a]"])
-    ff(["ffmpeg", "-y", "-i", str(src), "-vn", "-filter_complex", afc, "-map", "[a]",
+    # AUDIO: decode once, route each frame to one segment, de-click joins, then concatenate. This is
+    # linear in input frames; the old N-way atrim graph evaluated every frame against every segment.
+    afc, audio_output = build_audio_filter(local_segments, xfade)
+    ff(["ffmpeg", "-y", *input_args, "-i", str(src), "-t", f"{seek_duration:.6f}",
+        "-vn", "-filter_complex", afc, "-map", audio_output,
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(atmp)], "audio")
 
     # MUX (stream copy) — no sync problem, just interleave the two finished streams.
@@ -284,11 +407,16 @@ def main() -> int:
                     help="de-click fade at each join, seconds (length-preserving)")
     ap.add_argument("--silence-db", type=float, default=-30.0,
                     help="silencedetect noise floor in dB (dead-air detection)")
-    ap.add_argument("--max-gap", type=float, default=0.6,
+    ap.add_argument("--max-gap", type=float, default=0.28,
                     help="hard ceiling on any internal gap inside a kept span, seconds (dead-air kill)")
     ap.add_argument("--retake-window", type=float, default=3.0,
                     help="window (s) for IMMEDIATE stutter/false-start detection — keep small (~3s); "
                          "wide-gap retakes go through --drop, not this scan")
+    ap.add_argument(
+        "--no-auto-retakes",
+        action="store_true",
+        help="disable legacy n-gram guesses; V3 uses host-resolved Editorial Review Ledger drops",
+    )
     ap.add_argument("--drop", default=None,
                     help="JSON file of explicit source-second spans to remove: "
                          "[[a,b],...] or {\"explicit_drops\":[{\"span\":[a,b]},...]}")
@@ -334,7 +462,11 @@ def main() -> int:
             return 2
         # Retake removal wired INTO the cut: excise the earlier of each adjacent near-duplicate
         # phrase (last-take bias) plus any explicit surgical drops, BEFORE gap-tightening.
-        retakes = detect_retakes(words, window_s=args.retake_window, sacred=sacred)
+        retakes = (
+            []
+            if args.no_auto_retakes
+            else detect_retakes(words, window_s=args.retake_window, sacred=sacred)
+        )
         if args.drop:
             dd = load(args.drop)
             raw = dd.get("explicit_drops", []) if isinstance(dd, dict) else dd
