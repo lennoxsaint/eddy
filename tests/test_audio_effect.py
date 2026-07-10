@@ -195,3 +195,75 @@ def test_descript_prompt_always_requests_full_intensity_on_every_clip() -> None:
 
     assert "every clip" in prompt
     assert "100% intensity" in prompt
+
+
+def test_unchanged_descript_export_retries_once_and_uses_green_result(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    calls: list[Path] = []
+    survival_results = iter([False, True])
+
+    def fake_studio_sound(
+        wav: Path,
+        out: Path,
+        token: str,
+        intensity: int,
+    ) -> Path:
+        calls.append(out)
+        out.write_bytes(b"cleaned")
+        return out
+
+    monkeypatch.setattr(descript, "studio_sound", fake_studio_sound)
+    monkeypatch.setattr(descript, "parity_ok", lambda source, cleaned: True)
+    monkeypatch.setattr(
+        descript,
+        "effect_survival_ok",
+        lambda source, cleaned, work: next(survival_results),
+    )
+
+    result = descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
+
+    assert result == tmp_path / "work/retry-2/descript-studio-sound.m4a"
+    assert calls == [
+        tmp_path / "work/descript-studio-sound.m4a",
+        tmp_path / "work/retry-2/descript-studio-sound.m4a",
+    ]
+    assert '"event": "descript_effect_retry"' in capsys.readouterr().err
+
+
+def test_descript_effect_retry_stops_after_second_unchanged_export(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    calls: list[Path] = []
+
+    def fake_studio_sound(
+        wav: Path,
+        out: Path,
+        token: str,
+        intensity: int,
+    ) -> Path:
+        calls.append(out)
+        out.write_bytes(b"cleaned")
+        return out
+
+    monkeypatch.setattr(descript, "studio_sound", fake_studio_sound)
+    monkeypatch.setattr(descript, "parity_ok", lambda source, cleaned: True)
+    monkeypatch.setattr(
+        descript,
+        "effect_survival_ok",
+        lambda source, cleaned, work: False,
+    )
+
+    result = descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
+
+    assert result is None
+    assert len(calls) == 2

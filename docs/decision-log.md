@@ -1,5 +1,17 @@
 # Eddy decision log
 
+## 2026-07-10 - Missing Descript effects retry inside the audio boundary
+
+- A provider response that says Studio Sound was enabled does not override an unchanged exported
+  waveform.
+- When the Effect-Survival Gate finds `descript_effect_not_rendered`, Eddy automatically starts one
+  fresh private Descript render and repeats parity and waveform proof before returning a blocker.
+- API errors, invalid exports, and timing drift still fail immediately. A second unchanged export
+  still blocks, and no local-EQ fallback may populate `final/`.
+
+This keeps the proof gate honest while removing a needless host-repair round trip for a transient
+Descript export that acknowledged the effect but did not render it.
+
 ## 2026-07-10 - Delivered cadence gets bounded no-credit repair
 
 - After Studio Sound, Eddy retranscribes the delivered long and repairs word-gap outliers by removing
