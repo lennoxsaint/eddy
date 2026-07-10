@@ -71,7 +71,7 @@ def test_splice_preserves_onset_preroll_and_never_removes_through_words() -> Non
         max_gap=0.28,
     )
 
-    assert segments == [[0.0, 0.14], [0.64, 0.8]]
+    assert segments == [[0.0, 0.14], [0.68, 0.8]]
 
 
 def test_single_pass_audio_splice_keeps_only_requested_intervals(tmp_path: Path) -> None:
@@ -308,7 +308,67 @@ def test_absurd_whisper_word_duration_cannot_hide_audio_truth_silence() -> None:
         0.2,
     )
 
-    assert any(start <= 2.0 and end >= 4.5 for start, end in gaps)
+    assert any(start == 1.4 and end >= 4.6 for start, end in gaps)
+
+
+def test_audio_truth_silence_keeps_only_the_configured_handles() -> None:
+    splice = _load_script("splice")
+    words = [
+        {"word": "before", "start": 0.0, "end": 0.2},
+        {"word": "stretched", "start": 0.3, "end": 1.7},
+        {"word": "after", "start": 1.8, "end": 2.0},
+    ]
+
+    segments = splice.compute_segments(
+        [[0.0, 2.0]],
+        words,
+        [],
+        threshold=0.2,
+        target=0.1,
+        silences=[[0.4, 1.6]],
+        max_gap=0.28,
+    )
+
+    assert segments == [[0.0, 0.44], [1.54, 2.0]]
+
+
+def test_subthreshold_keep_edges_cannot_combine_into_a_slow_join() -> None:
+    splice = _load_script("splice")
+    words = [
+        {"word": "before", "start": 0.0, "end": 0.8},
+        {"word": "after", "start": 2.12, "end": 3.0},
+    ]
+
+    segments = splice.compute_segments(
+        [[0.0, 1.0], [2.0, 3.0]],
+        words,
+        [],
+        threshold=0.2,
+        target=0.1,
+        silences=[],
+        max_gap=0.28,
+    )
+
+    assert segments != [[0.0, 1.0], [2.0, 3.0]]
+    retained_join_gap = (segments[0][1] - 0.8) + (2.12 - segments[-1][0])
+    assert retained_join_gap <= 0.2
+
+
+def test_trailing_silence_does_not_create_a_silence_only_onset_segment() -> None:
+    splice = _load_script("splice")
+    words = [{"word": "finished", "start": 0.0, "end": 1.0}]
+
+    segments = splice.compute_segments(
+        [[0.0, 2.0]],
+        words,
+        [],
+        threshold=0.2,
+        target=0.1,
+        silences=[[0.8, 2.0]],
+        max_gap=0.28,
+    )
+
+    assert segments == [[0.0, 0.84]]
 
 
 def test_screen_proof_requires_one_quarter_of_the_short() -> None:

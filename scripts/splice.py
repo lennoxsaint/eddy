@@ -14,7 +14,7 @@ this script only executes it. Never regenerates or overdubs — it only removes 
 
 Usage:
   splice.py --in source.mp4 --words transcript.json --cutlist cutlist.json --out edited.mp4
-            [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.012] [--silence-db -30]
+            [--gap-threshold 0.2] [--gap-target 0.1] [--xfade 0.012] [--silence-db -27]
             [--segments prior.segments.json]   # reuse EXACT segments (co-splice a screen track)
 
 cutlist.json:
@@ -180,24 +180,32 @@ def span_gaps(span_start: float, span_end: float, inside: list[dict],
     """Every stretch inside [span_start,span_end] that should be tightened: word-gaps AND detected
     silences (incl. leading/trailing), > threshold. Protection may retain a short pause, but it can
     never hide silence above the protected-pause ceiling. Merged + sorted."""
-    gaps: list[list[float]] = []
+    transcript_gaps: list[list[float]] = []
     if inside:
-        if inside[0]["start"] - span_start > threshold:
-            gaps.append([span_start, inside[0]["start"]])
+        # Two retained keep edges meet in the delivered timeline. Cap each edge independently so
+        # individually sub-threshold pauses cannot add up to a slow join after concatenation.
+        boundary_threshold = min(threshold, MIN_BOUNDARY_HANDLE)
+        if inside[0]["start"] - span_start > boundary_threshold:
+            transcript_gaps.append([span_start, inside[0]["start"]])
         for i in range(1, len(inside)):
             g0, g1 = inside[i - 1]["end"], inside[i]["start"]
             if g1 - g0 > threshold:
-                gaps.append([g0, g1])
-        if span_end - inside[-1]["end"] > threshold:
-            gaps.append([inside[-1]["end"], span_end])
+                transcript_gaps.append([g0, g1])
+        if span_end - inside[-1]["end"] > boundary_threshold:
+            transcript_gaps.append([inside[-1]["end"], span_end])
+    transcript_gaps = _subtract_intervals(
+        _merge(transcript_gaps),
+        [_word_protection(word) for word in inside],
+    )
+    audio_gaps: list[list[float]] = []
     for ss, se in silences:
         a, b = max(ss, span_start), min(se, span_end)
         if b - a > threshold:
-            gaps.append([a, b])
-    gaps = _subtract_intervals(
-        _merge(gaps),
-        [_word_protection(word) for word in inside],
-    )
+            audio_gaps.append([a, b])
+    # Measured silence is audio truth and must not be weakened by malformed Whisper durations.
+    # Transcript word protection applies only to transcript-inferred gaps; the configured handles
+    # below preserve word onsets at measured-silence boundaries.
+    gaps = _merge([*transcript_gaps, *audio_gaps])
     gaps = [
         gap
         for gap in gaps
@@ -227,12 +235,23 @@ def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[li
     segments: list[list[float]] = []
     for span_start, span_end in keep:
         inside = [w for w in words if w["start"] >= span_start - 1e-6 and w["end"] <= span_end + 1e-6]
+        if inside:
+            first_start = float(inside[0]["start"])
+            last_end = float(inside[-1]["end"])
+            leading_midpoint = (span_start + first_start) / 2.0
+            trailing_midpoint = (last_end + span_end) / 2.0
+            if first_start - span_start > onset_handle and not in_any(leading_midpoint, sacred):
+                span_start = first_start - onset_handle
+            if span_end - last_end > trailing_handle and not in_any(trailing_midpoint, sacred):
+                span_end = last_end + trailing_handle
         seg_start = span_start
         for g0, g1 in span_gaps(span_start, span_end, inside, silences, sacred, eff_threshold):
-            keep_until = g0 + trailing_handle
+            touches_start = g0 <= span_start + 1e-6
+            touches_end = g1 >= span_end - 1e-6
+            keep_until = g0 if touches_start else g0 + trailing_handle
             if keep_until > seg_start + 1e-6:
                 segments.append([seg_start, keep_until])
-            seg_start = max(keep_until, g1 - onset_handle)
+            seg_start = span_end if touches_end else max(keep_until, g1 - onset_handle)
         if span_end > seg_start + 1e-6:
             segments.append([seg_start, span_end])
     # drop zero/negative-length segments
@@ -405,7 +424,7 @@ def main() -> int:
     ap.add_argument("--gap-target", type=float, default=None)
     ap.add_argument("--xfade", type=float, default=0.012,
                     help="de-click fade at each join, seconds (length-preserving)")
-    ap.add_argument("--silence-db", type=float, default=-30.0,
+    ap.add_argument("--silence-db", type=float, default=-27.0,
                     help="silencedetect noise floor in dB (dead-air detection)")
     ap.add_argument("--max-gap", type=float, default=0.28,
                     help="hard ceiling on any internal gap inside a kept span, seconds (dead-air kill)")

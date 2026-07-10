@@ -1,5 +1,17 @@
 # Eddy decision log
 
+## 2026-07-10 - Measured silence owns pacing cuts
+
+- Transcript word protection applies only to transcript-inferred gaps. Measured audio silence cannot
+  be hidden by an implausibly long Whisper word timestamp.
+- Kept spans start 60 ms before their first word and end 40 ms after their last word, so separate
+  source edges cannot accumulate into a slow delivered join.
+- The creator-footage silence floor is `-27 dB`; the delivered `-30 dB` verifier still enforces the
+  `0.28s` ceiling. The calibration edit measured a `0.269s` worst pause before Studio Sound.
+
+This repairs the false pacing proof where raw room tone plus malformed word durations survived the
+cut and Studio Sound later exposed those retained intervals as obvious dead air.
+
 ## 2026-07-10 - Studio Sound promotion uses provider and signal truth
 
 - Descript success, `project_changed`, private provenance, duration parity, and a material waveform
