@@ -296,12 +296,71 @@ def test_descript_provider_timeout_retries_once(
     monkeypatch.setattr(descript, "studio_sound", fake_studio_sound)
     monkeypatch.setattr(descript, "parity_ok", lambda source, cleaned: True)
     monkeypatch.setattr(descript, "effect_survival_ok", lambda source, cleaned, work: True)
+    monkeypatch.setattr(descript.time, "sleep", lambda seconds: None)
 
     result = descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
 
     assert result == tmp_path / "work/retry-2/descript-studio-sound.m4a"
     assert len(calls) == 2
     assert '"event": "descript_provider_retry"' in capsys.readouterr().err
+
+
+def test_descript_provider_retries_two_transient_failures_before_success(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    calls: list[Path] = []
+    sleeps: list[float] = []
+
+    def fake_studio_sound(
+        wav: Path,
+        out: Path,
+        token: str,
+        intensity: int,
+    ) -> Path:
+        calls.append(out)
+        if len(calls) < 3:
+            raise RuntimeError(f"descript_job_failed:job-{len(calls)}:error")
+        out.write_bytes(b"cleaned")
+        return out
+
+    monkeypatch.setattr(descript, "studio_sound", fake_studio_sound)
+    monkeypatch.setattr(descript, "parity_ok", lambda source, cleaned: True)
+    monkeypatch.setattr(descript, "effect_survival_ok", lambda source, cleaned, work: True)
+    monkeypatch.setattr(descript.time, "sleep", sleeps.append)
+
+    result = descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
+
+    assert result == tmp_path / "work/retry-3/descript-studio-sound.m4a"
+    assert len(calls) == 3
+    assert sleeps == [descript.PROVIDER_RETRY_DELAY_S, descript.PROVIDER_RETRY_DELAY_S * 2]
+    assert capsys.readouterr().err.count('"event": "descript_provider_retry"') == 2
+
+
+def test_descript_failed_job_logs_sanitized_provider_message(
+    monkeypatch,
+    capsys,
+) -> None:
+    descript = load_descript_script()
+    monkeypatch.setattr(
+        descript,
+        "api",
+        lambda method, path, token, payload: {
+            "job_state": "stopped",
+            "result": {"status": "error", "error_message": "Job failed unexpectedly."},
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="descript_job_failed:job-id:error"):
+        descript.wait_job("job-id", "token")
+
+    stderr = capsys.readouterr().err
+    assert '"event": "descript_job_failed"' in stderr
+    assert '"error_message": "Job failed unexpectedly."' in stderr
 
 
 def test_descript_auth_failure_does_not_retry(tmp_path: Path, monkeypatch) -> None:

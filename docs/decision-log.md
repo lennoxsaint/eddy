@@ -1,5 +1,15 @@
 # Eddy decision log
 
+## 2026-07-10 - Provider retries are separate from effect retries
+
+- A stopped Descript job, timeout, or transient API error gets up to three operational attempts with
+  a short increasing backoff. These attempts do not consume the two-render budget reserved for an
+  export where Studio Sound was reported applied but the waveform stayed unchanged.
+- Failed jobs receipt-log Descript's sanitized status and error message before retrying. Auth,
+  provenance, and hash faults still fail immediately.
+- Persistent provider failure remains an exact blocker; Eddy never substitutes local EQ and calls
+  it Studio Sound.
+
 ## 2026-07-10 - Short-only retakes need explicit splice inputs
 
 - `shorts[].drop` is a backward-compatible source-time removal list for a retake that survives only
