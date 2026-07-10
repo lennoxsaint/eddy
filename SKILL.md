@@ -95,8 +95,9 @@ eddy status <job-id>
 6. Compile all body drops, non-selected retake variants, hook removals, and Short removals into
    explicit splices. Tighten gaps above 0.2s to 0.1s, preserve word-onset pre-roll, cap unprotected
    delivered gaps at 0.28s, and cap protected silence at 0.8s. Reuse one shared body receipt.
-7. Apply real Descript Studio Sound to audio only. API success and duration parity are insufficient:
-   the local returned artifact must pass the calibrated **Effect-Survival Gate**. If the effect did
+7. Apply real Descript Studio Sound to audio only. Require provider success, a changed project,
+   private export provenance, duration parity, and a signal-changing **Effect-Survival Gate**. Keep
+   echo and voice-texture scores as review diagnostics, not false promotion vetoes. If the effect did
    not survive export, block with `descript_effect_not_rendered`; do not silently fall back.
 8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
    Prove semantic collision safety before compositing.

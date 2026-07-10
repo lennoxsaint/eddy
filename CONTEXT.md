@@ -25,8 +25,10 @@ A complete long-form edit that reuses the Primary Long's body but opens with a d
 _Avoid_: Independent edit, draft
 
 **Effect-Survival Gate**:
-Proof that Descript's returned audio contains a real applied effect while preserving timing.
-_Avoid_: Successful API job, duration parity
+Provider success plus proof that Descript's returned audio contains a real signal-changing effect
+while preserving timing. Echo and voice-texture heuristics remain diagnostics, not provider
+classifiers or promotion vetoes.
+_Avoid_: Successful API job alone, subjective quality oracle
 
 **Proof-Gated Edit**:
 An edit whose mandatory deterministic and configured quality gates are all green.

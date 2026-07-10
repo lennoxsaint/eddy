@@ -1,4 +1,4 @@
-"""Calibrated proof that a Descript export contains more than the source audio."""
+"""Proof that a Descript export contains a rendered effect without timing drift."""
 
 from __future__ import annotations
 
@@ -16,12 +16,11 @@ class EffectCalibration:
     max_duration_ratio_delta: float
     max_duration_absolute_delta_s: float
     max_normalized_source_correlation: float
-    max_echo_score: float
 
     @classmethod
     def default(cls) -> "EffectCalibration":
-        # This is deliberately strict about unchanged/gain-only exports. Quality calibration remains
-        # a separate gate; this threshold proves only that an effect survived the export round-trip.
+        # This is deliberately strict about unchanged/gain-only exports. It proves only that the
+        # provider-applied effect survived the export round-trip; subjective quality needs listening.
         return cls(
             max_duration_ratio_delta=0.01,
             max_duration_absolute_delta_s=1.0,
@@ -29,7 +28,6 @@ class EffectCalibration:
             # fixture, so the gate must sit below codec-only movement. A real denoise/de-reverb
             # pass moves the waveform materially farther; owner dogfoods ratchet this value only.
             max_normalized_source_correlation=0.995,
-            max_echo_score=0.15,
         )
 
 
@@ -98,10 +96,6 @@ def evaluate_effect_survival(
         blockers.append("descript_duration_parity_failed")
     if abs(correlation) > calibration.max_normalized_source_correlation:
         blockers.append("descript_effect_not_rendered")
-    if not quality["measurable"]:
-        blockers.append("descript_quality_unmeasurable")
-    elif float(quality["echo_score"]) > calibration.max_echo_score:
-        blockers.append("descript_quality_not_studio_sound")
     return EffectSurvivalResult(not blockers, tuple(blockers), metrics)
 
 

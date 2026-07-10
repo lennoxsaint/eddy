@@ -111,7 +111,10 @@ def test_changed_same_duration_audio_passes_effect_survival(tmp_path: Path, monk
     assert result.metrics["duration_delta_s"] == 0.0
 
 
-def test_changed_but_echoey_audio_fails_studio_quality(tmp_path: Path, monkeypatch) -> None:
+def test_changed_audio_is_not_blocked_by_uncalibrated_echo_diagnostic(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     source = tmp_path / "source.wav"
     exported = tmp_path / "exported.wav"
     samples = fixture_samples()
@@ -124,8 +127,9 @@ def test_changed_but_echoey_audio_fails_studio_quality(tmp_path: Path, monkeypat
 
     result = evaluate_effect_survival(source, exported, EffectCalibration.default())
 
-    assert result.passed is False
-    assert "descript_quality_not_studio_sound" in result.blockers
+    assert result.passed is True
+    assert result.blockers == ()
+    assert result.metrics["echo_score"] == 0.68
 
 
 def test_duration_shift_and_malformed_audio_fail_closed(tmp_path: Path) -> None:
@@ -160,7 +164,10 @@ def test_polarity_inversion_is_not_mistaken_for_studio_sound(tmp_path: Path, mon
     assert "descript_effect_not_rendered" in result.blockers
 
 
-def test_unmeasurable_changed_audio_is_blocked(tmp_path: Path, monkeypatch) -> None:
+def test_unmeasurable_echo_diagnostic_does_not_block_proven_effect(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     samples = fixture_samples(64_000)
     source = tmp_path / "source.wav"
     exported = tmp_path / "changed.wav"
@@ -176,8 +183,9 @@ def test_unmeasurable_changed_audio_is_blocked(tmp_path: Path, monkeypatch) -> N
 
     result = evaluate_effect_survival(source, exported, EffectCalibration.default())
 
-    assert result.passed is False
-    assert "descript_quality_unmeasurable" in result.blockers
+    assert result.passed is True
+    assert result.blockers == ()
+    assert result.metrics["echo_measurable"] == 0.0
 
 
 def test_descript_prompt_always_requests_full_intensity_on_every_clip() -> None:

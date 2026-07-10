@@ -1,5 +1,16 @@
 # Eddy decision log
 
+## 2026-07-10 - Studio Sound promotion uses provider and signal truth
+
+- Descript success, `project_changed`, private provenance, duration parity, and a material waveform
+  change are the blocking Studio Sound proof chain.
+- Unchanged audio, gain-only audio, invalid exports, provider failures, and timing drift still block.
+- Echo and voice-texture metrics stay in receipts for listening review but cannot independently veto
+  promotion because they are not calibrated classifiers for Descript's proprietary effect.
+
+This is the smallest repair for the real 100% Studio Sound audition that Descript confirmed and that
+changed the waveform materially, but which Eddy falsely rejected using an absolute echo heuristic.
+
 ## 2026-07-10 - Editorial truth belongs to delivered media
 
 - Preflight creates an Editorial Review Ledger from the complete transcript and measured audio.
