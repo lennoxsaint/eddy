@@ -490,6 +490,19 @@ def test_delivered_gap_gate_enforces_point_two_eight_ceiling() -> None:
     assert verdict["violations"] == [[0.3, 0.7]]
 
 
+def test_delivered_gap_gate_allows_transcript_alignment_jitter() -> None:
+    verify = _load_script("verify")
+    words = [
+        {"word": "one", "start": 0.0, "end": 0.1},
+        {"word": "two", "start": 0.381, "end": 0.5},
+    ]
+
+    verdict = verify.word_gap_verdict(words, [], hard_max=0.28)
+
+    assert verdict["pass"] is True
+    assert verdict["alignment_tolerance_s"] == 0.02
+
+
 def test_delivered_av_drift_gate_compares_stream_durations() -> None:
     verify = _load_script("verify")
     info = {

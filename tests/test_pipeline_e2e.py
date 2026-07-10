@@ -5,11 +5,99 @@ from pathlib import Path
 
 import pytest
 
-from eddy.pipeline import PipelineRunner
+import eddy.pipeline as pipeline
+from eddy.pipeline import (
+    PipelineRunner,
+    _delivered_gap_violations,
+    _repair_delivered_cadence,
+)
 from eddy.runtime import JobManager, JobState
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_delivered_gap_repair_targets_only_outliers(tmp_path: Path) -> None:
+    transcript = tmp_path / "words.json"
+    transcript.write_text(
+        json.dumps(
+            {
+                "words": [
+                    {"word": "one", "start": 0.0, "end": 0.1},
+                    {"word": "two", "start": 0.25, "end": 0.35},
+                    {"word": "three", "start": 0.75, "end": 0.85},
+                ]
+            }
+        )
+        + "\n"
+    )
+
+    assert _delivered_gap_violations(transcript) == [[0.35, 0.75]]
+
+
+def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    media = tmp_path / "long.mp4"
+    media.write_bytes(b"before")
+    words = tmp_path / "words.json"
+    words.write_text(
+        json.dumps(
+            {
+                "words": [
+                    {"word": "one", "start": 0.0, "end": 0.1},
+                    {"word": "two", "start": 0.7, "end": 0.8},
+                ]
+            }
+        )
+        + "\n"
+    )
+    work = tmp_path / "stage"
+    work.mkdir()
+    receipts = tmp_path / "provider-receipts.jsonl"
+    transcribed: list[Path] = []
+
+    def fake_splice(
+        root: Path,
+        source: Path,
+        transcript: Path,
+        cutlist: Path,
+        output: Path,
+        **kwargs,
+    ) -> None:
+        assert source == media
+        assert transcript == words
+        assert json.loads(cutlist.read_text())["keep"] == [[0.0, 1.0]]
+        output.write_bytes(b"after")
+        output.with_name(f"{output.stem}.segments.json").write_text(
+            json.dumps({"segments": [[0.0, 0.2], [0.6, 1.0]]}) + "\n"
+        )
+
+    monkeypatch.setattr(pipeline, "_media_duration", lambda path: 1.0)
+    monkeypatch.setattr(pipeline, "_splice", fake_splice)
+    monkeypatch.setattr(
+        pipeline,
+        "_transcribe_final",
+        lambda root, path, output: transcribed.append(path),
+    )
+
+    repaired = _repair_delivered_cadence(
+        tmp_path,
+        media,
+        words,
+        work,
+        label="long-1",
+        receipts=receipts,
+        artifact="long-primary.mp4",
+    )
+
+    row = json.loads(receipts.read_text())
+    assert repaired is True
+    assert media.read_bytes() == b"after"
+    assert row["event"] == "post_descript_cadence_repair"
+    assert row["before_sha256"] != row["output_sha256"]
+    assert transcribed == [media]
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")

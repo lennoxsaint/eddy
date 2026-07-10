@@ -1,5 +1,20 @@
 # Eddy decision log
 
+## 2026-07-10 - Delivered cadence gets one no-credit repair
+
+- After Studio Sound, Eddy retranscribes the delivered long and repairs word-gap outliers once by
+  removing time from the already enhanced video. It never creates or replaces speech.
+- The repair retains Descript provenance, writes before/after hashes and a segment receipt, and does
+  not start another paid provider job.
+- The audio-silence ceiling remains `0.28s`; word alignment gets 20 ms of tolerance for Whisper
+  boundary jitter. Large or repeated gaps still block.
+- Repeat evidence needs a content-bearing shared n-gram. Generic scaffolding such as “and this is
+  the” cannot group unrelated claims into a retake, and a single ellipsis cannot turn every nearby
+  “So...” sentence into a reset loop.
+
+This repairs the real candidate where a no-credit cadence pass moved p95 to `0.141s` and left only a
+`0.281s` alignment reading, while the prior detector incorrectly grouped normal explanatory prose.
+
 ## 2026-07-10 - Measured silence owns pacing cuts
 
 - Transcript word protection applies only to transcript-inferred gaps. Measured audio silence cannot

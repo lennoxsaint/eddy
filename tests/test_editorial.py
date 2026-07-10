@@ -33,6 +33,52 @@ def test_editorial_ledger_finds_separated_repeat_and_long_gap(tmp_path: Path) ->
     assert ledger["chunks"]
 
 
+def test_generic_sentence_scaffolding_is_not_a_repeat(tmp_path: Path) -> None:
+    transcript = tmp_path / "transcript.json"
+    tokens = [
+        "Two,", "and", "this", "is", "the", "load", "bearing", "trick.",
+        "And", "this", "is", "the", "big", "one.",
+    ]
+    transcript.write_text(
+        json.dumps(
+            {
+                "words": [
+                    _word(token, index * 0.2, index * 0.2 + 0.1)
+                    for index, token in enumerate(tokens)
+                ]
+            }
+        )
+        + "\n"
+    )
+
+    ledger = build_editorial_ledger(transcript)
+
+    assert all(item["kind"] != "repeat" for item in ledger["candidates"])
+
+
+def test_contentful_repeated_claim_still_blocks(tmp_path: Path) -> None:
+    transcript = tmp_path / "transcript.json"
+    tokens = [
+        "The", "fix", "is", "the", "local", "proxy.",
+        "The", "fix", "is", "the", "app", "points", "at", "the", "local", "proxy.",
+    ]
+    transcript.write_text(
+        json.dumps(
+            {
+                "words": [
+                    _word(token, index * 0.2, index * 0.2 + 0.1)
+                    for index, token in enumerate(tokens)
+                ]
+            }
+        )
+        + "\n"
+    )
+
+    ledger = build_editorial_ledger(transcript)
+
+    assert any(item["kind"] == "repeat" for item in ledger["candidates"])
+
+
 def test_editorial_review_must_cover_chunks_and_resolve_candidates(tmp_path: Path) -> None:
     ledger = {
         "chunks": [{"id": "chunk-1", "start": 0.0, "end": 60.0, "text": "text"}],
@@ -129,6 +175,34 @@ def test_legitimate_so_led_sentences_do_not_create_reset_loop(tmp_path: Path) ->
     ledger = build_editorial_ledger(transcript)
 
     assert all(item["kind"] != "reset_loop" for item in ledger["candidates"])
+
+
+def test_ellipsis_continuation_is_not_a_false_start(tmp_path: Path) -> None:
+    transcript = tmp_path / "transcript.json"
+    tokens = [
+        "What", "we", "do", "instead", "is...",
+        "three", "separate", "pieces.",
+        "So", "the", "newer", "Codex...",
+        "only", "talks", "one", "wire", "format.",
+    ]
+    transcript.write_text(
+        json.dumps(
+            {
+                "words": [
+                    _word(token, index * 0.2, index * 0.2 + 0.1)
+                    for index, token in enumerate(tokens)
+                ]
+            }
+        )
+        + "\n"
+    )
+
+    ledger = build_editorial_ledger(transcript)
+
+    assert all(
+        item["kind"] not in {"false_start", "reset_loop"}
+        for item in ledger["candidates"]
+    )
 
 
 def test_audio_and_transcript_gap_evidence_is_deduplicated(tmp_path: Path) -> None:

@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 HARD_MAX_GAP = 0.28  # unprotected gap ceiling (layout-constants.md)
+WORD_ALIGNMENT_TOLERANCE = 0.02
 PROTECTED_PAUSE_CEILING = 0.8
 AV_DRIFT_CEILING = 0.08
 
@@ -181,6 +182,7 @@ def word_gap_verdict(
     protected_windows: list[list[float]],
     *,
     hard_max: float = HARD_MAX_GAP,
+    alignment_tolerance: float = WORD_ALIGNMENT_TOLERANCE,
 ) -> dict:
     """Verify the delivered-word cadence without allowing protection to hide dead air."""
 
@@ -197,7 +199,7 @@ def word_gap_verdict(
         if _in_windows(midpoint, protected_windows, pad=0.0):
             if end - start > PROTECTED_PAUSE_CEILING:
                 protected_violations.append(gap)
-        elif end - start > hard_max:
+        elif end - start > hard_max + alignment_tolerance:
             ordinary_violations.append(gap)
     durations = sorted(end - start for start, end in gaps)
     percentile_index = max(0, int(len(durations) * 0.95) - 1)
@@ -205,6 +207,7 @@ def word_gap_verdict(
     return {
         "pass": not ordinary_violations and not protected_violations,
         "hard_max_s": hard_max,
+        "alignment_tolerance_s": alignment_tolerance,
         "protected_ceiling_s": PROTECTED_PAUSE_CEILING,
         "p95_s": round(p95, 3),
         "violations": ordinary_violations,

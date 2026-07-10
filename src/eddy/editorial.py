@@ -12,6 +12,15 @@ from pathlib import Path
 from typing import Any
 
 
+_GENERIC_REPEAT_TOKENS = frozenset(
+    {
+        "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "i",
+        "in", "is", "it", "of", "on", "or", "so", "that", "the", "this", "to", "we",
+        "you",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class _Phrase:
     index: int
@@ -247,7 +256,11 @@ def _reset_candidates(phrases: list[_Phrase]) -> list[dict[str, Any]]:
 
 
 def _looks_like_reset_loop(group: list[_Phrase]) -> bool:
-    if any(len(phrase.tokens) <= 2 or phrase.text.rstrip().endswith("...") for phrase in group):
+    unfinished_attempts = sum(
+        len(phrase.tokens) <= 2 or phrase.text.rstrip().endswith("...")
+        for phrase in group
+    )
+    if unfinished_attempts >= 2:
         return True
     return any(
         SequenceMatcher(
@@ -263,10 +276,17 @@ def _looks_like_reset_loop(group: list[_Phrase]) -> bool:
 def _false_start_candidates(phrases: list[_Phrase]) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     trailing = {"and", "but", "because", "so", "the", "a", "an", "to", "of"}
-    for phrase in phrases:
+    for index, phrase in enumerate(phrases):
         raw_last = phrase.text.rstrip().split()[-1].lower()
-        unfinished = raw_last.endswith("...") or (
-            len(phrase.tokens) <= 8 and phrase.tokens[-1] in trailing
+        ellipsis = raw_last.endswith("...")
+        following = phrases[index + 1] if index + 1 < len(phrases) else None
+        abandoned_ellipsis = ellipsis and (
+            following is None
+            or _is_reset_phrase(following)
+            or phrase.tokens[:2] == following.tokens[:2]
+        )
+        unfinished = abandoned_ellipsis or (
+            not ellipsis and len(phrase.tokens) <= 8 and phrase.tokens[-1] in trailing
         )
         if not unfinished:
             continue
@@ -404,7 +424,11 @@ def _shares_ngram(left: tuple[str, ...], right: tuple[str, ...], size: int) -> b
     if len(left) < size or len(right) < size:
         return False
     left_grams = {left[index : index + size] for index in range(len(left) - size + 1)}
-    return any(right[index : index + size] in left_grams for index in range(len(right) - size + 1))
+    for index in range(len(right) - size + 1):
+        gram = right[index : index + size]
+        if gram in left_grams and any(token not in _GENERIC_REPEAT_TOKENS for token in gram):
+            return True
+    return False
 
 
 def _chunks(words: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:

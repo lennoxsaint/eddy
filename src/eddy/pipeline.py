@@ -17,6 +17,10 @@ from .proof import measure_motion_activity, screen_proof_verdict
 from .runtime import JobManager, JobState
 
 
+DELIVERED_GAP_HARD_MAX = 0.28
+DELIVERED_GAP_ALIGNMENT_TOLERANCE = 0.02
+
+
 @dataclass(frozen=True, slots=True)
 class Sources:
     camera: Path
@@ -473,6 +477,15 @@ class PipelineRunner:
             if audio_green:
                 final_words = stage / f"final-words-{item.hook.rank}.json"
                 _transcribe_final(self.root, enhanced, final_words)
+                cadence_repaired = _repair_delivered_cadence(
+                    self.root,
+                    enhanced,
+                    final_words,
+                    stage,
+                    label=f"long-{item.hook.rank}",
+                    receipts=attempt / "provider-receipts.jsonl",
+                    artifact=item.output_name,
+                )
                 qa = subprocess.run(
                     [
                         sys.executable,
@@ -504,6 +517,7 @@ class PipelineRunner:
                     {
                         "hook": item.hook.id,
                         "rank": item.hook.rank,
+                        "delivered_cadence_repaired": cadence_repaired,
                         "motion_activity": motion_activity,
                         **qa_payload,
                     }
@@ -837,6 +851,85 @@ def _run(command: list[str], *, cwd: Path) -> None:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _delivered_gap_violations(
+    transcript: Path,
+    *,
+    hard_max: float = DELIVERED_GAP_HARD_MAX,
+    alignment_tolerance: float = DELIVERED_GAP_ALIGNMENT_TOLERANCE,
+) -> list[list[float]]:
+    payload = json.loads(transcript.read_text())
+    words = payload.get("words", [])
+    violations: list[list[float]] = []
+    for left, right in zip(words, words[1:], strict=False):
+        start, end = float(left["end"]), float(right["start"])
+        if end - start > hard_max + alignment_tolerance:
+            violations.append([round(start, 3), round(end, 3)])
+    return violations
+
+
+def _repair_delivered_cadence(
+    root: Path,
+    media: Path,
+    final_words: Path,
+    work: Path,
+    *,
+    label: str,
+    receipts: Path,
+    artifact: str,
+) -> bool:
+    violations = _delivered_gap_violations(final_words)
+    if not violations:
+        return False
+    duration = _media_duration(media)
+    cutlist = work / f"{label}-delivered-cadence-cutlist.json"
+    repaired = work / f"{label}-delivered-cadence.mp4"
+    _write_json(
+        cutlist,
+        {
+            "keep": [[0.0, duration]],
+            "sacred": [],
+            "gap_tighten": {"threshold": 0.2, "target": 0.1},
+        },
+    )
+    before_sha256 = _sha256_file(media)
+    _splice(root, media, final_words, cutlist, repaired)
+    repair_segments = repaired.with_name(f"{repaired.stem}.segments.json")
+    os.replace(repaired, media)
+    _append_receipt(
+        receipts,
+        {
+            "event": "post_descript_cadence_repair",
+            "status": "pass",
+            "artifact": artifact,
+            "violations_before": violations,
+            "before_sha256": before_sha256,
+            "output_sha256": _sha256_file(media),
+            "segments_receipt": str(repair_segments.relative_to(work.parent)),
+        },
+    )
+    _transcribe_final(root, media, final_words)
+    return True
+
+
+def _media_duration(path: Path) -> float:
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return float(result.stdout.strip())
+
+
+def _append_receipt(output: Path, row: dict[str, Any]) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("a") as handle:
+        handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def _sha256_file(path: Path) -> str:
