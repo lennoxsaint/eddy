@@ -1,5 +1,14 @@
 # Eddy decision log
 
+## 2026-07-10 - Short-only retakes need explicit splice inputs
+
+- `shorts[].drop` is a backward-compatible source-time removal list for a retake that survives only
+  inside a Short candidate.
+- Eddy validates each removal against the Short source spans and protected content, subtracts it
+  from screen-proof accounting, and merges it with shared-body drops for the actual camera splice.
+- The merged inputs are receipt-logged. Delivered-media retranscription remains the promotion
+  authority; this control repairs the edit rather than weakening the retake gate.
+
 ## 2026-07-10 - Descript operational failures retry before editorial repair
 
 - A timeout, failed provider job, transient API status, missing import/publish result, or no-change

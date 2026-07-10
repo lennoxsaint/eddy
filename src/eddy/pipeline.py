@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .plan import EditPlanV3, HookPlan
+from .plan import EditPlanV3, HookPlan, ShortPlan
 from .proof import measure_motion_activity, screen_proof_verdict
 from .runtime import JobManager, JobState
 
@@ -557,6 +557,18 @@ class PipelineRunner:
                         "gap_tighten": {"threshold": 0.2, "target": 0.1},
                     },
                 )
+                short_dropfile = stage / f"short-{short_id}-drops.json"
+                short_drop_rows = _merge_short_drops(
+                    render_plan.body_dropfile,
+                    short,
+                    short_dropfile,
+                )
+                self.manager.receipt(
+                    job_id,
+                    "short_splice_inputs",
+                    short_id=short.id,
+                    explicit_drops=short_drop_rows,
+                )
                 short_camera = stage / f"short-{short_id}-camera.mp4"
                 _splice(
                     self.root,
@@ -564,7 +576,7 @@ class PipelineRunner:
                     transcript,
                     cutlist,
                     short_camera,
-                    drop=render_plan.body_dropfile,
+                    drop=short_dropfile,
                 )
                 if sources.screen:
                     short_screen = stage / f"short-{short_id}-screen.mp4"
@@ -810,6 +822,34 @@ def _splice(
     if no_audio:
         command.append("--no-audio")
     _run(command, cwd=root)
+
+
+def _merge_short_drops(body_dropfile: Path, short: ShortPlan, output: Path) -> list[dict[str, Any]]:
+    body_rows = json.loads(body_dropfile.read_text()).get("explicit_drops", [])
+    rows: list[dict[str, Any]] = [
+        {
+            "span": [float(row["span"][0]), float(row["span"][1])],
+            "reason": str(row["reason"]),
+        }
+        for row in body_rows
+    ]
+    rows.extend(
+        {
+            "span": [float(start), float(end)],
+            "reason": f"host_short_drop:{short.id}",
+        }
+        for start, end in short.drop
+    )
+    unique: list[dict[str, Any]] = []
+    seen: set[tuple[float, float]] = set()
+    for row in rows:
+        span = (float(row["span"][0]), float(row["span"][1]))
+        if span in seen:
+            continue
+        seen.add(span)
+        unique.append(row)
+    _write_json(output, {"explicit_drops": unique})
+    return unique
 
 
 def _concat(first: Path, second: Path, output: Path) -> None:

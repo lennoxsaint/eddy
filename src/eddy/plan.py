@@ -52,6 +52,7 @@ class EditorialReview:
 class ShortPlan:
     id: str
     segments: tuple[tuple[float, float], ...]
+    drop: tuple[tuple[float, float], ...]
     screen_proof_segments: tuple[tuple[float, float], ...]
     motion_beats: tuple[dict[str, Any], ...]
 
@@ -169,6 +170,9 @@ class EditPlanV3:
                         and _overlaps(protected_range, variant_range)
                     ):
                         raise PlanValidationError("retake_drop_overlaps_protected_span")
+            for short in shorts:
+                if any(_overlaps(protected_range, dropped) for dropped in short.drop):
+                    raise PlanValidationError("short_drop_overlaps_protected_span")
 
         motion_beats = _dict_sequence(payload.get("motion_beats", []), "motion_beats")
         _validate_motion_beats(motion_beats, label="long_motion")
@@ -239,6 +243,7 @@ class EditPlanV3:
                 {
                     "id": item.id,
                     "segments": [list(value) for value in item.segments],
+                    "drop": [list(value) for value in item.drop],
                     "screen_proof_segments": [list(value) for value in item.screen_proof_segments],
                     "motion_beats": list(item.motion_beats),
                 }
@@ -345,6 +350,12 @@ def _parse_short(value: object, *, dual_source: bool) -> ShortPlan:
     if not isinstance(value, dict) or not isinstance(value.get("id"), str) or not value["id"].strip():
         raise PlanValidationError("short_candidate_invalid")
     segments = _ranges(value.get("segments"), "short_segments")
+    drops = _ranges(value.get("drop", []), "short_drop")
+    if any(not _range_fully_covered(dropped, segments) for dropped in drops):
+        raise PlanValidationError("short_drop_outside_segments")
+    effective_segments = _subtract_ranges(segments, drops)
+    if not effective_segments:
+        raise PlanValidationError("short_drop_removes_entire_candidate")
     proof = _ranges(value.get("screen_proof_segments", []), "short_screen_proof")
     beats = _dict_sequence(value.get("motion_beats", []), "short_motion_beats")
     if len(beats) < 2:
@@ -352,9 +363,10 @@ def _parse_short(value: object, *, dual_source: bool) -> ShortPlan:
     _validate_motion_beats(beats, label="short_motion")
     if min(float(beat["start"]) for beat in beats) > 2.0:
         raise PlanValidationError("short_hook_motion_must_start_by_two_seconds")
-    if dual_source and screen_proof_share(proof, segments) < 0.25:
+    effective_proof = _subtract_ranges(proof, drops)
+    if dual_source and screen_proof_share(effective_proof, effective_segments) < 0.25:
         raise PlanValidationError("short_screen_proof_below_25_percent")
-    return ShortPlan(value["id"].strip(), segments, proof, beats)
+    return ShortPlan(value["id"].strip(), segments, drops, proof, beats)
 
 
 def _validate_motion_beats(beats: tuple[dict[str, Any], ...], *, label: str) -> None:
@@ -398,3 +410,25 @@ def _range_fully_covered(
         if cursor >= target[1] - 0.001:
             return True
     return False
+
+
+def _subtract_ranges(
+    ranges: tuple[tuple[float, float], ...],
+    drops: tuple[tuple[float, float], ...],
+) -> tuple[tuple[float, float], ...]:
+    remaining: list[tuple[float, float]] = []
+    for range_start, range_end in ranges:
+        pieces = [(range_start, range_end)]
+        for drop_start, drop_end in drops:
+            next_pieces: list[tuple[float, float]] = []
+            for piece_start, piece_end in pieces:
+                if drop_end <= piece_start or drop_start >= piece_end:
+                    next_pieces.append((piece_start, piece_end))
+                    continue
+                if piece_start < drop_start:
+                    next_pieces.append((piece_start, min(piece_end, drop_start)))
+                if drop_end < piece_end:
+                    next_pieces.append((max(piece_start, drop_end), piece_end))
+            pieces = next_pieces
+        remaining.extend(piece for piece in pieces if piece[1] - piece[0] > 0.001)
+    return tuple(remaining)

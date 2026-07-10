@@ -92,6 +92,36 @@ def test_edit_plan_requires_three_ranked_hooks_and_one_body() -> None:
     assert plan.editorial_review.resolutions[0].candidate_id == "repeat-1"
 
 
+def test_short_drop_is_source_bounded_and_survives_round_trip() -> None:
+    payload = valid_plan()
+    payload["shorts"][0]["segments"] = [[0.0, 2.0]]
+    payload["shorts"][0]["drop"] = [[0.4, 0.8]]
+    payload["shorts"][0]["screen_proof_segments"] = [[0.8, 1.4]]
+
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.shorts[0].drop == ((0.4, 0.8),)
+    assert plan.to_dict()["shorts"][0]["drop"] == [[0.4, 0.8]]
+
+    payload["shorts"][0]["drop"] = [[1.9, 2.1]]
+    with pytest.raises(PlanValidationError, match="short_drop_outside_segments"):
+        EditPlanV3.from_dict(payload)
+
+
+def test_short_drop_cannot_erase_candidate_or_protected_content() -> None:
+    erased = valid_plan()
+    erased["shorts"][0]["drop"] = [[0.0, 1.0]]
+    with pytest.raises(PlanValidationError, match="short_drop_removes_entire_candidate"):
+        EditPlanV3.from_dict(erased)
+
+    protected = valid_plan()
+    protected["shorts"][0]["segments"] = [[10.0, 13.0]]
+    protected["shorts"][0]["drop"] = [[10.5, 11.0]]
+    protected["shorts"][0]["screen_proof_segments"] = [[11.0, 12.0]]
+    with pytest.raises(PlanValidationError, match="short_drop_overlaps_protected_span"):
+        EditPlanV3.from_dict(protected)
+
+
 def test_edit_plan_rejects_packaging_and_missing_alternate() -> None:
     payload = valid_plan()
     payload["hooks"] = payload["hooks"][:2]

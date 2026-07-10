@@ -8,6 +8,7 @@ from eddy.pipeline import (
     PipelineRunner,
     _combine_segment_receipts,
     _concat,
+    _merge_short_drops,
     _splice,
     _transcribe_final,
     build_render_plan,
@@ -56,6 +57,29 @@ def test_render_plan_uses_snapshot_sources_for_finalization(tmp_path: Path) -> N
     render_plan = build_render_plan(plan, tmp_path)
 
     assert render_plan.body_dropfile.parent == tmp_path
+
+
+def test_short_drops_merge_with_shared_body_drops(tmp_path: Path) -> None:
+    payload = valid_plan()
+    payload["shorts"][0]["segments"] = [[0.0, 2.0]]
+    payload["shorts"][0]["drop"] = [[0.4, 0.8]]
+    payload["shorts"][0]["screen_proof_segments"] = [[0.8, 1.4]]
+    plan = EditPlanV3.from_dict(payload)
+    body_dropfile = tmp_path / "body-drops.json"
+    body_dropfile.write_text(
+        json.dumps(
+            {"explicit_drops": [{"span": [20.0, 22.0], "reason": "shared_body"}]}
+        )
+    )
+    output = tmp_path / "short-drops.json"
+
+    rows = _merge_short_drops(body_dropfile, plan.shorts[0], output)
+
+    assert rows == [
+        {"span": [20.0, 22.0], "reason": "shared_body"},
+        {"span": [0.4, 0.8], "reason": "host_short_drop:short-0"},
+    ]
+    assert json.loads(output.read_text())["explicit_drops"] == rows
 
 
 def test_render_plan_compiles_editorial_resolutions_into_explicit_drops(tmp_path: Path) -> None:
