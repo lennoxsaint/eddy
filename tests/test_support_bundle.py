@@ -8,7 +8,9 @@ def test_support_bundle_contains_receipts_but_never_media_or_secrets(tmp_path: P
     run = tmp_path / "run"
     run.mkdir()
     (run / "state.json").write_text('{"state":"blocked"}\n')
-    (run / "receipts.jsonl").write_text('{"event":"failed","token":"sk-secret-value"}\n')
+    (run / "receipts.jsonl").write_text(
+        '{"event":"failed","token":"sk-secret-value","detail":"private speech"}\n'
+    )
     (run / "transcript.json").write_text('{"words":["private speech"]}\n')
     (run / "worker.log").write_text("Bearer private-token-value user@example.com /Users/me/file\n")
     (run / "proxy.mp4").write_bytes(b"media")
@@ -25,4 +27,6 @@ def test_support_bundle_contains_receipts_but_never_media_or_secrets(tmp_path: P
         assert "worker.log" not in names
         receipts = archive.extractfile("receipts.jsonl")
         assert receipts is not None
-        assert b"sk-secret-value" not in receipts.read()
+        receipt_bytes = receipts.read()
+        assert b"sk-secret-value" not in receipt_bytes
+        assert b"private speech" not in receipt_bytes

@@ -47,6 +47,7 @@ REQUIRED_FINAL_GATES = {
 class Job:
     id: str
     source: Path
+    snapshot: Path
     run_dir: Path
     state: JobState
     blockers: tuple[str, ...] = ()
@@ -68,8 +69,22 @@ class JobManager:
         run_dir = self.runs_root / job_id
         run_dir.mkdir(parents=True)
         hashes = {str(path): _sha256(path) for path in media}
-        _write_json(run_dir / "source-lock.json", {"before": hashes, "after": None})
-        job = Job(job_id, source, run_dir, JobState.QUEUED)
+        snapshot = run_dir / "source-snapshot"
+        snapshot.mkdir()
+        snapshot_hashes: dict[str, str] = {}
+        for path in media:
+            relative = Path(path.name) if source.is_file() else path.relative_to(source)
+            destination = snapshot / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, destination)
+            snapshot_hashes[str(destination)] = _sha256(destination)
+        if sorted(snapshot_hashes.values()) != sorted(hashes.values()):
+            raise RuntimeError("source_snapshot_hash_mismatch")
+        _write_json(
+            run_dir / "source-lock.json",
+            {"before": hashes, "snapshot": snapshot_hashes, "after": None},
+        )
+        job = Job(job_id, source, snapshot, run_dir, JobState.QUEUED)
         self._save(job)
         _receipt(job, "job_started", source=str(source), source_count=len(media))
         return job
@@ -82,6 +97,7 @@ class JobManager:
         return Job(
             id=payload["id"],
             source=Path(payload["source"]),
+            snapshot=Path(payload.get("snapshot", payload["source"])),
             run_dir=Path(payload["run_dir"]),
             state=JobState(payload["state"]),
             blockers=tuple(payload.get("blockers", [])),
@@ -96,7 +112,7 @@ class JobManager:
         if plan.source_hashes != lock["before"]:
             raise PlanValidationError("edit_plan_source_hash_mismatch")
         _write_json(job.run_dir / "edit-plan.json", plan.to_dict())
-        updated = Job(job.id, job.source, job.run_dir, JobState.COMPILING)
+        updated = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.COMPILING)
         self._save(updated)
         _receipt(updated, "host_plan_accepted")
         return updated
@@ -105,7 +121,7 @@ class JobManager:
         job = self.load(job_id)
         if job.state in TERMINAL_STATES:
             raise RuntimeError(f"terminal_job_cannot_transition:{job.state}")
-        updated = Job(job.id, job.source, job.run_dir, state, job.blockers)
+        updated = Job(job.id, job.source, job.snapshot, job.run_dir, state, job.blockers)
         self._save(updated)
         _receipt(updated, "job_state_changed", state=state.value)
         return updated
@@ -123,6 +139,10 @@ class JobManager:
         os.close(descriptor)
         _receipt(job, "finalize_claimed")
         return job
+
+    def release_finalize_claim(self, job_id: str) -> None:
+        job = self.load(job_id)
+        (job.run_dir / "finalize.claim").unlink(missing_ok=True)
 
     def record_verification(
         self,
@@ -161,7 +181,7 @@ class JobManager:
             if final.exists():
                 raise RuntimeError("final_already_exists")
             shutil.move(str(attempt), str(final))
-            updated = Job(job.id, job.source, job.run_dir, JobState.COMPLETED)
+            updated = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.COMPLETED)
             _receipt(updated, "proof_gated_edit_completed")
         else:
             quarantine = job.run_dir / "quarantine" / attempt.name
@@ -172,6 +192,7 @@ class JobManager:
             updated = Job(
                 job.id,
                 job.source,
+                job.snapshot,
                 job.run_dir,
                 JobState.BLOCKED,
                 tuple(verified_blockers),
@@ -190,7 +211,7 @@ class JobManager:
         if job.state in TERMINAL_STATES:
             return job
         quarantined = self.quarantine_attempts(job_id)
-        cancelled = Job(job.id, job.source, job.run_dir, JobState.CANCELLED)
+        cancelled = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.CANCELLED)
         self._save(cancelled)
         _receipt(cancelled, "job_cancelled", quarantine=quarantined)
         return cancelled
@@ -216,7 +237,7 @@ class JobManager:
         if job.state in TERMINAL_STATES:
             return job
         quarantined = self.quarantine_attempts(job_id)
-        blocked = Job(job.id, job.source, job.run_dir, JobState.BLOCKED, (blocker,))
+        blocked = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.BLOCKED, (blocker,))
         self._save(blocked)
         _receipt(blocked, "blocked_attempt_quarantined", blockers=[blocker], quarantine=quarantined)
         return blocked
@@ -227,6 +248,7 @@ class JobManager:
             {
                 "id": job.id,
                 "source": str(job.source),
+                "snapshot": str(job.snapshot),
                 "run_dir": str(job.run_dir),
                 "state": job.state.value,
                 "blockers": list(job.blockers),

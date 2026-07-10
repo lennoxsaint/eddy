@@ -82,11 +82,19 @@ def latest_stable_tag(repo_url: str = REPO_URL) -> str:
 
 
 def resolve_tag_commit(repo_url: str, tag: str) -> str:
-    result = check(["git", "ls-remote", "--tags", "--refs", repo_url, f"refs/tags/{tag}"], timeout=60)
-    rows = [line.split() for line in result.stdout.splitlines() if line.split()]
-    if len(rows) != 1 or len(rows[0][0]) != 40:
+    result = check(
+        ["git", "ls-remote", "--tags", repo_url, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],
+        timeout=60,
+    )
+    refs = {
+        row[1]: row[0]
+        for row in (line.split() for line in result.stdout.splitlines())
+        if len(row) == 2
+    }
+    commit = refs.get(f"refs/tags/{tag}^{{}}") or refs.get(f"refs/tags/{tag}")
+    if not commit or len(commit) != 40:
         raise RuntimeError(f"stable_tag_commit_unresolved:{tag}")
-    return rows[0][0]
+    return commit
 
 
 def home_root(home: Path | None = None) -> Path:
@@ -319,6 +327,12 @@ def ensure_latest_stable(
                 "blocker": str(exc),
             }
         raise
+    if (
+        active_tag == selected_tag
+        and state.get("active_commit")
+        and state.get("active_commit") != expected_commit
+    ):
+        raise RuntimeError(f"stable_tag_moved:{selected_tag}")
     if (
         active_tag == selected_tag
         and state.get("active_commit") == expected_commit

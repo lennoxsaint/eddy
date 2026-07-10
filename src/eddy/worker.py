@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from .pipeline import PipelineRunner
@@ -19,6 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     manager = JobManager(Path(args.runs_root))
     runner = PipelineRunner(root=Path(args.canonical_root), manager=manager)
+    marker = manager.load(args.job_id).run_dir / f"worker-{args.action}.json"
+    marker.write_text(json.dumps({"pid": os.getpid(), "action": args.action}, sort_keys=True) + "\n")
     try:
         if args.action == "prepare":
             runner.prepare(args.job_id)
@@ -32,7 +35,13 @@ def main(argv: list[str] | None = None) -> int:
             state_path.write_text(json.dumps({"blocker": str(exc), "action": args.action}, indent=2) + "\n")
         elif job.state is JobState.CANCELLED:
             manager.quarantine_attempts(args.job_id)
+        marker.unlink(missing_ok=True)
+        if args.action == "finalize":
+            manager.release_finalize_claim(args.job_id)
         return 1
+    marker.unlink(missing_ok=True)
+    if args.action == "finalize":
+        manager.release_finalize_claim(args.job_id)
     return 0
 
 

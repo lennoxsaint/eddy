@@ -96,6 +96,9 @@ def test_job_start_hashes_sources_and_never_writes_inside_source(tmp_path: Path)
     assert sorted(source.iterdir()) == before
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
     assert lock["before"][str(media)]
+    assert (job.snapshot / "camera.mp4").read_bytes() == b"raw-media"
+    media.write_bytes(b"mutated-after-start")
+    assert (job.snapshot / "camera.mp4").read_bytes() == b"raw-media"
 
 
 def test_red_attempt_is_quarantined_and_never_promoted(tmp_path: Path) -> None:

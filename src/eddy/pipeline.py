@@ -103,7 +103,7 @@ class PipelineRunner:
 
     def prepare(self, job_id: str) -> None:
         job = self.manager.transition(job_id, JobState.PREFLIGHTING)
-        sources = discover_sources(job.source)
+        sources = discover_sources(job.snapshot)
         _run(
             [
                 sys.executable,
@@ -255,6 +255,11 @@ class PipelineRunner:
                 capture_output=True,
                 text=True,
             )
+            _append_provider_receipts(
+                audio.stderr,
+                attempt / "provider-receipts.jsonl",
+                artifact=item.output_name,
+            )
             audio_green = audio.returncode == 0 and enhanced.exists() and not fake_descript
             gates[f"descript_effect_survival_hook_{item.hook.rank}"] = audio_green
             if not audio_green:
@@ -388,6 +393,11 @@ class PipelineRunner:
                     capture_output=True,
                     text=True,
                 )
+                _append_provider_receipts(
+                    audio.stderr,
+                    attempt / "provider-receipts.jsonl",
+                    artifact=f"shorts/{index:02d}-{short_id}.mp4",
+                )
                 short_qa = subprocess.run(
                     [
                         sys.executable,
@@ -501,6 +511,24 @@ def _run(command: list[str], *, cwd: Path) -> None:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _append_provider_receipts(stderr: str, output: Path, *, artifact: str) -> None:
+    allowed_events = {"descript_provider", "descript_effect_survival", "audio_parity"}
+    rows: list[dict[str, Any]] = []
+    for line in stderr.splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and row.get("event") in allowed_events:
+            rows.append({**row, "artifact": artifact})
+    if not rows:
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("a") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def _write_final_words(

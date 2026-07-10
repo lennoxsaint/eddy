@@ -44,6 +44,7 @@ def test_plugin_install_is_not_editable_before_atomic_move() -> None:
     assert '"-e", f"{candidate_source}[mcp]"' not in bootstrap
     assert '"pip", "install", f"{candidate_source}[mcp]"' in bootstrap
     assert "stable_tag_commit_mismatch" in bootstrap
+    assert "stable_tag_moved" in bootstrap
     assert "active_commit" in bootstrap
 
 

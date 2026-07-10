@@ -1,12 +1,48 @@
 import json
+import hashlib
 from pathlib import Path
 
 from eddy.trust import trust_status
 
 
-def proven_run(index: int, *, run_id: str | None = None, source_hash: str | None = None) -> dict:
+def proven_run(index: int, runs_root: Path, *, run_id: str | None = None) -> dict:
+    job_id = run_id or f"dogfood-{index}"
+    run_dir = runs_root / job_id
+    final = run_dir / "final"
+    shorts = final / "shorts"
+    shorts.mkdir(parents=True, exist_ok=True)
+    for name in ("long-primary.mp4", "long-alternate-a.mp4", "long-alternate-b.mp4"):
+        (final / name).write_bytes(b"real-video")
+    for short_index in range(3):
+        (shorts / f"{short_index}.mp4").write_bytes(b"real-short")
+    qa = final / "qa.json"
+    qa.write_text('{"pass":true}\n')
+    source_map = {f"/source/{index}.mp4": f"{index + 1:064x}"}
+    (run_dir / "state.json").write_text(
+        json.dumps({"id": job_id, "state": "completed"}) + "\n"
+    )
+    (run_dir / "verification.json").write_text(
+        json.dumps({"gates": {"all": True}, "blockers": []}) + "\n"
+    )
+    (run_dir / "source-lock.json").write_text(
+        json.dumps({"before": source_map, "after": source_map}) + "\n"
+    )
+    receipts = []
+    for artifact_index in range(6):
+        receipts.extend(
+            [
+                {"event": "descript_provider", "provider": "descript_api"},
+                {"event": "descript_effect_survival", "status": "pass"},
+            ]
+        )
+    (final / "provider-receipts.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in receipts)
+    )
+    source_hash = hashlib.sha256(
+        json.dumps(source_map, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     return {
-        "id": run_id or f"dogfood-{index}",
+        "id": job_id,
         "owner_approved": True,
         "critical_failures": 0,
         "green": True,
@@ -15,35 +51,37 @@ def proven_run(index: int, *, run_id: str | None = None, source_hash: str | None
         "fake_modes": False,
         "descript_provider": "descript_api",
         "hyperframes_provider": "hyperframes",
-        "source_hash": source_hash or f"{index + 1:064x}",
-        "qa_receipt_sha256": f"{index + 101:064x}",
+        "source_hash": source_hash,
+        "qa_receipt_sha256": hashlib.sha256(qa.read_bytes()).hexdigest(),
     }
 
 
 def test_no_review_claim_remains_locked_until_five_green_owner_runs(tmp_path: Path) -> None:
     ledger = tmp_path / "trust-ledger.json"
+    runs_root = tmp_path / "runs"
     ledger.write_text(json.dumps({"schema_version": "eddy-trust-v1", "runs": []}))
 
-    assert trust_status(ledger)["no_review_unlocked"] is False
+    assert trust_status(ledger, runs_root=runs_root)["no_review_unlocked"] is False
 
-    runs = [proven_run(index) for index in range(5)]
+    runs = [proven_run(index, runs_root) for index in range(5)]
     ledger.write_text(json.dumps({"schema_version": "eddy-trust-v1", "runs": runs}))
 
-    status = trust_status(ledger)
+    status = trust_status(ledger, runs_root=runs_root)
     assert status["green_owner_runs"] == 5
     assert status["no_review_unlocked"] is True
 
 
 def test_duplicate_or_red_runs_do_not_unlock_claim(tmp_path: Path) -> None:
     ledger = tmp_path / "trust-ledger.json"
+    runs_root = tmp_path / "runs"
     runs = [
-        proven_run(0, run_id="same"),
-        proven_run(1, run_id="same"),
+        proven_run(0, runs_root, run_id="same"),
+        proven_run(1, runs_root, run_id="same"),
         {"id": "red", "owner_approved": True, "critical_failures": 1, "green": False},
     ]
     ledger.write_text(json.dumps({"schema_version": "eddy-trust-v1", "runs": runs}))
 
-    assert trust_status(ledger)["green_owner_runs"] == 1
+    assert trust_status(ledger, runs_root=runs_root)["green_owner_runs"] == 1
 
 
 def test_self_asserted_rows_without_proof_evidence_do_not_unlock(tmp_path: Path) -> None:

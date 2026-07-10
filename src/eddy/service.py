@@ -89,10 +89,17 @@ class EddyService:
 
     def finalize(self, job_id: str) -> dict[str, Any]:
         job = self.manager.claim_finalize(job_id)
-        self._launch_worker("finalize", job_id)
+        try:
+            self._launch_worker("finalize", job_id)
+        except Exception:
+            self.manager.release_finalize_claim(job_id)
+            raise
         return {**self._job_payload(job), "worker": "started"}
 
     def cancel_job(self, job_id: str) -> dict[str, Any]:
+        job = self.manager.load(job_id)
+        if job.state in {JobState.COMPLETED, JobState.BLOCKED, JobState.CANCELLED}:
+            return self._job_payload(job)
         self._terminate_worker(job_id)
         return self._job_payload(self.manager.cancel(job_id))
 
@@ -146,7 +153,10 @@ class EddyService:
             "public_channel": "stable_tags",
             "installed": installed,
             "projections": projections,
-            "trust": trust_status(self.canonical_root / "dogfood" / "trust-ledger.json"),
+            "trust": trust_status(
+                self.canonical_root / "dogfood" / "trust-ledger.json",
+                runs_root=self.manager.runs_root,
+            ),
         }
 
     def _launch_worker(self, action: str, job_id: str) -> None:
@@ -176,9 +186,7 @@ class EddyService:
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
-        (job.run_dir / f"worker-{action}.json").write_text(
-            json.dumps({"pid": process.pid, "action": action}, sort_keys=True) + "\n"
-        )
+        _ = process.pid
 
     def _terminate_worker(self, job_id: str) -> None:
         job = self.manager.load(job_id)
@@ -186,6 +194,14 @@ class EddyService:
             try:
                 payload = json.loads(path.read_text())
                 pid = int(payload["pid"])
+                command = subprocess.run(
+                    ["ps", "-p", str(pid), "-o", "command="],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                ).stdout
+                if "eddy.worker" not in command or job_id not in command:
+                    continue
                 os.killpg(pid, signal.SIGTERM)
             except (FileNotFoundError, json.JSONDecodeError, KeyError, ProcessLookupError, ValueError):
                 continue
@@ -206,6 +222,7 @@ class EddyService:
             "job_id": job.id,
             "state": job.state.value,
             "source": str(job.source),
+            "snapshot": str(job.snapshot),
             "run_dir": str(job.run_dir),
             "blockers": list(job.blockers),
             "proof_state": proof_state,
