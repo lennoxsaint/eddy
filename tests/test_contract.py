@@ -35,3 +35,5 @@ def test_skill_declares_the_machine_readable_contract() -> None:
     assert "Blocked Attempt" in skill
     assert "Effect-Survival Gate" in skill
     assert "five owner-approved dogfood runs" in skill
+    assert "eddy_record_feedback" in skill
+    assert "sentence-ending periods" in skill

@@ -25,6 +25,7 @@
         "final long is 16:9 1080p and plays end-to-end",
         "webcam PiP present bottom-right with rounded corners; screen recording rounded",
         "karaoke is clean (one cue at a time), synced to speech",
+        "karaoke preserves sentence-ending periods, question marks, and exclamation marks",
         "all >0.2s word gaps tightened to ~0.1s; sacred pauses preserved",
         "no repeated-phrase pair remains (retakes removed, last take kept)",
         "Descript Studio Sound applied; duration parity and Effect-Survival Gate pass",

@@ -53,6 +53,10 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
             calls.append(("finalize", job_id))
             return {"worker": "started"}
 
+        def repair_captions(self, job_id):
+            calls.append(("repair-captions", job_id))
+            return {"status": "pass"}
+
         def sync_doctor(self):
             return {}
 
@@ -66,12 +70,15 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
     capsys.readouterr()
     assert cli.main(["finalize", "job-1"]) == 0
     capsys.readouterr()
+    assert cli.main(["repair-captions", "job-1"]) == 0
+    capsys.readouterr()
 
     assert calls == [
         ("options", "source-folder", "youtube"),
         ("packet", "job-1"),
         ("submit", "job-1", {"schema_version": "edit-plan-v3"}),
         ("finalize", "job-1"),
+        ("repair-captions", "job-1"),
     ]
 
 
@@ -91,6 +98,7 @@ def test_mcp_server_exposes_every_public_tool(tmp_path: Path, monkeypatch) -> No
         "eddy_cancel_job",
         "eddy_support_bundle",
         "eddy_sync_doctor",
+        "eddy_record_feedback",
     } <= names
 
 

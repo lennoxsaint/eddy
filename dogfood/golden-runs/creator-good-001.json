@@ -1,0 +1,26 @@
+{
+  "schema_version": "eddy-golden-run-v1",
+  "id": "creator-good-001",
+  "quality_profile": "creator_good_v1",
+  "owner_approved": true,
+  "approval_scope": [
+    "primary_long",
+    "two_alternate_hook_longs",
+    "three_evidence_bearing_shorts"
+  ],
+  "proof": {
+    "artifact_manifest_sha256": "39c4092abdfb99c95c1b261f763830f796bc6722c4e62674cf13302828d80583",
+    "qa_receipt_sha256": "bafb79437d258b95678c94acf5ceafc162862cb5dc279adaa31d79d7e4617ba8",
+    "source_hashes_unchanged": true,
+    "long_hashes_unchanged_by_caption_repair": true,
+    "studio_sound_audio_streams_unchanged_by_caption_repair": true,
+    "caption_terminal_marks_proven": 19,
+    "required_gates_green": true
+  },
+  "privacy": {
+    "media_included": false,
+    "transcript_included": false,
+    "provider_identifiers_included": false,
+    "machine_paths_included": false
+  }
+}

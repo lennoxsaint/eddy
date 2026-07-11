@@ -17,6 +17,41 @@ from PIL import Image, ImageOps
 Range = tuple[float, float]
 
 
+def caption_terminal_punctuation_verdict(
+    planned_words: list[dict[str, Any]],
+    rendered_tokens: list[object],
+) -> dict[str, Any]:
+    """Prove the generated caption tokens preserve source sentence endings."""
+    planned_tokens = [str(item.get("word", "")).strip() for item in planned_words]
+    rendered = [str(item).strip() for item in rendered_tokens]
+    mismatches: list[dict[str, object]] = []
+    if len(planned_tokens) != len(rendered):
+        return {
+            "pass": False,
+            "reason": "caption_token_count_changed",
+            "expected_tokens": len(planned_tokens),
+            "rendered_tokens": len(rendered),
+            "mismatches": [],
+        }
+    expected_count = 0
+    for index, (planned, actual) in enumerate(zip(planned_tokens, rendered, strict=True)):
+        expected = _terminal_punctuation(planned)
+        if not expected:
+            continue
+        expected_count += 1
+        got = _terminal_punctuation(actual)
+        if got != expected:
+            mismatches.append(
+                {"index": index, "expected": expected, "rendered": got, "word": planned}
+            )
+    return {
+        "pass": not mismatches,
+        "reason": None if not mismatches else "caption_terminal_punctuation_missing",
+        "expected_terminal_marks": expected_count,
+        "mismatches": mismatches,
+    }
+
+
 def caption_sync_verdict(
     planned_words: list[dict[str, Any]],
     delivered_words: list[dict[str, Any]],
@@ -141,6 +176,14 @@ def contextual_motion_verdict(
 
 def _caption_token(value: object) -> str:
     return re.sub(r"[^a-z0-9]", "", str(value).lower())
+
+
+def _terminal_punctuation(value: str) -> str:
+    match = re.search(r"[.?!]+$", value.strip())
+    if not match:
+        return ""
+    raw = match.group(0)
+    return raw[-1] if raw[-1] in "?!" else "."
 
 
 def _word_span(words: list[dict[str, Any]]) -> float:

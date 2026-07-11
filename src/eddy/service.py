@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from .contract import canonical_contract
+from .caption_repair import repair_captions
+from .feedback import record_owner_feedback
+from .owner_plugin import owner_plugin_status
 from .runtime import JobManager, JobState
 from .sync import CANONICAL_SURFACES, canonical_surface_commit, check_projection
 from .support import create_support_bundle
@@ -88,6 +91,7 @@ class EddyService:
             for relative in source_lock["before"]
             if "screen" in relative.lower() or "display" in relative.lower()
         ]
+        quality_profile_path = self.canonical_root / "references" / "creator-good-v1.json"
         return {
             "schema_version": "eddy-host-packet-v3",
             "job_id": job.id,
@@ -132,6 +136,7 @@ class EddyService:
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
             "edit_plan_schema": "edit-plan-v3",
+            "quality_profile": json.loads(quality_profile_path.read_text()),
             "requirements": {
                 "primary_hooks": 1,
                 "alternate_hooks": 2,
@@ -165,6 +170,13 @@ class EddyService:
         path = Path(output).expanduser().resolve() if output else job.run_dir / "support.tar.gz"
         create_support_bundle(job.run_dir, path)
         return {"job_id": job_id, "bundle": str(path), "media_included": False}
+
+    def repair_captions(self, job_id: str) -> dict[str, Any]:
+        return repair_captions(root=self.canonical_root, manager=self.manager, job_id=job_id)
+
+    def record_feedback(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        job = self.manager.load(job_id)
+        return record_owner_feedback(job.run_dir, job_id, payload)
 
     def sync_doctor(self) -> dict[str, Any]:
         commit = _git_commit(self.canonical_root)
@@ -210,6 +222,7 @@ class EddyService:
             "public_channel": "stable_tags",
             "installed": installed,
             "projections": projections,
+            "owner_plugin": owner_plugin_status(self.canonical_root),
             "trust": trust_status(
                 self.canonical_root / "dogfood" / "trust-ledger.json",
                 runs_root=self.manager.runs_root,

@@ -1,5 +1,23 @@
 # Eddy decision log
 
+## 2026-07-11 - Owner feedback becomes proof, regression, then guarded shipping
+
+- The first owner-approved golden run is evaluated against `creator_good_v1`: editorial truth,
+  pacing, layout, Studio Sound survival, contextual HyperFrames motion, screen proof, Shorts honesty,
+  caption timing, and sentence-ending punctuation.
+- Caption-only repairs reuse the approved final audio stream byte-for-byte. They do not start another
+  Descript job, alter the three long videos, or promote until delivered-media gates pass again.
+- Owner feedback is typed as run-specific, deterministic defect, quality preference, or doctrine.
+  A future-facing lesson needs a regression before it may enter the canonical skill or runtime.
+- Canonical changes ship through one guarded command that regenerates projections, runs all release
+  gates, stages an explicit allowlist, pushes `eddy-v3/main`, waits for CI, and refreshes the owner
+  plugin. Unconditional feedback auto-push remains forbidden.
+- The owner `@eddy` plugin follows the canonical local V3 projection. Public installs remain pinned
+  to immutable stable tags once the five-run trust gate permits a release.
+
+This records the first run Lennox approved across all three longs and all three Shorts after the
+only requested correction: restoring terminal punctuation in burned Short captions.
+
 ## 2026-07-11 - Captions and motion must follow the delivered environment
 
 - Short caption timing is projected through the exact splice segment receipt. Eddy no longer

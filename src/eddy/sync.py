@@ -14,6 +14,9 @@ from typing import Iterable
 CANONICAL_SURFACES = (
     "SKILL.md",
     "README.md",
+    "agents/openai.yaml",
+    "assets/eddy-eagle-icon.png",
+    "assets/eddy-eagle-logo.png",
     "assets/fonts/Montserrat.ttf",
     "assets/vendor/gsap.min.js",
     "assets/motion/threadify-fc/frame.md",
@@ -23,6 +26,7 @@ CANONICAL_SURFACES = (
     "assets/motion/threadify-fc/assets/threadify-needle.png",
     "evals/evals.json",
     "references/commands.md",
+    "references/creator-good-v1.json",
     "references/edit-plan-schema.md",
     "references/hook-doctrine.md",
     "references/layout-constants.md",

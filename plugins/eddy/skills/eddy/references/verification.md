@@ -39,6 +39,8 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Layout asserts** — PiP flush to the bottom-right corner at the right size/radius; screen fills
   the frame (no black bars) with slight rounded corners; Shorts stack geometry correct.
 - **Caption sync** — cue timings align to word timings; no cue overlaps the next by >1 frame.
+- **Caption terminal punctuation** — the generated ASS token proof preserves source `.`, `?`, and
+  `!` sentence endings while continuing to suppress stray decorative punctuation.
 - **Loudness** — final mix hits the loudness target; no clipping.
 
 ## Model rubrics (you judge; trigger a redo)

@@ -9,8 +9,9 @@ Attempt; it is never relabeled as final.
 
 ## Install channels
 
-- **Owner development:** clone `main`, then run `python3 scripts/install_owner_surfaces.py`. Claude,
-  Codex, and Agents skill folders become symlinks to the canonical checkout.
+- **Owner development:** clone `main`, then run `python3 scripts/install_owner_surfaces.py` and
+  `python3 scripts/install_owner_plugin.py`. Claude, Codex, and Agents skill folders become symlinks
+  to the canonical checkout, while `eddy@personal` is refreshed from its generated V3 projection.
 - **Public/plugin:** install a stable `vX.Y.Z` tag. Plugin bootstrap updates atomically and keeps the
   prior working tag if smoke checks fail.
 
@@ -35,7 +36,13 @@ eddy edit <source>
 eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
 eddy finalize <job-id>
+eddy repair-captions <job-id>
+eddy record-feedback <job-id> owner-feedback.json
 ```
+
+Explicit owner feedback is stored beside the run and classified before it becomes product doctrine.
+Generalizable changes ship with `scripts/ship_to_github.py`, which refuses unrelated changes and
+updates projections, GitHub `main`, CI proof, and the installed owner plugin as one guarded action.
 
 The host model owns editorial taste. Eddy owns source locks, deterministic media mechanics,
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full

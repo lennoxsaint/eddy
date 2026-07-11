@@ -43,6 +43,7 @@ REQUIRED_FINAL_GATES = {
     "shorts_screen_proof",
     "shorts_motion_activity",
     "shorts_caption_sync",
+    "caption_terminal_punctuation",
     "shorts_contextual_motion",
     *(f"hyperframes_motion_hook_{rank}" for rank in range(1, 4)),
     *(f"contextual_motion_hook_{rank}" for rank in range(1, 4)),

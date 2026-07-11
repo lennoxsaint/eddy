@@ -16,7 +16,7 @@ Usage:
 transcript.words.json: {"words":[{"word","start","end"},...]} (edited-timeline timings).
 """
 from __future__ import annotations
-import argparse, json, subprocess, sys
+import argparse, json, re, subprocess, sys
 from pathlib import Path
 
 # ASS colours are &HAABBGGRR. From layout-constants.md:
@@ -27,9 +27,16 @@ STROKE = "&H00160A01"         # dark navy outline
 
 
 def esc(t: str) -> str:
-    # strip ASS control chars + surrounding punctuation (clean caption look, no stray commas)
-    t = t.replace("\\", "").replace("{", "(").replace("}", ")").strip()
-    return t.strip(",.;:!?—–\"'").strip() or t
+    """Sanitize one caption token while preserving meaningful sentence endings."""
+    sanitized = t.replace("\\", "").replace("{", "(").replace("}", ")").strip()
+    terminal_match = re.search(r"[.?!]+$", sanitized)
+    terminal = ""
+    if terminal_match:
+        raw_terminal = terminal_match.group(0)
+        terminal = raw_terminal[-1] if raw_terminal[-1] in "?!" else "."
+        sanitized = sanitized[:terminal_match.start()]
+    body = sanitized.strip(",.;:!?—–\"'").strip()
+    return f"{body}{terminal}" if body else t
 
 
 def cues(words, max_words, max_dur=2.0):
@@ -153,6 +160,7 @@ def main() -> int:
     ap.add_argument("--margin", type=int, default=60, help="left/right safe-area margin (px)")
     ap.add_argument("--max-words", type=int, default=4)
     ap.add_argument("--uppercase", action="store_true")
+    ap.add_argument("--proof-out", help="write rendered caption-token punctuation proof JSON")
     ap.add_argument("--burn", action="store_true")
     ap.add_argument("--in", dest="inp")
     ap.add_argument("--video-out")
@@ -164,6 +172,9 @@ def main() -> int:
     ass = build(words, args.play_w, args.play_h, args.y, args.font_size, args.max_words,
                 args.uppercase, args.margin, args.font_min)
     Path(args.out).write_text(ass)
+    if args.proof_out:
+        rendered = [esc(str(word.get("word", ""))) for word in words]
+        Path(args.proof_out).write_text(json.dumps({"rendered_tokens": rendered}, indent=2) + "\n")
     print(json.dumps({"event": "ass_written", "cues": ass.count("Dialogue:"), "out": args.out}))
 
     if args.burn:

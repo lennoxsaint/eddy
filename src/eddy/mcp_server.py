@@ -59,6 +59,10 @@ def build_server() -> Any:
     def sync_doctor() -> dict[str, Any]:
         return service.sync_doctor()
 
+    @server.tool(name="eddy_record_feedback")
+    def record_feedback(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return service.record_feedback(job_id, payload)
+
     return server
 
 

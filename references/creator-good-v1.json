@@ -1,0 +1,47 @@
+{
+  "schema_version": "eddy-quality-profile-v1",
+  "id": "creator_good_v1",
+  "editorial": {
+    "delivered_media_retranscription_required": true,
+    "last_complete_clean_take_default": true,
+    "retake_survivors_allowed": 0,
+    "shared_body_for_long_variants": true
+  },
+  "pacing": {
+    "gap_tighten_threshold_s": 0.2,
+    "gap_target_s": 0.1,
+    "unprotected_gap_hard_max_s": 0.28,
+    "protected_pause_ceiling_s": 0.8
+  },
+  "layout": {
+    "long_resolution": "1920x1080",
+    "screen_primary": true,
+    "camera_pip_px": 260,
+    "camera_radius_px": 30,
+    "camera_margin_px": 0
+  },
+  "audio": {
+    "provider": "descript",
+    "studio_sound_required": true,
+    "effect_survival_required": true,
+    "local_or_raw_fallback_allowed": false
+  },
+  "motion": {
+    "engine": "hyperframes",
+    "contextual_skeuomorphic_panels": true,
+    "rendered_pixel_collision_proof": true,
+    "minimum_short_beats": 2
+  },
+  "shorts": {
+    "count_min": 3,
+    "count_max": 5,
+    "minimum_screen_proof_share": 0.25,
+    "weak_quota_padding_allowed": false
+  },
+  "captions": {
+    "style": "one_line_karaoke",
+    "terminal_punctuation": [".", "?", "!"],
+    "stray_decorative_punctuation": "strip",
+    "delivered_timing_proof_required": true
+  }
+}

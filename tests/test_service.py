@@ -42,6 +42,8 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["editorial_ledger"]["chunks"][0]["id"] == "chunk-001"
     assert packet["motion_requirements"]["shorts"]["minimum_animated_beats"] == 2
     assert packet["motion_requirements"]["longs"]["render_host_authored_plan"] is True
+    assert packet["quality_profile"]["id"] == "creator_good_v1"
+    assert packet["quality_profile"]["captions"]["terminal_punctuation"] == [".", "?", "!"]
     assert packet["requested_host_action"] == "review_every_chunk_and_resolve_every_ledger_item"
     assert cancelled["state"] == "cancelled"
 
@@ -61,3 +63,4 @@ def test_sync_doctor_distinguishes_owner_main_and_stable_channels(tmp_path: Path
     assert result["owner_channel"] == "main"
     assert result["public_channel"] == "stable_tags"
     assert result["canonical_commit"]
+    assert result["owner_plugin"]["version"] == "3.0.0"

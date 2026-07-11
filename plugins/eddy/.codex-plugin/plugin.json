@@ -3,8 +3,8 @@
   "version": "3.0.0",
   "description": "Proof-gated primary and alternate-hook YouTube edits plus strong Shorts.",
   "author": {"name": "Lennox Saint", "url": "https://github.com/lennoxsaint"},
-  "homepage": "https://github.com/lennoxsaint/eddy",
-  "repository": "https://github.com/lennoxsaint/eddy",
+  "homepage": "https://github.com/lennoxsaint/eddy-v3",
+  "repository": "https://github.com/lennoxsaint/eddy-v3",
   "license": "MIT",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
@@ -14,6 +14,8 @@
     "developerName": "Lennox Saint",
     "category": "Creativity",
     "capabilities": ["Read", "Write", "Interactive"],
-    "brandColor": "#F8BE34"
+    "brandColor": "#F8BE34",
+    "composerIcon": "./skills/eddy/assets/eddy-eagle-icon.png",
+    "logo": "./skills/eddy/assets/eddy-eagle-logo.png"
   }
 }

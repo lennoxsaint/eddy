@@ -1,0 +1,6 @@
+interface:
+  display_name: Eddy
+  short_description: Proof-gated YouTube edits and Shorts.
+  brand_color: "#F8BE34"
+  icon_small: ./assets/eddy-eagle-icon.png
+  icon_large: ./assets/eddy-eagle-logo.png

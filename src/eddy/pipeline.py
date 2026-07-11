@@ -16,6 +16,7 @@ from .audio_effect import restore_effect_cache, store_effect_cache
 from .plan import EditPlanV3, HookPlan, ShortPlan
 from .proof import (
     caption_sync_verdict,
+    caption_terminal_punctuation_verdict,
     contextual_motion_verdict,
     measure_motion_activity,
     screen_proof_verdict,
@@ -571,6 +572,7 @@ class PipelineRunner:
             short_motion_greens: list[bool] = []
             short_context_greens: list[bool] = []
             short_caption_greens: list[bool] = []
+            short_punctuation_greens: list[bool] = []
             for index, short in enumerate(plan.shorts, start=1):
                 short_id = _slug(short.id)
                 cutlist = stage / f"short-{short_id}-cutlist.json"
@@ -651,6 +653,7 @@ class PipelineRunner:
                     short_words,
                 )
                 short_ass = stage / f"short-{short_id}.ass"
+                short_punctuation_proof = stage / f"short-{short_id}-caption-punctuation.json"
                 captioned = stage / f"short-{short_id}-captioned.mp4"
                 _run(
                     [
@@ -667,6 +670,8 @@ class PipelineRunner:
                         str(captioned),
                         "--max-words",
                         "5",
+                        "--proof-out",
+                        str(short_punctuation_proof),
                     ],
                     cwd=self.root,
                 )
@@ -763,6 +768,18 @@ class PipelineRunner:
                 short_caption_greens.append(short_caption_green)
                 if not short_caption_green:
                     blockers.append(f"short_caption_sync_failed:{short_id}")
+                short_punctuation = (
+                    caption_terminal_punctuation_verdict(
+                        json.loads(short_words.read_text()).get("words", []),
+                        json.loads(short_punctuation_proof.read_text()).get("rendered_tokens", []),
+                    )
+                    if short_punctuation_proof.exists()
+                    else {"pass": False, "reason": "caption_punctuation_proof_missing"}
+                )
+                short_punctuation_green = bool(short_punctuation["pass"])
+                short_punctuation_greens.append(short_punctuation_green)
+                if not short_punctuation_green:
+                    blockers.append(f"caption_terminal_punctuation_failed:{short_id}")
                 short_qa = subprocess.run(
                     [
                         sys.executable,
@@ -817,6 +834,7 @@ class PipelineRunner:
                     and short_qa.returncode == 0
                     and short_motion_green
                     and short_caption_green
+                    and short_punctuation_green
                     and bool(proof["pass"])
                 )
                 short_greens.append(green)
@@ -826,6 +844,7 @@ class PipelineRunner:
                         "motion_activity": short_motion_activity,
                         "motion_context": short_motion_context,
                         "caption_sync": short_caption_sync,
+                        "caption_terminal_punctuation": short_punctuation,
                         "screen_proof": proof,
                         "pass": green,
                     }
@@ -848,11 +867,16 @@ class PipelineRunner:
             gates["shorts_caption_sync"] = (
                 len(short_caption_greens) == len(plan.shorts) and all(short_caption_greens)
             )
+            gates["caption_terminal_punctuation"] = (
+                len(short_punctuation_greens) == len(plan.shorts)
+                and all(short_punctuation_greens)
+            )
         gates["editorial_ledger_resolved"] = True
         gates.setdefault("shorts_screen_proof", False)
         gates.setdefault("shorts_motion_activity", False)
         gates.setdefault("shorts_contextual_motion", False)
         gates.setdefault("shorts_caption_sync", False)
+        gates.setdefault("caption_terminal_punctuation", False)
         finish_attempt()
 
 

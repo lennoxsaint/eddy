@@ -24,6 +24,9 @@ def test_plugin_is_named_eddy_and_launches_managed_wrapper() -> None:
     assert manifest["name"] == "eddy"
     assert manifest["interface"]["displayName"] == "Eddy"
     assert manifest["version"] == "3.0.0"
+    assert manifest["repository"].endswith("/eddy-v3")
+    assert manifest["interface"]["composerIcon"].endswith("eddy-eagle-icon.png")
+    assert manifest["interface"]["logo"].endswith("eddy-eagle-logo.png")
     assert mcp["mcpServers"]["eddy"]["args"] == ["./scripts/eddy_plugin_mcp.py"]
 
 
@@ -65,3 +68,32 @@ def test_plugin_uses_healthy_active_install_when_tag_lookup_is_offline(
     assert result["status"] == "offline_fallback"
     assert result["ok"] is True
     assert result["active_tag"] == "v3.0.0"
+
+
+def test_plugin_prefers_verified_owner_channel_before_stable_tags(
+    tmp_path: Path, monkeypatch
+) -> None:
+    bootstrap = load_bootstrap()
+    canonical = tmp_path / "canonical"
+    canonical.mkdir()
+    python = tmp_path / "python"
+    python.write_text("executable")
+    (tmp_path / "owner-channel.json").write_text(
+        json.dumps({"canonical_root": str(canonical), "python": str(python)})
+    )
+    monkeypatch.setattr(
+        bootstrap,
+        "run",
+        lambda *args, **kwargs: bootstrap.CommandResult([], 0, "3.0.0\n", ""),
+    )
+    monkeypatch.setattr(
+        bootstrap,
+        "latest_stable_tag",
+        lambda repo_url: (_ for _ in ()).throw(AssertionError("stable lookup must not run")),
+    )
+
+    result = bootstrap.ensure_latest_stable(home=tmp_path)
+
+    assert result["status"] == "owner_channel"
+    assert result["python"] == str(python)
+    assert result["canonical_root"] == str(canonical)

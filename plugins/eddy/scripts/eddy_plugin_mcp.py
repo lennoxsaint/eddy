@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 
 from eddy_plugin_bootstrap import ensure_latest_stable, home_root, venv_python
 
@@ -13,7 +14,11 @@ from eddy_plugin_bootstrap import ensure_latest_stable, home_root, venv_python
 def main() -> int:
     result = ensure_latest_stable()
     print(json.dumps({"eddy_plugin_bootstrap": result}, sort_keys=True), file=sys.stderr)
-    active_python = venv_python(home_root() / "venv")
+    active_python = (
+        Path(str(result["python"]))
+        if result.get("python")
+        else venv_python(home_root() / "venv")
+    )
     if not active_python.exists():
         print(
             json.dumps(

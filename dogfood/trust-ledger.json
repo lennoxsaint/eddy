@@ -1,4 +1,18 @@
 {
   "schema_version": "eddy-trust-v1",
-  "runs": []
+  "runs": [
+    {
+      "id": "96b74784a3e44494ae71ef02e346f8b7",
+      "owner_approved": true,
+      "critical_failures": 0,
+      "green": true,
+      "proof_state": "final_qa_passed",
+      "real_footage": true,
+      "fake_modes": false,
+      "descript_provider": "descript_api",
+      "hyperframes_provider": "hyperframes",
+      "source_hash": "dbfacfe63e7b723995fa1c72495b858af282235a6cb2cb10e7e431eb586f2bda",
+      "qa_receipt_sha256": "bafb79437d258b95678c94acf5ceafc162862cb5dc279adaa31d79d7e4617ba8"
+    }
+  ]
 }

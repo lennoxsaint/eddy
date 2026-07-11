@@ -84,11 +84,24 @@ false starts).
 ```
 python3 scripts/karaoke_ass.py --transcript short.words.json --out short.ass \
   --play-w 1080 --play-h 1920 --y 1155 --font-size 68 --max-words 4 --uppercase \
-  --burn --in short.mp4 --video-out short_cap.mp4
+  --proof-out short-caption-punctuation.json --burn --in short.mp4 --video-out short_cap.mp4
 ```
 Self-contained per-word karaoke (cyan current word / white spoken / dim upcoming, `layout-constants.md`
 style). `--transcript` = word timings of the **edited** short (re-transcribe the composited short first,
 because splicing shifts word times). Position `--y` in the Shorts caption strip (1080–1230 → center 1155).
+The renderer preserves terminal `.`, `?`, and `!`, normalizes a trailing ellipsis to one period, and
+continues to remove stray commas/quotes. `--proof-out` is the blocking generated-token receipt.
+
+## Owner feedback and caption-only repair
+
+```
+eddy repair-captions <job-id>
+eddy record-feedback <job-id> owner-feedback.json
+```
+
+`repair-captions` is valid only for a completed run. It preserves the three long hashes, remuxes the
+already-green Studio Sound audio streams byte-for-byte, retranscribes the repaired Shorts, reruns
+caption/motion/screen/deterministic gates, and leaves originals as repair evidence.
 
 ## 7. HyperFrames motion — the DEFAULT engine (iconography-forward, threadify-fc)
 

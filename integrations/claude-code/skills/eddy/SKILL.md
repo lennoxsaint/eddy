@@ -67,6 +67,10 @@ outputs proof-gated candidates.
    bypassing them.
 6. Call `eddy_finalize(job_id=...)`, poll with `eddy_job_status`, and return only final paths or exact
    blockers. Use `eddy_cancel_job` when the user cancels.
+7. When the owner reviews an Eddy output, record the explicit verdict and evidence with
+   `eddy_record_feedback`. Repair the current run first. Promote a lesson into code, a quality
+   profile, an eval, or doctrine only when it generalizes, and require a regression test before the
+   guarded ship command refreshes projections, GitHub `main`, and the installed owner plugin.
 
 If MCP tools are unavailable, continue automatically through the equivalent CLI commands; do not
 make the user restart the edit:
@@ -78,6 +82,8 @@ eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
 eddy finalize <job-id>
 eddy status <job-id>
+eddy repair-captions <job-id>
+eddy record-feedback <job-id> owner-feedback.json
 ```
 
 ## Ordered edit
@@ -130,6 +136,8 @@ eddy status <job-id>
 - Screen/camera geometry, transcript-synchronous caption timing, proof assets, rendered contextual
   motion placement, Shorts source/style locks, 25% source-mapped screen proof, and motion activity at
   10 fps pass.
+- Burned Shorts preserve sentence-ending periods, question marks, and exclamation marks. Stray
+  decorative punctuation stays suppressed, and a generated-token proof blocks missing endings.
 - `spot-check.md`, `edit-plan.json`, `final/qa.json`, and `receipts.jsonl` are inspectable.
 
 ## Descript boundary

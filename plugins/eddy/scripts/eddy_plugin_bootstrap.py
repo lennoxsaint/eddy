@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-REPO_URL = "https://github.com/lennoxsaint/eddy.git"
+REPO_URL = "https://github.com/lennoxsaint/eddy-v3.git"
 STATE_VERSION = 1
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
@@ -103,6 +103,39 @@ def home_root(home: Path | None = None) -> Path:
 
 def state_file(home: Path | None = None) -> Path:
     return home_root(home) / "plugin-state.json"
+
+
+def owner_state_file(home: Path | None = None) -> Path:
+    return home_root(home) / "owner-channel.json"
+
+
+def active_owner_channel(home: Path | None = None) -> dict:
+    path = owner_state_file(home)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {}
+    root = Path(str(payload.get("canonical_root", ""))).expanduser()
+    python = Path(str(payload.get("python", ""))).expanduser()
+    if not root.is_dir() or not python.is_file():
+        return {}
+    smoke = run(
+        [str(python), "-c", "import eddy, eddy.cli, eddy.mcp_server; print(eddy.__version__)"],
+        timeout=30,
+        cwd=root,
+    )
+    if smoke.returncode != 0 or smoke.stdout.strip() != "3.0.0":
+        return {}
+    return {
+        **payload,
+        "status": "owner_channel",
+        "ok": True,
+        "mutated": False,
+        "python": str(python),
+        "canonical_root": str(root.resolve()),
+    }
 
 
 def venv_python(venv: Path) -> Path:
@@ -270,6 +303,9 @@ def ensure_latest_stable(
     python: str | None = None,
     tag: str | None = None,
 ) -> dict:
+    owner = active_owner_channel(home)
+    if owner:
+        return owner
     root = home_root(home)
     root.mkdir(parents=True, exist_ok=True)
     state = active_state(root)
