@@ -99,6 +99,11 @@ eddy repair-captions <job-id>
 eddy record-feedback <job-id> owner-feedback.json
 ```
 
+For a completed candidate that needs a real edit repair, submit typed owner feedback with
+`verdict: changes_requested`. Eddy receipts the reason, moves the completed candidate to
+`quarantine/attempt-<n>/`, returns to `awaiting_host_repair`, and preserves the three-attempt ceiling.
+An owner rejection after attempt 3 transitions the job to `blocked`.
+
 `repair-captions` is valid only for a completed run. It preserves the three long hashes, remuxes the
 already-green Studio Sound audio streams byte-for-byte, retranscribes the repaired Shorts, reruns
 caption/motion/screen/deterministic gates, and leaves originals as repair evidence.

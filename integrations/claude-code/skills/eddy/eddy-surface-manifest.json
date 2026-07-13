@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "bef05f41bb22ade0f5c36f681e9747beb0bf301b",
+  "canonical_commit": "1c9e2ad6ff4b2517b600d98418f1860b0b8c64ed",
   "files": {
     "README.md": "8efc99dcc411aee739cd51c87090a616572be7c72d49692acce37b7c5be5b0ca",
-    "SKILL.md": "6c10a9c28557399de31eea2f5c3cbcb3198007240fd5ee9b269353b8ac978c74",
+    "SKILL.md": "484406c8b21f8726d5eeaf8877ea6cc916f3684181039642a354137ac96cc291",
     "agents/openai.yaml": "bbb89a517e1b489c9f7c3decfcab7f6466e4391e98ab4602962c7a729174c6d6",
     "assets/eddy-eagle-icon.png": "fc3de64ea2499cf8b769da8197ef0868e6d3f5680e0ede2c1632d320a7d22993",
     "assets/eddy-eagle-logo.png": "1808a090c36fe43f28143f6d678959a21a3d5cbfbae4494a7656d4758fddb3ca",
@@ -14,7 +14,7 @@
     "assets/motion/threadify-fc/identity.css": "9088e99f565ae3aebd6f1afafc3d2b57aad89bc081ada8ca208f4abd08d5cfb9",
     "assets/vendor/gsap.min.js": "c3a03a345e45bc954cd48c43f11572891f5dca7a5d99348d5bc14753a728618c",
     "evals/evals.json": "5f08aba5a60355ce1b4b4bbd3d06859afdf21ff8cf56c54afb6ddfd4781b10e2",
-    "references/commands.md": "9d8c6ca40ee48eab7866ccd6e27d1436f21602161dd112e974e8474fd620602e",
+    "references/commands.md": "857a36ee9c907a94f04328b28c6ace07ad9c87e8b06925f59ce199a0c5bbbd3a",
     "references/creator-good-v1.json": "ab413315506a77148ecc1778a9bf2b16b127a6f427b75a6a56c542b941ed7a19",
     "references/edit-plan-schema.md": "bd016bed4da617e6455b95ba5a656a1c48e08fac23cd7b6fb5df941c8d98053c",
     "references/hook-doctrine.md": "077fa891f915e4a35a9b4952abdccd413dd58bfb4064b461fd9d71f16a5e8c57",

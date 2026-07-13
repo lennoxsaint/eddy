@@ -48,6 +48,10 @@ A **Blocked Attempt** is a playable inspection artifact with exact blockers and 
 most three repair attempts, keep the best red attempt under `quarantine/attempt-<n>/`; never promote
 it into `final/` or call it ship-ready.
 
+A completed proof-gated edit may be reopened only by typed owner feedback with
+`verdict: changes_requested`; Eddy moves that exact candidate to its numbered quarantine attempt
+before accepting the repaired host plan.
+
 Do not claim Eddy is safe to publish without human review until the repository trust ledger records
 five owner-approved dogfood runs with no unresolved critical failures. Before that unlock, call green
 outputs proof-gated candidates.
