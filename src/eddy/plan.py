@@ -66,6 +66,19 @@ class HookPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class PrivacyMask:
+    id: str
+    hook_ids: tuple[str, ...]
+    start: float
+    end: float
+    x: int
+    y: int
+    width: int
+    height: int
+    color: str
+
+
+@dataclass(frozen=True, slots=True)
 class EditPlanV3:
     schema_version: str
     source_hashes: dict[str, str]
@@ -73,6 +86,7 @@ class EditPlanV3:
     editorial_review: EditorialReview
     body: BodyPlan
     hooks: tuple[HookPlan, HookPlan, HookPlan]
+    privacy_masks: tuple[PrivacyMask, ...]
     shorts: tuple[ShortPlan, ...]
     motion_beats: tuple[dict[str, Any], ...]
 
@@ -93,6 +107,7 @@ class EditPlanV3:
             "editorial_review",
             "body",
             "hooks",
+            "privacy_masks",
             "shorts",
             "motion_beats",
         }
@@ -110,6 +125,10 @@ class EditPlanV3:
             raise PlanValidationError("hook_ranks_must_be_1_2_3")
         if len({hook.id for hook in hooks}) != 3:
             raise PlanValidationError("hook_ids_must_be_unique")
+        privacy_masks = _parse_privacy_masks(
+            payload.get("privacy_masks", []),
+            valid_hook_ids={hook.id for hook in hooks},
+        )
 
         raw_review = payload.get("editorial_review")
         if not isinstance(raw_review, dict):
@@ -194,6 +213,7 @@ class EditPlanV3:
             editorial_review=editorial_review,
             body=body,
             hooks=hooks,  # type: ignore[arg-type]
+            privacy_masks=privacy_masks,
             shorts=tuple(shorts),
             motion_beats=motion_beats,
         )
@@ -238,6 +258,20 @@ class EditPlanV3:
                     "proof_assets": list(hook.proof_assets),
                 }
                 for hook in self.hooks
+            ],
+            "privacy_masks": [
+                {
+                    "id": mask.id,
+                    "hook_ids": list(mask.hook_ids),
+                    "start": mask.start,
+                    "end": mask.end,
+                    "x": mask.x,
+                    "y": mask.y,
+                    "width": mask.width,
+                    "height": mask.height,
+                    "color": mask.color,
+                }
+                for mask in self.privacy_masks
             ],
             "shorts": [
                 {
@@ -298,6 +332,73 @@ def _parse_hook(value: object) -> HookPlan:
     if not isinstance(proof_assets, list) or not all(isinstance(item, str) for item in proof_assets):
         raise PlanValidationError("hook_proof_assets_invalid")
     return HookPlan(hook_id.strip(), rank, segments, tuple(proof_assets))
+
+
+def _parse_privacy_masks(
+    value: object,
+    *,
+    valid_hook_ids: set[str],
+) -> tuple[PrivacyMask, ...]:
+    rows = _dict_sequence(value, "privacy_masks")
+    masks: list[PrivacyMask] = []
+    seen_ids: set[str] = set()
+    for row in rows:
+        mask_id = row.get("id")
+        hook_ids = row.get("hook_ids")
+        if not isinstance(mask_id, str) or not mask_id.strip():
+            raise PlanValidationError("privacy_mask_id_required")
+        mask_id = mask_id.strip()
+        if mask_id in seen_ids:
+            raise PlanValidationError("privacy_mask_ids_must_be_unique")
+        seen_ids.add(mask_id)
+        if (
+            not isinstance(hook_ids, list)
+            or not hook_ids
+            or not all(isinstance(hook_id, str) and hook_id.strip() for hook_id in hook_ids)
+        ):
+            raise PlanValidationError("privacy_mask_hook_ids_required")
+        normalized_hook_ids = tuple(hook_id.strip() for hook_id in hook_ids)
+        if any(hook_id not in valid_hook_ids for hook_id in normalized_hook_ids):
+            raise PlanValidationError("privacy_mask_hook_unknown")
+        try:
+            start = float(row["start"])
+            end = float(row["end"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PlanValidationError("privacy_mask_range_invalid") from exc
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+            raise PlanValidationError("privacy_mask_range_invalid")
+        coordinates = (row.get("x"), row.get("y"), row.get("width"), row.get("height"))
+        if not all(isinstance(item, int) and not isinstance(item, bool) for item in coordinates):
+            raise PlanValidationError("privacy_mask_rectangle_invalid")
+        x, y, width, height = coordinates
+        assert isinstance(x, int) and isinstance(y, int)
+        assert isinstance(width, int) and isinstance(height, int)
+        if x < 0 or y < 0 or width <= 0 or height <= 0:
+            raise PlanValidationError("privacy_mask_rectangle_invalid")
+        if x + width > 1920 or y + height > 1080:
+            raise PlanValidationError("privacy_mask_rectangle_out_of_bounds")
+        color = row.get("color", "0x111827")
+        if (
+            not isinstance(color, str)
+            or len(color) != 8
+            or not color.startswith("0x")
+            or any(character not in "0123456789abcdefABCDEF" for character in color[2:])
+        ):
+            raise PlanValidationError("privacy_mask_color_invalid")
+        masks.append(
+            PrivacyMask(
+                id=mask_id,
+                hook_ids=normalized_hook_ids,
+                start=start,
+                end=end,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                color=color,
+            )
+        )
+    return tuple(masks)
 
 
 def _parse_resolutions(value: object) -> tuple[EditorialResolution, ...]:

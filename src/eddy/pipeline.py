@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .audio_effect import restore_effect_cache, store_effect_cache
-from .plan import EditPlanV3, HookPlan, ShortPlan
+from .plan import EditPlanV3, HookPlan, PrivacyMask, ShortPlan
 from .proof import (
     caption_sync_verdict,
     caption_terminal_punctuation_verdict,
@@ -320,6 +320,7 @@ class PipelineRunner:
         fake_descript = bool(os.environ.get("EDDY_FAKE_DESCRIPT"))
         fake_hyperframes = bool(os.environ.get("EDDY_FAKE_HYPERFRAMES"))
         fatal_audio_failure = False
+        fatal_privacy_failure = False
 
         def finish_attempt() -> None:
             _write_json(
@@ -467,9 +468,35 @@ class PipelineRunner:
             if not context_green:
                 blockers.append("contextual_motion_fit_failed")
 
+            audio_input = motioned if motion_green else composite
+            applicable_masks = tuple(
+                mask for mask in plan.privacy_masks if item.hook.id in mask.hook_ids
+            )
+            if applicable_masks:
+                privacy_masked = stage / f"privacy-masked-{item.hook.rank}.mp4"
+                try:
+                    _apply_privacy_masks(
+                        self.root,
+                        audio_input,
+                        privacy_masked,
+                        applicable_masks,
+                    )
+                except RuntimeError:
+                    gates[f"privacy_masks_hook_{item.hook.rank}"] = False
+                    blockers.append(f"privacy_mask_failed:{item.hook.id}")
+                    fatal_privacy_failure = True
+                    break
+                gates[f"privacy_masks_hook_{item.hook.rank}"] = privacy_masked.exists()
+                if not privacy_masked.exists():
+                    blockers.append(f"privacy_mask_failed:{item.hook.id}")
+                    fatal_privacy_failure = True
+                    break
+                audio_input = privacy_masked
+            else:
+                gates[f"privacy_masks_hook_{item.hook.rank}"] = True
+
             self.manager.transition(job_id, JobState.ENHANCING_AUDIO)
             enhanced = long_dir / item.output_name
-            audio_input = motioned if motion_green else composite
             audio = _enhance_audio(
                 self.root,
                 audio_input,
@@ -556,7 +583,7 @@ class PipelineRunner:
 
         gates["three_long_variants"] = len(list(long_dir.glob("*.mp4"))) == 3
         gates["shared_body"] = body_camera.exists()
-        if fatal_audio_failure:
+        if fatal_audio_failure or fatal_privacy_failure:
             gates["shorts_quality"] = False
             gates["shorts_count"] = False
             gates["shorts_screen_proof"] = False
@@ -987,6 +1014,50 @@ def _enhance_audio(
                 ],
             )
     return AudioEnhancement(passed, audio.stderr)
+
+
+def _apply_privacy_masks(
+    root: Path,
+    input_media: Path,
+    output_media: Path,
+    masks: tuple[PrivacyMask, ...],
+) -> None:
+    if not masks:
+        raise ValueError("privacy_masks_required")
+    output_media.parent.mkdir(parents=True, exist_ok=True)
+    filters = [
+        (
+            f"drawbox=x={mask.x}:y={mask.y}:w={mask.width}:h={mask.height}:"
+            f"color={mask.color}:t=fill:enable='between(t,{mask.start:.3f},{mask.end:.3f})'"
+        )
+        for mask in masks
+    ]
+    _run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_media),
+            "-vf",
+            ",".join(filters),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "18",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(output_media),
+        ],
+        cwd=root,
+    )
 
 
 def _append_receipt_rows(path: Path, rows: list[dict[str, Any]]) -> None:

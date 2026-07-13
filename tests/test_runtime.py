@@ -92,6 +92,64 @@ def test_edit_plan_requires_three_ranked_hooks_and_one_body() -> None:
     assert plan.editorial_review.resolutions[0].candidate_id == "repeat-1"
 
 
+def test_privacy_mask_is_hook_scoped_and_survives_round_trip() -> None:
+    payload = valid_plan()
+    payload["privacy_masks"] = [
+        {
+            "id": "bystander-comment",
+            "hook_ids": ["proof"],
+            "start": 0.0,
+            "end": 18.7,
+            "x": 175,
+            "y": 920,
+            "width": 790,
+            "height": 160,
+            "color": "0x111827",
+        }
+    ]
+
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.privacy_masks[0].hook_ids == ("proof",)
+    assert plan.to_dict()["privacy_masks"] == payload["privacy_masks"]
+
+
+def test_privacy_mask_rejects_unknown_hook_and_out_of_bounds_rectangle() -> None:
+    unknown_hook = valid_plan()
+    unknown_hook["privacy_masks"] = [
+        {
+            "id": "bystander-comment",
+            "hook_ids": ["missing"],
+            "start": 0.0,
+            "end": 18.7,
+            "x": 175,
+            "y": 920,
+            "width": 790,
+            "height": 160,
+            "color": "0x111827",
+        }
+    ]
+    with pytest.raises(PlanValidationError, match="privacy_mask_hook_unknown"):
+        EditPlanV3.from_dict(unknown_hook)
+
+    out_of_bounds = valid_plan()
+    out_of_bounds["privacy_masks"] = [
+        {
+            "id": "bystander-comment",
+            "hook_ids": ["proof"],
+            "start": 0.0,
+            "end": 18.7,
+            "x": 175,
+            "y": 1000,
+            "width": 790,
+            "height": 160,
+            "color": "0x111827",
+        }
+    ]
+    with pytest.raises(PlanValidationError, match="privacy_mask_rectangle_out_of_bounds"):
+        EditPlanV3.from_dict(out_of_bounds)
+
+
 def test_short_drop_is_source_bounded_and_survives_round_trip() -> None:
     payload = valid_plan()
     payload["shorts"][0]["segments"] = [[0.0, 2.0]]

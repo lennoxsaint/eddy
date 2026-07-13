@@ -88,6 +88,12 @@ pre-audio MP4 hash, cached output hash, provider provenance, and effect-survival
 The delivered file is still re-transcribed and rechecked.
 _Avoid_: Audio fallback, filename cache, assumed Studio Sound
 
+**Privacy Mask**:
+A deterministic, hook-scoped visual redaction rendered into the Long before Studio Sound and bound
+to delivered-relative time plus a validated 1920x1080 rectangle. It protects incidental people or
+private evidence without altering the immutable source files.
+_Avoid_: Source mutation, editor-memory blur, approval-time redaction
+
 **Owner Channel**:
 The maintainer installation channel linked directly to canonical `main`.
 _Avoid_: Public latest, nightly release

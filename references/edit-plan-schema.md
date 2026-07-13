@@ -44,6 +44,19 @@ source evidence; it never contains generated speech or packaging.
     {"id": "speed", "rank": 2, "segments": [[180.0, 215.0]], "proof_assets": []},
     {"id": "cost", "rank": 3, "segments": [[220.0, 255.0]], "proof_assets": []}
   ],
+  "privacy_masks": [
+    {
+      "id": "bystander-comment",
+      "hook_ids": ["proof"],
+      "start": 0.0,
+      "end": 18.7,
+      "x": 175,
+      "y": 920,
+      "width": 1420,
+      "height": 160,
+      "color": "0x111827"
+    }
+  ],
   "shorts": [
     {
       "id": "proof-short",
@@ -86,6 +99,9 @@ source evidence; it never contains generated speech or packaging.
 - Source hashes use source-relative paths and must exactly match the job's source lock.
 - There is one body and exactly three unique hooks ranked `1`, `2`, and `3`.
 - The rank-1 hook creates the Primary Long; ranks 2 and 3 create Alternate Longs.
+- Privacy masks are optional, have unique IDs, target existing hook IDs, use delivered-relative
+  time, and stay inside the 1920x1080 Long frame. They render before Studio Sound and cannot mutate
+  source media.
 - Every range is source time with `0 <= start < end`.
 - `editorial_review.coverage` spans every transcript chunk and every ledger candidate has exactly one
   resolution with a reason. The default resolution keeps the last complete clean variant.

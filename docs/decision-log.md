@@ -211,6 +211,18 @@ Sound cleans recorded audio. The correction was proved on the same July 13 priva
 first returned `no_verified_consent`; the corrected export passed effect survival at correlation
 `0.83978672` with `0.007271s` duration delta.
 
+## 2026-07-13 - Incidental people are redacted before owner approval
+
+- A host plan may declare deterministic privacy masks scoped to named Long hooks.
+- Masks use delivered-relative time and validated 1920x1080 rectangles, and are burned into the
+  motion-complete render before Studio Sound.
+- The source snapshot remains immutable. A configured mask that does not render blocks the attempt.
+- Redaction happens before private staging so the owner full-watch receipt binds the exact file that
+  can later become the Canonical Master.
+
+This prevents an approval receipt from becoming stale merely because an incidental comment, handle,
+or other private evidence was discovered after staging.
+
 The owner plugin may be launched by a desktop host that does not inherit shell startup variables.
 When `DESCRIPT_API_KEY` is absent from the process, Eddy reads only a literal exported value from the
 owner's `~/.zshenv`; it never executes the file, expands shell expressions, or logs the token.

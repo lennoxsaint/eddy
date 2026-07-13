@@ -7,6 +7,7 @@ import pytest
 from eddy.audio_effect import store_effect_cache
 from eddy.pipeline import (
     PipelineRunner,
+    _apply_privacy_masks,
     _combine_segment_receipts,
     _concat,
     _enhance_audio,
@@ -147,6 +148,39 @@ def test_audio_enhancement_reuses_exact_green_content_cache(
         row["event"] == "descript_effect_survival" and row["status"] == "pass"
         for row in receipt_rows
     )
+
+
+def test_privacy_masks_render_before_audio_enhancement(tmp_path: Path, monkeypatch) -> None:
+    payload = valid_plan()
+    payload["privacy_masks"] = [
+        {
+            "id": "bystander-comment",
+            "hook_ids": ["proof"],
+            "start": 0.0,
+            "end": 18.7,
+            "x": 175,
+            "y": 920,
+            "width": 790,
+            "height": 160,
+            "color": "0x111827",
+        }
+    ]
+    mask = EditPlanV3.from_dict(payload).privacy_masks[0]
+    input_media = tmp_path / "motioned.mp4"
+    output_media = tmp_path / "privacy-masked.mp4"
+    captured: list[list[str]] = []
+
+    def fake_run(command, *, cwd):
+        captured.append(command)
+        output_media.write_bytes(b"masked")
+
+    monkeypatch.setattr("eddy.pipeline._run", fake_run)
+
+    _apply_privacy_masks(tmp_path, input_media, output_media, (mask,))
+
+    assert captured[0][0] == "ffmpeg"
+    assert "drawbox=x=175:y=920:w=790:h=160:color=0x111827:t=fill:enable='between(t,0.000,18.700)'" in captured[0]
+    assert output_media.read_bytes() == b"masked"
 
 
 def test_render_plan_compiles_editorial_resolutions_into_explicit_drops(tmp_path: Path) -> None:
