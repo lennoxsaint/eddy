@@ -94,6 +94,11 @@ to delivered-relative time plus a validated 1920x1080 rectangle. It protects inc
 private evidence without altering the immutable source files.
 _Avoid_: Source mutation, editor-memory blur, approval-time redaction
 
+**Short Privacy Repair**:
+A post-completion, pixels-only Eddy repair that redacts an incidental Short exposure while preserving
+every Long hash and the proven Studio Sound audio stream byte-for-byte.
+_Avoid_: New audio render, Long replacement, unreceipted export
+
 **Owner Channel**:
 The maintainer installation channel linked directly to canonical `main`.
 _Avoid_: Public latest, nightly release

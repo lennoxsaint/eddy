@@ -234,6 +234,17 @@ or other private evidence was discovered after staging.
 This preserves the difference between a proof-gated edit and an owner-accepted edit without allowing
 manual state edits or off-pipeline media replacement.
 
+## 2026-07-13 - Completed Shorts allow proof-gated pixels-only privacy repair
+
+- `privacy-repair-v1` targets only a named `final/shorts/*.mp4` artifact.
+- Eddy validates the real portrait dimensions and mask ranges, proves the solid mask at its midpoint,
+  and preserves the prior audio elementary stream byte-for-byte.
+- Every Long hash and raw source hash must remain unchanged. The original Short remains under the
+  repair evidence folder and the final artifact manifest is regenerated.
+
+This provides a narrow privacy fix without rerunning Studio Sound, weakening the Long approval hash,
+or routing media through a manual editor.
+
 The owner plugin may be launched by a desktop host that does not inherit shell startup variables.
 When `DESCRIPT_API_KEY` is absent from the process, Eddy reads only a literal exported value from the
 owner's `~/.zshenv`; it never executes the file, expands shell expressions, or logs the token.

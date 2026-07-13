@@ -15,6 +15,7 @@ from .contract import canonical_contract
 from .caption_repair import repair_captions
 from .feedback import record_owner_feedback
 from .owner_plugin import owner_plugin_status
+from .privacy_repair import repair_short_privacy
 from .runtime import JobManager, JobState
 from .sync import CANONICAL_SURFACES, canonical_surface_commit, check_projection
 from .support import create_support_bundle
@@ -173,6 +174,14 @@ class EddyService:
 
     def repair_captions(self, job_id: str) -> dict[str, Any]:
         return repair_captions(root=self.canonical_root, manager=self.manager, job_id=job_id)
+
+    def repair_privacy(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return repair_short_privacy(
+            root=self.canonical_root,
+            manager=self.manager,
+            job_id=job_id,
+            payload=payload,
+        )
 
     def record_feedback(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         job = self.manager.load(job_id)

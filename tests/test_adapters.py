@@ -99,6 +99,7 @@ def test_mcp_server_exposes_every_public_tool(tmp_path: Path, monkeypatch) -> No
         "eddy_support_bundle",
         "eddy_sync_doctor",
         "eddy_record_feedback",
+        "eddy_repair_privacy",
     } <= names
 
 

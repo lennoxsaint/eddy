@@ -87,6 +87,7 @@ eddy submit <job-id> edit-plan.json
 eddy finalize <job-id>
 eddy status <job-id>
 eddy repair-captions <job-id>
+eddy repair-privacy <job-id> privacy-repair.json
 eddy record-feedback <job-id> owner-feedback.json
 ```
 
@@ -149,6 +150,9 @@ eddy record-feedback <job-id> owner-feedback.json
   10 fps pass.
 - Burned Shorts preserve sentence-ending periods, question marks, and exclamation marks. Stray
   decorative punctuation stays suppressed, and a generated-token proof blocks missing endings.
+- A completed Short privacy repair may change pixels only: it preserves every Long hash and the
+  proven Studio Sound audio stream byte-for-byte, proves each solid mask at its midpoint, and updates
+  the artifact manifest before promotion.
 - `spot-check.md`, `edit-plan.json`, `final/qa.json`, and `receipts.jsonl` are inspectable.
 
 ## Descript boundary

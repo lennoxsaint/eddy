@@ -63,6 +63,10 @@ def build_server() -> Any:
     def record_feedback(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         return service.record_feedback(job_id, payload)
 
+    @server.tool(name="eddy_repair_privacy")
+    def repair_privacy(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return service.repair_privacy(job_id, payload)
+
     return server
 
 

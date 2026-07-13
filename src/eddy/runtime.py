@@ -47,6 +47,7 @@ REQUIRED_FINAL_GATES = {
     "shorts_contextual_motion",
     *(f"hyperframes_motion_hook_{rank}" for rank in range(1, 4)),
     *(f"contextual_motion_hook_{rank}" for rank in range(1, 4)),
+    *(f"privacy_masks_hook_{rank}" for rank in range(1, 4)),
     *(f"descript_effect_survival_hook_{rank}" for rank in range(1, 4)),
     *(f"deterministic_qa_hook_{rank}" for rank in range(1, 4)),
 }

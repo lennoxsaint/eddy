@@ -44,6 +44,9 @@ def main(argv: list[str] | None = None) -> int:
     bundle.add_argument("--output", default=None)
     repair_captions = sub.add_parser("repair-captions")
     repair_captions.add_argument("job_id")
+    repair_privacy = sub.add_parser("repair-privacy")
+    repair_privacy.add_argument("job_id")
+    repair_privacy.add_argument("repair", help="privacy-repair-v1 JSON path, or - for stdin")
     feedback = sub.add_parser("record-feedback")
     feedback.add_argument("job_id")
     feedback.add_argument("feedback", help="owner-feedback-v1 JSON path, or - for stdin")
@@ -60,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         "cancel": lambda: service.cancel_job(args.job_id),
         "bundle": lambda: service.support_bundle(args.job_id, args.output),
         "repair-captions": lambda: service.repair_captions(args.job_id),
+        "repair-privacy": lambda: service.repair_privacy(args.job_id, _read_plan(args.repair)),
         "record-feedback": lambda: service.record_feedback(args.job_id, _read_plan(args.feedback)),
         "sync-doctor": service.sync_doctor,
     }
