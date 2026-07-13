@@ -1230,6 +1230,8 @@ def _descript_failure_blocker(stderr: str) -> str:
             return "descript_duration_parity_failed"
         if row.get("event") == "error":
             error = str(row.get("error", ""))
+            if "descript_voice_consent_required" in error:
+                return "descript_voice_consent_required"
             if "timeout" in error:
                 return "descript_provider_timeout"
             return "descript_provider_failed"

@@ -183,6 +183,13 @@ def host_connector_sound(wav: Path, out: Path, command: str) -> Path:
     return out
 
 
+def agent_terminal_blocker(response: str) -> str | None:
+    normalized = response.lower()
+    if "no_verified_consent" in normalized or "no verified voice consent" in normalized:
+        return "descript_voice_consent_required"
+    return None
+
+
 def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | None:
     if os.environ.get("EDDY_FAKE_DESCRIPT"):
         return fake_studio_sound(wav, out)
@@ -222,6 +229,9 @@ def studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path | Non
         ai_credits_used=agent_result.get("ai_credits_used"),
         resolved_model=agent_result.get("resolved_model") or agent_job.get("resolved_model"),
     )
+    terminal_blocker = agent_terminal_blocker(str(agent_result.get("agent_response") or ""))
+    if terminal_blocker:
+        raise RuntimeError(terminal_blocker)
     if not agent_result.get("project_changed"):
         raise RuntimeError("descript_agent_made_no_change")
 

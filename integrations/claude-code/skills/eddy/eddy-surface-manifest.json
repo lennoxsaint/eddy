@@ -24,7 +24,7 @@
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
     "references/verification.md": "c5c2e203aafa29c58bafd7d83da27c4d1c7aab7d2c3ace9cc90a9be031d0daad",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
-    "scripts/descript_studio_sound.py": "9177e473bdf40267204870f47e3c8a11e989ce116b2c9782a228fcd34890aa76",
+    "scripts/descript_studio_sound.py": "0ee6fa83900702f697e2c7247abe5cf1f36f7ff7f370eac3039008bb4b3c1daf",
     "scripts/karaoke_ass.py": "d73c9194e019d25c630c91b10435bc86d8a25a3d508475f6365ef05b5c2b7329",
     "scripts/motion_render.py": "64e3512fff954d1c64f42b9a6efe2160296a3b7a09cfab521dc2e0f2932cf3b7",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",

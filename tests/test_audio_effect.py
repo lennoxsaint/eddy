@@ -361,6 +361,29 @@ def test_descript_effect_retry_stops_after_second_unchanged_export(
     assert len(calls) == 2
 
 
+def test_descript_voice_consent_is_terminal_and_not_retried(tmp_path: Path, monkeypatch) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    calls = 0
+
+    def blocked_studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("descript_voice_consent_required")
+
+    monkeypatch.setattr(descript, "studio_sound", blocked_studio_sound)
+    with pytest.raises(RuntimeError, match="descript_voice_consent_required"):
+        descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
+    assert calls == 1
+
+
+def test_descript_agent_response_detects_voice_consent_blocker() -> None:
+    descript = load_descript_script()
+    response = "The speaker has no verified voice consent (`no_verified_consent`)."
+    assert descript.agent_terminal_blocker(response) == "descript_voice_consent_required"
+
+
 def test_descript_provider_timeout_retries_once(
     tmp_path: Path,
     monkeypatch,
