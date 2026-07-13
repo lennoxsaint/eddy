@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "652d8ea85e9c356bf0f67106088301f216c9650f",
+  "canonical_commit": "2c15c16266fd9e2ab036e8f1b720479bcb04ac18",
   "files": {
     "README.md": "8efc99dcc411aee739cd51c87090a616572be7c72d49692acce37b7c5be5b0ca",
-    "SKILL.md": "81f32890355471beb45157ed8316b5584443d750f62ffa72d809fb72a5f2034e",
+    "SKILL.md": "781770bc5ec5a34e6c7bb2508d5e4e1d860f5b9a397b8f06f9ed276cf31d59ea",
     "agents/openai.yaml": "bbb89a517e1b489c9f7c3decfcab7f6466e4391e98ab4602962c7a729174c6d6",
     "assets/eddy-eagle-icon.png": "fc3de64ea2499cf8b769da8197ef0868e6d3f5680e0ede2c1632d320a7d22993",
     "assets/eddy-eagle-logo.png": "1808a090c36fe43f28143f6d678959a21a3d5cbfbae4494a7656d4758fddb3ca",
@@ -24,13 +24,13 @@
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
     "references/verification.md": "c5c2e203aafa29c58bafd7d83da27c4d1c7aab7d2c3ace9cc90a9be031d0daad",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
-    "scripts/descript_studio_sound.py": "0ee6fa83900702f697e2c7247abe5cf1f36f7ff7f370eac3039008bb4b3c1daf",
+    "scripts/descript_studio_sound.py": "6715dcfd75d4e5e1f48044a702e74769683c9f7c755ac1f4ed887977e0e637aa",
     "scripts/karaoke_ass.py": "d73c9194e019d25c630c91b10435bc86d8a25a3d508475f6365ef05b5c2b7329",
     "scripts/motion_render.py": "64e3512fff954d1c64f42b9a6efe2160296a3b7a09cfab521dc2e0f2932cf3b7",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",
     "scripts/splice.py": "c9405f1185f9ba79ced444ab8997836a7883cd71947e859aab464fdb414550ba",
     "scripts/transcribe.py": "6dc38ffc28b1896270ee380957092b65e6b576dba9d85b75ea9de82fdd5323ba",
-    "scripts/verify.py": "49cddf9a1caa86c73b0ee2385a5dcc2633add5588e515650e889ba5ef35520aa"
+    "scripts/verify.py": "f8feb9fecfcc7bcf2428cf452bcef47d9a9c574f380b31d944956f588931d45f"
   },
   "schema_version": "eddy-surface-manifest-v1"
 }

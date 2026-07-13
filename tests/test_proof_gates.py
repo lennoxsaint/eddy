@@ -601,6 +601,40 @@ def test_delivered_repeat_honors_matching_reviewed_callback() -> None:
     assert verify.filter_resolved_intentional_repeats([issue], plan, ledger) == []
 
 
+def test_delivered_repeat_honors_reviewed_subset_after_discarded_source_retakes() -> None:
+    verify = _load_script("verify")
+    issue = {
+        "kind": "repeat",
+        "variants": [
+            {"text": "One thing before I start every command and prompt is free."},
+            {"text": "The exact repo every command and prompt is free at the end."},
+        ],
+    }
+    ledger = {
+        "candidates": [
+            {
+                "id": "repeat-reviewed",
+                "kind": "repeat",
+                "variants": [
+                    {"text": "False start every command and prompt."},
+                    {"text": "Another discarded take every command and prompt."},
+                    {"text": "One thing before I start every command and prompt is free."},
+                    {"text": "The exact repo every command and prompt is free at the end."},
+                ],
+            }
+        ]
+    }
+    plan = {
+        "editorial_review": {
+            "resolutions": [
+                {"candidate_id": "repeat-reviewed", "action": "intentional_repeat"}
+            ]
+        }
+    }
+
+    assert verify.filter_resolved_intentional_repeats([issue], plan, ledger) == []
+
+
 def test_delivered_repeat_does_not_hide_unmatched_retake() -> None:
     verify = _load_script("verify")
     issue = {

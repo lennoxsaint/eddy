@@ -287,6 +287,29 @@ def test_descript_prompt_always_requests_full_intensity_on_every_clip() -> None:
 
     assert "every clip" in prompt
     assert "100% intensity" in prompt
+    assert "Do not create, assign, train, or enable an AI Speaker" in prompt
+    assert "Speaker voice consent is not relevant" in prompt
+
+
+def test_descript_token_loads_from_literal_zshenv_when_plugin_env_is_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    descript = load_descript_script()
+    zshenv = tmp_path / ".zshenv"
+    zshenv.write_text('export DESCRIPT_API_KEY="owner-token"\n')
+    monkeypatch.delenv("DESCRIPT_API_KEY", raising=False)
+
+    assert descript.resolve_descript_token(zshenv) == "owner-token"
+
+
+def test_descript_token_loader_rejects_shell_expansion(tmp_path: Path, monkeypatch) -> None:
+    descript = load_descript_script()
+    zshenv = tmp_path / ".zshenv"
+    zshenv.write_text('export DESCRIPT_API_KEY="$(unsafe-command)"\n')
+    monkeypatch.delenv("DESCRIPT_API_KEY", raising=False)
+
+    assert descript.resolve_descript_token(zshenv) is None
 
 
 def test_unchanged_descript_export_retries_once_and_uses_green_result(
@@ -361,7 +384,10 @@ def test_descript_effect_retry_stops_after_second_unchanged_export(
     assert len(calls) == 2
 
 
-def test_descript_voice_consent_is_terminal_and_not_retried(tmp_path: Path, monkeypatch) -> None:
+def test_descript_agent_misroute_is_terminal_and_not_retried_by_provider_loop(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     descript = load_descript_script()
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -370,18 +396,94 @@ def test_descript_voice_consent_is_terminal_and_not_retried(tmp_path: Path, monk
     def blocked_studio_sound(wav: Path, out: Path, token: str, intensity: int) -> Path:
         nonlocal calls
         calls += 1
-        raise RuntimeError("descript_voice_consent_required")
+        raise RuntimeError("descript_studio_sound_agent_misrouted")
 
     monkeypatch.setattr(descript, "studio_sound", blocked_studio_sound)
-    with pytest.raises(RuntimeError, match="descript_voice_consent_required"):
+    with pytest.raises(RuntimeError, match="descript_studio_sound_agent_misrouted"):
         descript.studio_sound_with_effect_retry(source, tmp_path / "work", "token", 100)
     assert calls == 1
 
 
-def test_descript_agent_response_detects_voice_consent_blocker() -> None:
+def test_descript_agent_response_detects_ai_speaker_misroute() -> None:
     descript = load_descript_script()
     response = "The speaker has no verified voice consent (`no_verified_consent`)."
-    assert descript.agent_terminal_blocker(response) == "descript_voice_consent_required"
+    assert descript.agent_response_misrouted(response) is True
+    assert "AI Speaker" in descript.studio_sound_correction_prompt(100)
+
+
+def test_descript_ai_speaker_misroute_gets_one_audio_effect_correction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    descript = load_descript_script()
+    source = tmp_path / "source.wav"
+    output = tmp_path / "cleaned.m4a"
+    source.write_bytes(b"recorded audio")
+    agent_prompts: list[str] = []
+
+    def fake_api(method: str, path: str, token: str, payload: dict | None) -> dict:
+        if path == "/jobs/import/project_media":
+            return {
+                "job_id": "import-job",
+                "project_id": "project-1",
+                "upload_urls": {descript.MEDIA_NAME: {"upload_url": "https://upload.invalid"}},
+            }
+        if path == "/jobs/agent":
+            assert payload is not None
+            agent_prompts.append(payload["prompt"])
+            return {"job_id": f"agent-{len(agent_prompts)}"}
+        if path == "/jobs/publish":
+            return {"job_id": "publish-job"}
+        raise AssertionError(path)
+
+    def fake_wait_job(job_id: str, token: str, timeout_s: int = 1800) -> dict:
+        if job_id == "import-job":
+            return {
+                "project_id": "project-1",
+                "result": {"created_compositions": [{"id": "composition-1"}]},
+            }
+        if job_id == "agent-1":
+            return {
+                "result": {
+                    "status": "success",
+                    "project_changed": True,
+                    "agent_response": "no_verified_consent",
+                }
+            }
+        if job_id == "agent-2":
+            return {
+                "result": {
+                    "status": "success",
+                    "project_changed": True,
+                    "agent_response": "Studio Sound is enabled at 100%.",
+                }
+            }
+        if job_id == "publish-job":
+            return {"result": {"download_url": "https://download.invalid"}}
+        raise AssertionError(job_id)
+
+    class FakeDownload:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self) -> bytes:
+            return b"cleaned audio"
+
+    monkeypatch.setattr(descript, "api", fake_api)
+    monkeypatch.setattr(descript, "upload", lambda url, wav: None)
+    monkeypatch.setattr(descript, "wait_job", fake_wait_job)
+    monkeypatch.setattr(descript.urllib.request, "urlopen", lambda url, timeout=300: FakeDownload())
+
+    result = descript.studio_sound(source, output, "token", 100)
+
+    assert result == output
+    assert output.read_bytes() == b"cleaned audio"
+    assert len(agent_prompts) == 2
+    assert "voice consent is not relevant" in agent_prompts[0]
+    assert "do not request voice consent" in agent_prompts[1]
 
 
 def test_descript_provider_timeout_retries_once(

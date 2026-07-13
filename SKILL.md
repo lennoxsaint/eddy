@@ -106,7 +106,11 @@ eddy record-feedback <job-id> owner-feedback.json
    echo and voice-texture scores as review diagnostics, not false promotion vetoes. If the effect did
    not survive an export, retry once through a fresh private render. A retryable provider failure gets
    up to three operational attempts with backoff; authentication and provenance faults fail
-   immediately. Reuse a prior green Studio Sound result only when the exact pre-audio MP4 hash,
+   immediately. Studio Sound is a file-level audio cleanup effect, not AI Speech: never create or
+   require an AI Speaker or voice-consent recording. If Descript misroutes the request through its AI
+   Speaker policy, issue one explicit audio-effect correction; if it repeats, block as
+   `descript_studio_sound_agent_misrouted` and use the authenticated host/UI effect path. Reuse a
+   prior green Studio Sound result only when the exact pre-audio MP4 hash,
    cached output hash, private provenance, and effect-survival receipt validate. Re-transcribe and QA
    cache hits normally. Never silently substitute local processing.
 8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.

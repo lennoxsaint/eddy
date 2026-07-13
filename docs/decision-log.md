@@ -192,3 +192,29 @@ request. It records Underlord's result, whether the project changed, resolved mo
 use without retaining private project identifiers in support bundles. The first failed
 Effect-Survival Gate ends the attempt before additional paid jobs; later outputs cannot rescue a
 required red audio gate.
+
+## 2026-07-13 - Studio Sound never requires AI Speaker consent
+
+- Studio Sound is requested as a file-level audio cleanup effect on imported recorded media.
+- Eddy explicitly forbids AI Speaker creation, AI Speech, Regenerate, text-to-speech, overdubbing,
+  and voice generation in the Studio Sound prompt.
+- A `no_verified_consent` response is evidence that Descript's agent misrouted the request through
+  AI Speaker policy, not evidence that Studio Sound itself requires consent.
+- Eddy sends one corrective audio-effect-only prompt. If the agent repeats the misroute, Eddy emits
+  `descript_studio_sound_agent_misrouted` and routes to the authenticated host/UI effect path; it
+  never asks the owner to record voice consent for Studio Sound.
+- Promotion still requires private provider provenance, duration parity, and a materially changed
+  exported waveform.
+
+This follows Descript's product boundary: consent belongs to generated AI Speakers, while Studio
+Sound cleans recorded audio. The correction was proved on the same July 13 private project that had
+first returned `no_verified_consent`; the corrected export passed effect survival at correlation
+`0.83978672` with `0.007271s` duration delta.
+
+The owner plugin may be launched by a desktop host that does not inherit shell startup variables.
+When `DESCRIPT_API_KEY` is absent from the process, Eddy reads only a literal exported value from the
+owner's `~/.zshenv`; it never executes the file, expands shell expressions, or logs the token.
+
+Delivered intentional callbacks may be a reviewed subset of a larger source repeat candidate after
+false starts and discarded takes are removed. Eddy requires every delivered variant to match a
+distinct reviewed source variant; extra unreviewed delivered variants still block.

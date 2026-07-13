@@ -1190,6 +1190,8 @@ def _append_provider_receipts(stderr: str, output: Path, *, artifact: str) -> No
     allowed_events = {
         "descript_provider",
         "descript_agent_result",
+        "descript_agent_misroute",
+        "descript_credentials_loaded",
         "descript_effect_survival",
         "descript_effect_retry",
         "descript_provider_retry",
@@ -1230,8 +1232,8 @@ def _descript_failure_blocker(stderr: str) -> str:
             return "descript_duration_parity_failed"
         if row.get("event") == "error":
             error = str(row.get("error", ""))
-            if "descript_voice_consent_required" in error:
-                return "descript_voice_consent_required"
+            if "descript_studio_sound_agent_misrouted" in error:
+                return "descript_studio_sound_agent_misrouted"
             if "timeout" in error:
                 return "descript_provider_timeout"
             return "descript_provider_failed"

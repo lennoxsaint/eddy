@@ -240,7 +240,10 @@ def _has_full_variant_matching(
     delivered: list[set[tuple[str, ...]]],
     source: list[set[tuple[str, ...]]],
 ) -> bool:
-    if len(delivered) != len(source) or len(delivered) < 2:
+    # Source review can legitimately contain discarded false starts and retakes. The delivered
+    # callback is resolved when every surviving delivered variant maps to a distinct reviewed
+    # source variant. Extra delivered variants remain blocking because they have no reviewed match.
+    if len(delivered) < 2 or len(delivered) > len(source):
         return False
     source_match: dict[int, int] = {}
 

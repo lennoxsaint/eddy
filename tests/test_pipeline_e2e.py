@@ -44,6 +44,14 @@ def test_descript_failure_blocker_distinguishes_provider_timeout() -> None:
     assert _descript_failure_blocker(stderr) == "descript_provider_timeout"
 
 
+def test_descript_failure_blocker_reports_agent_misroute_not_voice_consent() -> None:
+    stderr = json.dumps(
+        {"event": "error", "error": "descript_studio_sound_agent_misrouted"}
+    )
+
+    assert _descript_failure_blocker(stderr) == "descript_studio_sound_agent_misrouted"
+
+
 def test_descript_failure_blocker_keeps_effect_survival_reason() -> None:
     stderr = json.dumps(
         {
