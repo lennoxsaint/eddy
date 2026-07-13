@@ -101,7 +101,15 @@ eddy record-feedback <job-id> owner-feedback.json
 6. Compile all body drops, non-selected retake variants, hook removals, and Short removals into
    explicit splices. Tighten gaps above 0.2s to 0.1s, preserve word-onset pre-roll, cap unprotected
    delivered gaps at 0.28s, and cap protected silence at 0.8s. Reuse one shared body receipt.
-7. Apply real Descript Studio Sound to audio only. Require provider success, a changed project,
+7. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
+8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
+   Place compact skeuomorphic panels against the real underlying frame, automatically choose the
+   quietest valid region, reserve the camera PiP/face/caption/footer geometry, and prove the rendered
+   overlay pixels stay inside their assigned regions before compositing.
+9. Apply every declared hook-scoped privacy mask to the deterministic Long render. Validate its
+   delivered-relative range and 1920x1080 rectangle, render it before audio work, and block the
+   attempt if the redacted artifact is missing. Never alter the immutable raw source.
+10. Apply real Descript Studio Sound to audio only. Require provider success, a changed project,
    private export provenance, duration parity, and a signal-changing **Effect-Survival Gate**. Keep
    echo and voice-texture scores as review diagnostics, not false promotion vetoes. If the effect did
    not survive an export, retry once through a fresh private render. A retryable provider failure gets
@@ -113,17 +121,12 @@ eddy record-feedback <job-id> owner-feedback.json
    prior green Studio Sound result only when the exact pre-audio MP4 hash,
    cached output hash, private provenance, and effect-survival receipt validate. Re-transcribe and QA
    cache hits normally. Never silently substitute local processing.
-8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
-   Place compact skeuomorphic panels against the real underlying frame, automatically choose the
-   quietest valid region, reserve the camera PiP/face/caption/footer geometry, and prove the rendered
-   overlay pixels stay inside their assigned regions before compositing.
-9. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
-10. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke.
+11. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke.
     Project every caption word through the exact splice receipt and verify its timing against a fresh
     delivered transcript. A dual-source Short needs at least 25% verified raw-screen proof plus two
     compact animated HyperFrames beats: an opening hook beat by 2s and a later supporting proof beat.
-11. Iterate with proxies; render full resolution only after the final plan is green.
-12. Re-transcribe every emitted long and Short. Actual delivered silence is the hard pacing truth.
+12. Iterate with proxies; render full resolution only after the final plan is green.
+13. Re-transcribe every emitted long and Short. Actual delivered silence is the hard pacing truth.
     If word timing shows sustained slow p95 cadence or an extreme gap above 0.8s, run up to three
     improving time-only repairs, re-transcribe after each pass, verify, then re-hash all sources.
 
