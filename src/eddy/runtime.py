@@ -143,6 +143,88 @@ class JobManager:
         _receipt(updated, "job_state_changed", state=state.value)
         return updated
 
+    def request_owner_repair(self, job_id: str, *, reason: str) -> Job:
+        job = self.load(job_id)
+        if job.state is not JobState.COMPLETED:
+            raise RuntimeError(f"owner_repair_requires_completed_job:{job.state}")
+        if not reason.strip():
+            raise ValueError("owner_repair_reason_required")
+        final = job.run_dir / "final"
+        if not final.is_dir():
+            raise RuntimeError("owner_repair_final_missing")
+        quarantine = job.run_dir / "quarantine"
+        attempt_number = len(list(quarantine.glob("attempt-*"))) + 1
+        remaining_attempts = max(0, 3 - attempt_number)
+        if not remaining_attempts:
+            blockers = ("owner_repair_attempts_exhausted",)
+            updated = Job(
+                job.id,
+                job.source,
+                job.snapshot,
+                job.run_dir,
+                JobState.BLOCKED,
+                blockers,
+            )
+            _write_json(
+                job.run_dir / "repair-packet.json",
+                {
+                    "schema_version": "eddy-repair-packet-v1",
+                    "attempt": attempt_number,
+                    "remaining_attempts": 0,
+                    "gates": {},
+                    "blockers": list(blockers),
+                    "reason": reason.strip(),
+                    "quarantine": None,
+                },
+            )
+            self._save(updated)
+            _receipt(
+                updated,
+                "owner_repair_attempts_exhausted",
+                attempt=attempt_number,
+                reason=reason.strip(),
+            )
+            return updated
+
+        quarantined = quarantine / f"attempt-{attempt_number}"
+        quarantine.mkdir(parents=True, exist_ok=True)
+        if quarantined.exists():
+            raise RuntimeError(f"quarantine_attempt_exists:{quarantined.name}")
+        shutil.move(str(final), str(quarantined))
+        blockers = ("owner_directed_repair",)
+        _write_json(
+            job.run_dir / "repair-packet.json",
+            {
+                "schema_version": "eddy-repair-packet-v1",
+                "attempt": attempt_number,
+                "remaining_attempts": remaining_attempts,
+                "gates": json.loads((job.run_dir / "verification.json").read_text()).get(
+                    "gates", {}
+                ) if (job.run_dir / "verification.json").exists() else {},
+                "blockers": list(blockers),
+                "reason": reason.strip(),
+                "quarantine": str(quarantined),
+            },
+        )
+        updated = Job(
+            job.id,
+            job.source,
+            job.snapshot,
+            job.run_dir,
+            JobState.AWAITING_HOST_REPAIR,
+            blockers,
+        )
+        self._save(updated)
+        _receipt(
+            updated,
+            "owner_repair_requested",
+            attempt=attempt_number,
+            reason=reason.strip(),
+            quarantine=str(quarantined),
+            remaining_attempts=remaining_attempts,
+        )
+        return updated
+
     def receipt(self, job_id: str, event: str, **details: Any) -> None:
         """Append a public, secret-safe run event from deterministic pipeline stages."""
 

@@ -48,6 +48,43 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert cancelled["state"] == "cancelled"
 
 
+def test_changes_requested_feedback_reopens_completed_job_for_repair(tmp_path: Path) -> None:
+    source = tmp_path / "camera.mp4"
+    source.write_bytes(b"raw")
+    service = EddyService(tmp_path / "runs", auto_prepare=False)
+    started = service.edit_start(str(source), format="youtube")
+    run_dir = Path(started["run_dir"])
+    (run_dir / "final").mkdir()
+    (run_dir / "final" / "long-primary.mp4").write_bytes(b"candidate")
+    state = json.loads((run_dir / "state.json").read_text())
+    state["state"] = "completed"
+    (run_dir / "state.json").write_text(json.dumps(state))
+
+    result = service.record_feedback(
+        started["job_id"],
+        {
+            "schema_version": "owner-feedback-v1",
+            "job_id": started["job_id"],
+            "verdict": "changes_requested",
+            "approval_scope": ["long-primary"],
+            "summary": "Redact the incidental bystander comment before staging.",
+            "issues": [
+                {
+                    "artifact": "long-primary.mp4",
+                    "evidence": "A third-party name, handle, and profane comment are legible.",
+                    "category": "deterministic_bug",
+                    "scope": "current_run",
+                    "desired_correction": "Burn in a hook-scoped privacy mask before Studio Sound.",
+                }
+            ],
+        },
+    )
+
+    assert result["status"] == "recorded"
+    assert result["job"]["state"] == "awaiting_host_repair"
+    assert (run_dir / "quarantine" / "attempt-1" / "long-primary.mp4").exists()
+
+
 def test_sync_doctor_distinguishes_owner_main_and_stable_channels(tmp_path: Path) -> None:
     source = tmp_path / "camera.mp4"
     source.write_bytes(b"raw")

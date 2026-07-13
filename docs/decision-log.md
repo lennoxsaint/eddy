@@ -223,6 +223,17 @@ first returned `no_verified_consent`; the corrected export passed effect surviva
 This prevents an approval receipt from becoming stale merely because an incidental comment, handle,
 or other private evidence was discovered after staging.
 
+## 2026-07-13 - Green candidates reopen only through typed owner repair
+
+- `owner-feedback-v1` with `verdict: changes_requested` is the sole route from `completed` back to
+  `awaiting_host_repair`.
+- Eddy moves the completed candidate into its numbered quarantine attempt before accepting another
+  plan, keeping the source lock and evidence chain intact.
+- The same three-attempt ceiling applies. A rejection after attempt 3 moves the job to `blocked`.
+
+This preserves the difference between a proof-gated edit and an owner-accepted edit without allowing
+manual state edits or off-pipeline media replacement.
+
 The owner plugin may be launched by a desktop host that does not inherit shell startup variables.
 When `DESCRIPT_API_KEY` is absent from the process, Eddy reads only a literal exported value from the
 owner's `~/.zshenv`; it never executes the file, expands shell expressions, or logs the token.

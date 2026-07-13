@@ -176,7 +176,18 @@ class EddyService:
 
     def record_feedback(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         job = self.manager.load(job_id)
-        return record_owner_feedback(job.run_dir, job_id, payload)
+        result = record_owner_feedback(job.run_dir, job_id, payload)
+        feedback = result["feedback"]
+        if feedback["verdict"] == "changes_requested":
+            reason = str(feedback.get("summary", "")).strip()
+            if not reason:
+                reason = "; ".join(
+                    str(issue["desired_correction"])
+                    for issue in feedback.get("issues", [])
+                )
+            reopened = self.manager.request_owner_repair(job_id, reason=reason)
+            result["job"] = self._job_payload(reopened)
+        return result
 
     def sync_doctor(self) -> dict[str, Any]:
         commit = _git_commit(self.canonical_root)

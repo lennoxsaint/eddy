@@ -280,6 +280,57 @@ def test_job_start_hashes_sources_and_never_writes_inside_source(tmp_path: Path)
     assert (job.snapshot / "camera.mp4").read_bytes() == b"raw-media"
 
 
+def test_completed_job_can_be_reopened_for_one_receipted_owner_repair(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "camera.mp4").write_bytes(b"raw-media")
+    manager = JobManager(tmp_path / "runs")
+    job = manager.start(source)
+    final = job.run_dir / "final"
+    final.mkdir()
+    (final / "long-primary.mp4").write_bytes(b"candidate")
+    state = json.loads((job.run_dir / "state.json").read_text())
+    state["state"] = "completed"
+    (job.run_dir / "state.json").write_text(json.dumps(state))
+
+    reopened = manager.request_owner_repair(
+        job.id,
+        reason="Incidental bystander comment must be redacted before staging.",
+    )
+
+    assert reopened.state is JobState.AWAITING_HOST_REPAIR
+    assert not final.exists()
+    assert (job.run_dir / "quarantine" / "attempt-1" / "long-primary.mp4").exists()
+    packet = json.loads((job.run_dir / "repair-packet.json").read_text())
+    assert packet["blockers"] == ["owner_directed_repair"]
+    assert packet["remaining_attempts"] == 2
+
+
+def test_owner_repair_rejection_after_third_attempt_blocks_job(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "camera.mp4").write_bytes(b"raw-media")
+    manager = JobManager(tmp_path / "runs")
+    job = manager.start(source)
+    quarantine = job.run_dir / "quarantine"
+    (quarantine / "attempt-1").mkdir(parents=True)
+    (quarantine / "attempt-2").mkdir()
+    final = job.run_dir / "final"
+    final.mkdir()
+    state = json.loads((job.run_dir / "state.json").read_text())
+    state["state"] = "completed"
+    (job.run_dir / "state.json").write_text(json.dumps(state))
+
+    blocked = manager.request_owner_repair(
+        job.id,
+        reason="A second owner rejection is terminal.",
+    )
+
+    assert blocked.state is JobState.BLOCKED
+    assert blocked.blockers == ("owner_repair_attempts_exhausted",)
+    assert final.exists()
+
+
 def test_top_level_raw_media_excludes_nested_prior_run_artifacts(tmp_path: Path) -> None:
     source = tmp_path / "raw"
     source.mkdir()
