@@ -40,7 +40,7 @@ def repair_short_privacy(
         raise ValueError("privacy_repair_rows_required")
 
     final = job.run_dir / "final"
-    validated: list[tuple[str, Path, tuple[dict[str, Any], ...]]] = []
+    validated: list[tuple[str, Path, Path, bool, tuple[dict[str, Any], ...]]] = []
     seen: set[str] = set()
     for row in raw_repairs:
         if not isinstance(row, dict):
@@ -64,13 +64,20 @@ def repair_short_privacy(
         delivered = final / relative
         if not delivered.is_file():
             raise FileNotFoundError(f"privacy_repair_artifact_missing:{artifact}")
-        width, height, duration = _media_info(delivered)
+        rebuild = row.get("rebuild_from_original", False)
+        if not isinstance(rebuild, bool):
+            raise ValueError("privacy_repair_rebuild_flag_invalid")
+        base_media = delivered
+        if rebuild:
+            base_media = job.run_dir / "repairs" / "privacy-v1" / "originals" / relative
+            if not base_media.is_file():
+                raise FileNotFoundError(f"privacy_repair_original_missing:{artifact}")
+        width, height, duration = _media_info(base_media)
         masks = _validate_masks(row.get("masks"), width=width, height=height, duration=duration)
-        validated.append((artifact, delivered, masks))
+        validated.append((artifact, delivered, base_media, rebuild, masks))
 
-    repair = job.run_dir / "repairs" / "privacy-v1"
-    if repair.exists():
-        raise RuntimeError(f"privacy_repair_already_exists:{repair}")
+    revision = _next_repair_revision(job.run_dir / "repairs")
+    repair = job.run_dir / "repairs" / f"privacy-v{revision}"
     originals = repair / "originals"
     candidates = repair / "candidates"
     originals.mkdir(parents=True)
@@ -80,13 +87,13 @@ def repair_short_privacy(
     long_hashes_before = {path.name: _sha256(path) for path in long_paths}
     blockers: list[str] = []
     repair_rows: list[dict[str, Any]] = []
-    for artifact, delivered, masks in validated:
+    for artifact, delivered, base_media, rebuild, masks in validated:
         original = originals / artifact
         candidate = candidates / artifact
         original.parent.mkdir(parents=True, exist_ok=True)
         candidate.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(delivered, original)
-        _render_masks(delivered, candidate, masks, cwd=root)
+        _render_masks(base_media, candidate, masks, cwd=root)
         before_audio = _audio_stream_sha256(delivered)
         after_audio = _audio_stream_sha256(candidate)
         before_info = _media_info(delivered)
@@ -106,6 +113,8 @@ def repair_short_privacy(
         repair_rows.append(
             {
                 "artifact": artifact,
+                "rebuilt_from_original": rebuild,
+                "base_media": str(base_media),
                 "pass": passed,
                 "masks": list(masks),
                 "visual_proof": visual_proof,
@@ -158,8 +167,18 @@ def repair_short_privacy(
     for short in qa.get("shorts", []):
         repair_row = by_id.get(str(short.get("short")))
         if repair_row:
-            short["privacy_masks"] = repair_row["masks"]
-            short["privacy_visual_proof"] = repair_row["visual_proof"]
+            if repair_row["rebuilt_from_original"]:
+                short["privacy_masks"] = repair_row["masks"]
+                short["privacy_visual_proof"] = repair_row["visual_proof"]
+            else:
+                short["privacy_masks"] = [
+                    *short.get("privacy_masks", []),
+                    *repair_row["masks"],
+                ]
+                short["privacy_visual_proof"] = [
+                    *short.get("privacy_visual_proof", []),
+                    *repair_row["visual_proof"],
+                ]
             short["privacy_audio_stream_identical"] = True
             short["pass"] = True
     qa.setdefault("gates", {})["shorts_privacy_masks"] = True
@@ -195,6 +214,7 @@ def repair_short_privacy(
     _write_json(final / "artifact-manifest.json", {"files": _artifact_hashes(final)})
     summary = {
         "schema_version": "eddy-privacy-repair-v1",
+        "revision": revision,
         "status": "pass",
         "blockers": [],
         "repairs": repair_rows,
@@ -207,11 +227,22 @@ def repair_short_privacy(
     manager.receipt(
         job_id,
         "privacy_repair_completed",
+        revision=revision,
         artifacts=[row["artifact"] for row in repair_rows],
         audio_streams_identical=True,
         long_hashes_unchanged=True,
     )
     return summary
+
+
+def _next_repair_revision(repairs_root: Path) -> int:
+    revisions: list[int] = []
+    if repairs_root.exists():
+        for path in repairs_root.glob("privacy-v*"):
+            suffix = path.name.removeprefix("privacy-v")
+            if path.is_dir() and suffix.isdigit():
+                revisions.append(int(suffix))
+    return max(revisions, default=0) + 1
 
 
 def _validate_masks(

@@ -99,6 +99,76 @@ def test_completed_short_privacy_repair_preserves_longs_and_proven_audio(tmp_pat
     assert qa["gates"]["shorts_privacy_masks"] is True
     assert qa["shorts"][0]["privacy_masks"][0]["id"] == "bystander-comments"
 
+    second = repair_short_privacy(
+        root=Path(__file__).resolve().parents[1],
+        manager=manager,
+        job_id=job.id,
+        payload={
+            "schema_version": "privacy-repair-v1",
+            "repairs": [
+                {
+                    "artifact": "shorts/03-theft.mp4",
+                    "masks": [
+                        {
+                            "id": "scrolled-comments",
+                            "start": 0.1,
+                            "end": 0.3,
+                            "x": 0,
+                            "y": 1300,
+                            "width": 1080,
+                            "height": 300,
+                            "color": "0xF7F9F9",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert second["status"] == "pass", second
+    assert second["revision"] == 2
+    assert (job.run_dir / "repairs" / "privacy-v2" / "repair-summary.json").exists()
+    qa = json.loads((final / "qa.json").read_text())
+    assert [mask["id"] for mask in qa["shorts"][0]["privacy_masks"]] == [
+        "bystander-comments",
+        "scrolled-comments",
+    ]
+
+    replacement = repair_short_privacy(
+        root=Path(__file__).resolve().parents[1],
+        manager=manager,
+        job_id=job.id,
+        payload={
+            "schema_version": "privacy-repair-v1",
+            "repairs": [
+                {
+                    "artifact": "shorts/03-theft.mp4",
+                    "rebuild_from_original": True,
+                    "masks": [
+                        {
+                            "id": "replacement-mask",
+                            "start": 0.0,
+                            "end": 0.2,
+                            "x": 0,
+                            "y": 1750,
+                            "width": 1080,
+                            "height": 170,
+                            "color": "0x111827",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert replacement["status"] == "pass", replacement
+    assert replacement["revision"] == 3
+    assert replacement["repairs"][0]["rebuilt_from_original"] is True
+    qa = json.loads((final / "qa.json").read_text())
+    assert [mask["id"] for mask in qa["shorts"][0]["privacy_masks"]] == [
+        "replacement-mask"
+    ]
+
 
 def test_short_privacy_repair_rejects_escape_and_out_of_bounds_masks(tmp_path: Path) -> None:
     source = tmp_path / "camera.mp4"

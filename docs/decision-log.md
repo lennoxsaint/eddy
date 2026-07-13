@@ -245,6 +245,12 @@ manual state edits or off-pipeline media replacement.
 This provides a narrow privacy fix without rerunning Studio Sound, weakening the Long approval hash,
 or routing media through a manual editor.
 
+Privacy repair revisions are append-only (`privacy-v1`, `privacy-v2`, and so on). When visual review
+finds that an earlier mask covered the wrong time window, a later revision may explicitly rebuild
+from the first revision's immutable original and declare the complete replacement mask set. Eddy
+keeps every rejected revision, re-proves audio-stream identity, and replaces the QA mask inventory
+instead of silently stacking stale masks.
+
 The owner plugin may be launched by a desktop host that does not inherit shell startup variables.
 When `DESCRIPT_API_KEY` is absent from the process, Eddy reads only a literal exported value from the
 owner's `~/.zshenv`; it never executes the file, expands shell expressions, or logs the token.
