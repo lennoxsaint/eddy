@@ -37,6 +37,7 @@ eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
 eddy finalize <job-id>
 eddy repair-captions <job-id>
+eddy repair-privacy <job-id> privacy-repair.json
 eddy record-feedback <job-id> owner-feedback.json
 ```
 

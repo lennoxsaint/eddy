@@ -96,6 +96,7 @@ continues to remove stray commas/quotes. `--proof-out` is the blocking generated
 
 ```
 eddy repair-captions <job-id>
+eddy repair-privacy <job-id> privacy-repair.json
 eddy record-feedback <job-id> owner-feedback.json
 ```
 
@@ -107,6 +108,11 @@ An owner rejection after attempt 3 transitions the job to `blocked`.
 `repair-captions` is valid only for a completed run. It preserves the three long hashes, remuxes the
 already-green Studio Sound audio streams byte-for-byte, retranscribes the repaired Shorts, reruns
 caption/motion/screen/deterministic gates, and leaves originals as repair evidence.
+
+`repair-privacy` is valid only for completed Short artifacts. It validates every portrait-frame
+rectangle and delivered-relative range, burns in the declared redactions, proves their midpoint
+pixels, preserves all Long hashes and the existing Studio Sound audio stream byte-for-byte, and
+keeps the original Short under `repairs/privacy-v1/originals/`.
 
 ## 7. HyperFrames motion — the DEFAULT engine (iconography-forward, threadify-fc)
 
