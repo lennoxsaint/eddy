@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "8babcbd3d90f405f69e74d5831e13a135228f80a",
+  "canonical_commit": "c64d0354ba1fa6e8a6efb9787933a984d3c3f507",
   "files": {
     "README.md": "f5f2fa478172899c484ac69be12a0c2333c6014bf8daa247be13b59bc54a3c2c",
-    "SKILL.md": "02eede9b87cc2fdcc75037f766f41abd11576be55f85858130a83bde51b1e6a7",
+    "SKILL.md": "b9337caeb53c561477821e11f137a572348e25459553c330b8ff6af8db1f4fb0",
     "agents/openai.yaml": "bbb89a517e1b489c9f7c3decfcab7f6466e4391e98ab4602962c7a729174c6d6",
     "assets/eddy-eagle-icon.png": "fc3de64ea2499cf8b769da8197ef0868e6d3f5680e0ede2c1632d320a7d22993",
     "assets/eddy-eagle-logo.png": "1808a090c36fe43f28143f6d678959a21a3d5cbfbae4494a7656d4758fddb3ca",
@@ -16,7 +16,7 @@
     "evals/evals.json": "5f08aba5a60355ce1b4b4bbd3d06859afdf21ff8cf56c54afb6ddfd4781b10e2",
     "references/commands.md": "767993ea1b62a1612fe2c3aff596626f328a0c05ade7f11cd20d1c9b4a7bba9b",
     "references/creator-good-v1.json": "ab413315506a77148ecc1778a9bf2b16b127a6f427b75a6a56c542b941ed7a19",
-    "references/edit-plan-schema.md": "bd016bed4da617e6455b95ba5a656a1c48e08fac23cd7b6fb5df941c8d98053c",
+    "references/edit-plan-schema.md": "c7e3dddbb8dde6580af60717f43fead7d642d0c67290bf8a72b2030c85b090d4",
     "references/hook-doctrine.md": "077fa891f915e4a35a9b4952abdccd413dd58bfb4064b461fd9d71f16a5e8c57",
     "references/layout-constants.md": "f22038962ed146f2074af716272543159669437f012f252236086d43671968bb",
     "references/motion-layer.md": "587c36062d5fcef2bb90184d604a607230256f8ec0a5241e66d451acce495284",

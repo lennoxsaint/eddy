@@ -34,6 +34,14 @@ first 30-60 seconds. Each hook must be self-contained, pay off a distinct angle,
 proof on screen when the narration names an artifact. Rank one angle as primary; the other two are
 alternate hooks, not independently drifting body edits.
 
+For projects snapshotted against YouTube Strategy Profile V5, use `edit-plan-v3.1`. It keeps the
+same three-hooks/one-body architecture and adds a complete Opening Proof Trailer contract for every
+hook: visual activity on frame one, a money shot by second 3, real proof by second 10, stakes by
+second 30, at least eight meaningful visual beats in the first 30 seconds, no unexplained static
+hold over four seconds, and passing muted, mobile, and human-taste reviews. Eddy renders all three
+openings through HyperFrames, then emits a three-way 0-30s comparison reel and contact sheet.
+`edit-plan-v3` remains accepted for legacy project snapshots.
+
 Preserve every unique substantive beat. Never gut a long recording into a summary clip, remove a
 protected or vulnerable moment, regenerate speech, overdub the speaker, or rewrite the opening line.
 Remove genuine retakes with last-take bias, remove dead air, and tighten ordinary gaps without

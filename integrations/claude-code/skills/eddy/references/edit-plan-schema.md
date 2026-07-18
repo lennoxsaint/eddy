@@ -94,6 +94,55 @@ source evidence; it never contains generated speech or packaging.
 }
 ```
 
+## V3.1 Opening Proof Trailer extension
+
+New Strategy Profile V5 projects set `schema_version` to `edit-plan-v3.1` and add:
+
+```json
+{
+  "opening_visual_contract": {
+    "schema_version": "1.0",
+    "profile_version": 5,
+    "contract_ref": "pre-production/review/opening-visual-contract.json",
+    "contract_sha256": "<sha256>",
+    "comparison_reel_ref": "source/eddy/opening-comparison-reel.mp4",
+    "contact_sheet_ref": "source/eddy/opening-contact-sheet.png",
+    "variants": [
+      {
+        "variant_id": "opening-proof",
+        "hook_id": "proof",
+        "money_shot_by_second": 3,
+        "proof_by_second": 8,
+        "stakes_by_second": 26,
+        "meaningful_visual_beat_ids": [
+          "proof-01",
+          "proof-02",
+          "proof-03",
+          "proof-04",
+          "proof-05",
+          "proof-06",
+          "proof-07",
+          "proof-08"
+        ],
+        "max_unexplained_static_hold_seconds": 3.5,
+        "muted_preview_status": "pass",
+        "mobile_preview_status": "pass",
+        "taste_review_status": "pass",
+        "outlier_visual_refs": ["observed-outlier-source-id"],
+        "tldraw_mode": "none"
+      }
+    ]
+  }
+}
+```
+
+The array contains one complete object for each of the three hook IDs. Every cited Long
+`motion_beats` row also declares `job`, `source_kind`, `source_ref`, `meaningful_change`, and
+`preview_safe: true`. At least eight cited beats must land inside 0-30 seconds for each hook, with
+the first starting by second `0.04`. More than 12 is a taste warning in pre-production, not a
+licence to replace meaningful change with decorative busyness. When `tldraw_mode` is
+`prepared_live_reveal`, the variant also cites its `.tldr` canvas and capture plan.
+
 ## Invariants
 
 - Source hashes use source-relative paths and must exactly match the job's source lock.
@@ -113,6 +162,10 @@ source evidence; it never contains generated speech or packaging.
 - Every dual-source Short maps at least 25% of its duration to raw screen proof and declares at least
   two motion beats: an opening hook beat by 2s and a later proof beat.
 - Each long hook receives at least two host-authored HyperFrames beats through `motion_beats`.
+- V5 `edit-plan-v3.1` hooks receive at least eight semantic Opening Proof Trailer beats in the first
+  30 seconds and pass the money-shot, proof, stakes, static-hold, muted, mobile, and taste gates.
+- Eddy emits `opening-comparison-reel.mp4` and `opening-contact-sheet.png` for V3.1 jobs so the
+  three hypotheses can be reviewed together before candidate selection.
 - Eddy resolves each motion beat against the real base frame into a compact contextual panel. Host
   intent supplies the message and visual layout; Eddy owns safe placement, PiP/face/caption/footer
   exclusions, light/dark environment treatment, and rendered-pixel collision proof.
