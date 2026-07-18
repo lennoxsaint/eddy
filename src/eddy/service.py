@@ -119,6 +119,16 @@ class EddyService:
                 "longs": {
                     "minimum_animated_beats_per_hook": 2,
                     "render_host_authored_plan": True,
+                    "opening_proof_trailer": {
+                        "variants": 3,
+                        "meaningful_visual_beats_first_30_min": 8,
+                        "frame_one_activity_by_second": 0.04,
+                        "money_shot_by_second": 3,
+                        "real_proof_by_second": 10,
+                        "stakes_by_second": 30,
+                        "max_unexplained_static_hold_seconds": 4,
+                        "requires_muted_mobile_and_taste_passes": True,
+                    },
                 },
                 "shorts": {
                     "minimum_screen_share": 0.25,
@@ -136,7 +146,8 @@ class EddyService:
                 if (job.run_dir / "repair-packet.json").exists()
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
-            "edit_plan_schema": "edit-plan-v3",
+            "edit_plan_schema": "edit-plan-v3.1",
+            "accepted_edit_plan_schemas": ["edit-plan-v3", "edit-plan-v3.1"],
             "quality_profile": json.loads(quality_profile_path.read_text()),
             "requirements": {
                 "primary_hooks": 1,

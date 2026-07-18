@@ -75,6 +75,60 @@ def valid_plan() -> dict:
     }
 
 
+def valid_plan_v31() -> dict:
+    payload = valid_plan()
+    payload["schema_version"] = "edit-plan-v3.1"
+    beats = []
+    variants = []
+    for hook_index, hook in enumerate(payload["hooks"]):
+        beat_ids = []
+        for beat_index in range(8):
+            beat_id = f"{hook['id']}-opening-beat-{beat_index + 1}"
+            beat_ids.append(beat_id)
+            beats.append(
+                {
+                    "id": beat_id,
+                    "hook_id": hook["id"],
+                    "start": beat_index * 3.5,
+                    "dur": 2.4,
+                    "layout": "stat",
+                    "job": "opening_proof_trailer",
+                    "source_kind": "real_proof" if beat_index < 3 else "hyperframes",
+                    "source_ref": f"proof/opening-{hook_index + 1}-{beat_index + 1}.png",
+                    "meaningful_change": f"Reveal state {beat_index + 1}",
+                    "preview_safe": True,
+                    "value": str(beat_index + 1),
+                }
+            )
+        variants.append(
+            {
+                "variant_id": f"opening-{hook_index + 1}",
+                "hook_id": hook["id"],
+                "money_shot_by_second": 3,
+                "proof_by_second": 8,
+                "stakes_by_second": 26,
+                "meaningful_visual_beat_ids": beat_ids,
+                "max_unexplained_static_hold_seconds": 3.5,
+                "muted_preview_status": "pass",
+                "mobile_preview_status": "pass",
+                "taste_review_status": "pass",
+                "outlier_visual_refs": [f"observed-outlier-{hook_index + 1}"],
+                "tldraw_mode": "none",
+            }
+        )
+    payload["motion_beats"] = beats
+    payload["opening_visual_contract"] = {
+        "schema_version": "1.0",
+        "profile_version": 5,
+        "contract_ref": "pre-production/review/opening-visual-contract.json",
+        "contract_sha256": "c" * 64,
+        "comparison_reel_ref": "source/eddy/opening-comparison-reel.mp4",
+        "contact_sheet_ref": "source/eddy/opening-contact-sheet.png",
+        "variants": variants,
+    }
+    return payload
+
+
 def plan_for_job(job) -> dict:
     payload = valid_plan()
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
@@ -247,6 +301,45 @@ def test_long_motion_plan_must_cover_every_hook() -> None:
 
     with pytest.raises(PlanValidationError, match="long_two_motion_beats_required"):
         EditPlanV3.from_dict(no_motion)
+
+
+def test_edit_plan_v31_requires_three_complete_opening_proof_trailers() -> None:
+    payload = valid_plan_v31()
+
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.schema_version == "edit-plan-v3.1"
+    assert plan.opening_visual_contract is not None
+    assert len(plan.opening_visual_contract["variants"]) == 3
+    assert plan.to_dict()["opening_visual_contract"] == payload["opening_visual_contract"]
+
+
+def test_edit_plan_v31_rejects_missing_or_late_opening_proof() -> None:
+    missing = valid_plan_v31()
+    missing.pop("opening_visual_contract")
+    with pytest.raises(PlanValidationError, match="opening_visual_contract_required"):
+        EditPlanV3.from_dict(missing)
+
+    late = valid_plan_v31()
+    late["opening_visual_contract"]["variants"][0]["money_shot_by_second"] = 3.1
+    with pytest.raises(PlanValidationError, match="opening_money_shot_must_arrive_by_three_seconds"):
+        EditPlanV3.from_dict(late)
+
+
+def test_edit_plan_v31_binds_eight_semantic_beats_to_each_hook() -> None:
+    too_few = valid_plan_v31()
+    too_few["opening_visual_contract"]["variants"][1][
+        "meaningful_visual_beat_ids"
+    ] = too_few["opening_visual_contract"]["variants"][1][
+        "meaningful_visual_beat_ids"
+    ][:7]
+    with pytest.raises(PlanValidationError, match="opening_eight_meaningful_beats_required"):
+        EditPlanV3.from_dict(too_few)
+
+    missing_semantics = valid_plan_v31()
+    missing_semantics["motion_beats"][0].pop("meaningful_change")
+    with pytest.raises(PlanValidationError, match="long_motion_semantic_fields_required"):
+        EditPlanV3.from_dict(missing_semantics)
 
 
 def test_protected_span_cannot_be_dropped_or_omitted_from_shared_body() -> None:

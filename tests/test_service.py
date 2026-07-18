@@ -42,6 +42,9 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["editorial_ledger"]["chunks"][0]["id"] == "chunk-001"
     assert packet["motion_requirements"]["shorts"]["minimum_animated_beats"] == 2
     assert packet["motion_requirements"]["longs"]["render_host_authored_plan"] is True
+    assert packet["motion_requirements"]["longs"]["opening_proof_trailer"]["variants"] == 3
+    assert packet["edit_plan_schema"] == "edit-plan-v3.1"
+    assert packet["accepted_edit_plan_schemas"] == ["edit-plan-v3", "edit-plan-v3.1"]
     assert packet["quality_profile"]["id"] == "creator_good_v1"
     assert packet["quality_profile"]["captions"]["terminal_punctuation"] == [".", "?", "!"]
     assert packet["requested_host_action"] == "review_every_chunk_and_resolve_every_ledger_item"

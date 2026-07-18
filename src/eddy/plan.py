@@ -89,6 +89,7 @@ class EditPlanV3:
     privacy_masks: tuple[PrivacyMask, ...]
     shorts: tuple[ShortPlan, ...]
     motion_beats: tuple[dict[str, Any], ...]
+    opening_visual_contract: dict[str, Any] | None
 
     @property
     def primary_hook(self) -> HookPlan:
@@ -110,11 +111,13 @@ class EditPlanV3:
             "privacy_masks",
             "shorts",
             "motion_beats",
+            "opening_visual_contract",
         }
         extra = sorted(set(payload) - allowed)
         if extra:
             raise PlanValidationError(f"unsupported_edit_plan_fields:{','.join(extra)}")
-        if payload.get("schema_version") != "edit-plan-v3":
+        schema_version = payload.get("schema_version")
+        if schema_version not in {"edit-plan-v3", "edit-plan-v3.1"}:
             raise PlanValidationError("edit_plan_schema_version_invalid")
 
         raw_hooks = payload.get("hooks")
@@ -194,7 +197,11 @@ class EditPlanV3:
                     raise PlanValidationError("short_drop_overlaps_protected_span")
 
         motion_beats = _dict_sequence(payload.get("motion_beats", []), "motion_beats")
-        _validate_motion_beats(motion_beats, label="long_motion")
+        _validate_motion_beats(
+            motion_beats,
+            label="long_motion",
+            require_semantics=schema_version == "edit-plan-v3.1",
+        )
         for hook in hooks:
             applicable = tuple(
                 beat
@@ -206,8 +213,20 @@ class EditPlanV3:
             if min(float(beat["start"]) for beat in applicable) > 2.0:
                 raise PlanValidationError(f"long_hook_motion_must_start_by_two_seconds:{hook.id}")
 
+        opening_visual_contract = None
+        if schema_version == "edit-plan-v3.1":
+            opening_visual_contract = _parse_opening_visual_contract(
+                payload.get("opening_visual_contract"),
+                hooks=hooks,
+                motion_beats=motion_beats,
+            )
+        elif payload.get("opening_visual_contract") is not None:
+            raise PlanValidationError(
+                "opening_visual_contract_requires_edit_plan_v3_1"
+            )
+
         return cls(
-            schema_version="edit-plan-v3",
+            schema_version=schema_version,
             source_hashes=dict(hashes),
             protected=protected,
             editorial_review=editorial_review,
@@ -216,10 +235,11 @@ class EditPlanV3:
             privacy_masks=privacy_masks,
             shorts=tuple(shorts),
             motion_beats=motion_beats,
+            opening_visual_contract=opening_visual_contract,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "schema_version": self.schema_version,
             "source_hashes": self.source_hashes,
             "protected": list(self.protected),
@@ -285,6 +305,9 @@ class EditPlanV3:
             ],
             "motion_beats": list(self.motion_beats),
         }
+        if self.opening_visual_contract is not None:
+            payload["opening_visual_contract"] = self.opening_visual_contract
+        return payload
 
 
 def _valid_hash(value: object) -> bool:
@@ -470,7 +493,12 @@ def _parse_short(value: object, *, dual_source: bool) -> ShortPlan:
     return ShortPlan(value["id"].strip(), segments, drops, proof, beats)
 
 
-def _validate_motion_beats(beats: tuple[dict[str, Any], ...], *, label: str) -> None:
+def _validate_motion_beats(
+    beats: tuple[dict[str, Any], ...],
+    *,
+    label: str,
+    require_semantics: bool = False,
+) -> None:
     ids: list[str] = []
     for beat in beats:
         try:
@@ -480,7 +508,9 @@ def _validate_motion_beats(beats: tuple[dict[str, Any], ...], *, label: str) -> 
         beat_id = beat.get("id")
         layout = beat.get("layout")
         if (
-            start < 0
+            not math.isfinite(start)
+            or not math.isfinite(duration)
+            or start < 0
             or duration <= 0
             or not isinstance(beat_id, str)
             or not beat_id.strip()
@@ -488,9 +518,132 @@ def _validate_motion_beats(beats: tuple[dict[str, Any], ...], *, label: str) -> 
             or not layout.strip()
         ):
             raise PlanValidationError(f"{label}_beat_invalid")
+        if require_semantics and (
+            not all(
+                isinstance(beat.get(field), str) and str(beat[field]).strip()
+                for field in ("job", "source_kind", "source_ref", "meaningful_change")
+            )
+            or beat.get("preview_safe") is not True
+        ):
+            raise PlanValidationError(f"{label}_semantic_fields_required")
         ids.append(beat_id)
     if len(set(ids)) != len(ids):
         raise PlanValidationError(f"{label}_beat_ids_must_be_unique")
+
+
+def _parse_opening_visual_contract(
+    value: object,
+    *,
+    hooks: tuple[HookPlan, ...],
+    motion_beats: tuple[dict[str, Any], ...],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise PlanValidationError("opening_visual_contract_required")
+    if value.get("schema_version") != "1.0" or value.get("profile_version") != 5:
+        raise PlanValidationError("opening_visual_contract_version_invalid")
+    if (
+        not isinstance(value.get("contract_ref"), str)
+        or not value["contract_ref"].strip()
+        or not _valid_hash(value.get("contract_sha256"))
+    ):
+        raise PlanValidationError("opening_visual_contract_binding_invalid")
+    for field in ("comparison_reel_ref", "contact_sheet_ref"):
+        if not isinstance(value.get(field), str) or not value[field].strip():
+            raise PlanValidationError(f"opening_visual_{field}_required")
+
+    variants = value.get("variants")
+    if not isinstance(variants, list) or len(variants) != 3:
+        raise PlanValidationError("three_opening_visual_variants_required")
+    hook_ids = {hook.id for hook in hooks}
+    variant_hook_ids: list[str] = []
+    variant_ids: list[str] = []
+    for item in variants:
+        if not isinstance(item, dict):
+            raise PlanValidationError("opening_visual_variant_invalid")
+        variant_id = item.get("variant_id")
+        hook_id = item.get("hook_id")
+        if not isinstance(variant_id, str) or not variant_id.strip():
+            raise PlanValidationError("opening_visual_variant_id_required")
+        if not isinstance(hook_id, str) or hook_id not in hook_ids:
+            raise PlanValidationError("opening_visual_hook_unknown")
+        variant_ids.append(variant_id.strip())
+        variant_hook_ids.append(hook_id)
+        _opening_deadline(
+            item.get("money_shot_by_second"),
+            maximum=3,
+            error="opening_money_shot_must_arrive_by_three_seconds",
+        )
+        _opening_deadline(
+            item.get("proof_by_second"),
+            maximum=10,
+            error="opening_real_proof_must_arrive_by_ten_seconds",
+        )
+        _opening_deadline(
+            item.get("stakes_by_second"),
+            maximum=30,
+            error="opening_stakes_must_arrive_by_thirty_seconds",
+        )
+        _opening_deadline(
+            item.get("max_unexplained_static_hold_seconds"),
+            maximum=4,
+            error="opening_static_hold_exceeds_four_seconds",
+        )
+        beat_ids = item.get("meaningful_visual_beat_ids")
+        if (
+            not isinstance(beat_ids, list)
+            or len(beat_ids) < 8
+            or not all(isinstance(beat_id, str) and beat_id.strip() for beat_id in beat_ids)
+        ):
+            raise PlanValidationError(
+                f"opening_eight_meaningful_beats_required:{hook_id}"
+            )
+        if len(set(beat_ids)) != len(beat_ids):
+            raise PlanValidationError(
+                f"opening_meaningful_beat_ids_must_be_unique:{hook_id}"
+            )
+        applicable = {
+            str(beat.get("id")): beat
+            for beat in motion_beats
+            if beat.get("hook_id") in {hook_id, "*", None}
+        }
+        if any(beat_id not in applicable for beat_id in beat_ids):
+            raise PlanValidationError(f"opening_meaningful_beat_unknown:{hook_id}")
+        if min(float(applicable[beat_id]["start"]) for beat_id in beat_ids) > 0.04:
+            raise PlanValidationError(f"opening_frame_one_activity_required:{hook_id}")
+        for field in (
+            "muted_preview_status",
+            "mobile_preview_status",
+            "taste_review_status",
+        ):
+            if item.get(field) != "pass":
+                raise PlanValidationError(f"opening_{field}_must_pass:{hook_id}")
+        refs = item.get("outlier_visual_refs")
+        if (
+            not isinstance(refs, list)
+            or not refs
+            or not all(isinstance(ref, str) and ref.strip() for ref in refs)
+        ):
+            raise PlanValidationError(f"opening_outlier_visual_refs_required:{hook_id}")
+        tldraw_mode = item.get("tldraw_mode")
+        if tldraw_mode not in {"none", "prepared_live_reveal"}:
+            raise PlanValidationError(f"opening_tldraw_mode_invalid:{hook_id}")
+        if tldraw_mode == "prepared_live_reveal":
+            for field in ("tldraw_canvas_ref", "tldraw_capture_plan_ref"):
+                if not isinstance(item.get(field), str) or not item[field].strip():
+                    raise PlanValidationError(f"opening_{field}_required:{hook_id}")
+    if len(set(variant_ids)) != 3:
+        raise PlanValidationError("opening_visual_variant_ids_must_be_unique")
+    if set(variant_hook_ids) != hook_ids:
+        raise PlanValidationError("opening_visual_variants_must_cover_each_hook")
+    return dict(value)
+
+
+def _opening_deadline(value: object, *, maximum: float, error: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise PlanValidationError(error)
+    number = float(value)
+    if not math.isfinite(number) or number < 0 or number > maximum:
+        raise PlanValidationError(error)
 
 
 def _overlaps(left: tuple[float, float], right: tuple[float, float]) -> bool:

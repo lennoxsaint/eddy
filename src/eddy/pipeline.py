@@ -323,6 +323,19 @@ class PipelineRunner:
         fatal_privacy_failure = False
 
         def finish_attempt() -> None:
+            opening_visual_delivery = _build_opening_visual_surfaces(
+                attempt,
+                plan.opening_visual_contract,
+                tuple(
+                    (item.hook.id, item.output_name)
+                    for item in render_plan.longs
+                ),
+            )
+            if opening_visual_delivery is not None:
+                opening_green = opening_visual_delivery["status"] == "pass"
+                gates["opening_visual_comparison_surfaces"] = opening_green
+                if not opening_green:
+                    blockers.append("opening_visual_comparison_surfaces_failed")
             _write_json(
                 attempt / "qa.json",
                 {
@@ -330,6 +343,7 @@ class PipelineRunner:
                     "shorts": short_qa_rows,
                     "gates": gates,
                     "blockers": blockers,
+                    "opening_visual_delivery": opening_visual_delivery,
                 },
             )
             primary_words = stage / "final-words-1.json"
@@ -1379,6 +1393,157 @@ def _write_motion_brief(
             "beats": list(beats),
         },
     )
+
+
+def _build_opening_visual_surfaces(
+    attempt: Path,
+    contract: dict[str, Any] | None,
+    candidate_order: tuple[tuple[str, str], ...],
+) -> dict[str, Any] | None:
+    if contract is None:
+        return None
+    raw_variants = contract.get("variants")
+    variants = raw_variants if isinstance(raw_variants, list) else []
+    variants_by_hook = {
+        str(variant.get("hook_id")): variant
+        for variant in variants
+        if isinstance(variant, dict)
+        and isinstance(variant.get("hook_id"), str)
+    }
+    candidates = [attempt / output_name for _, output_name in candidate_order]
+    candidate_variants = [
+        {
+            "position": index,
+            "hook_id": hook_id,
+            "variant_id": variants_by_hook.get(hook_id, {}).get("variant_id"),
+            "path": output_name,
+        }
+        for index, (hook_id, output_name) in enumerate(candidate_order, start=1)
+    ]
+    delivery: dict[str, Any] = {
+        "schema_version": "1.0",
+        "contract_ref": contract["contract_ref"],
+        "contract_sha256": contract["contract_sha256"],
+        "variant_count": len(contract["variants"]),
+        "candidate_paths": [path.name for path in candidates],
+        "candidate_variants": candidate_variants,
+        "comparison_reel_path": "opening-comparison-reel.mp4",
+        "contact_sheet_path": "opening-contact-sheet.png",
+        "status": "fail",
+        "blocking_reasons": [],
+    }
+    if len(candidate_order) != 3 or len({hook_id for hook_id, _ in candidate_order}) != 3:
+        delivery["blocking_reasons"].append(
+            f"three ranked Long candidates required; found {len(candidate_order)}"
+        )
+        return delivery
+    if any(row["variant_id"] is None for row in candidate_variants):
+        delivery["blocking_reasons"].append(
+            "every ranked Long candidate must map to an opening visual variant"
+        )
+        return delivery
+    missing_candidates = [
+        path.name
+        for path in candidates
+        if not path.exists() or path.stat().st_size == 0
+    ]
+    if missing_candidates:
+        delivery["blocking_reasons"].append(
+            f"ranked Long candidates missing or empty: {','.join(missing_candidates)}"
+        )
+        return delivery
+
+    comparison_reel = attempt / delivery["comparison_reel_path"]
+    contact_sheet = attempt / delivery["contact_sheet_path"]
+    scale_filters = [
+        (
+            f"[{index}:v]trim=start=0:end=30,setpts=PTS-STARTPTS,"
+            "scale=640:360:force_original_aspect_ratio=decrease,"
+            f"pad=640:360:(ow-iw)/2:(oh-ih)/2:black[v{index}]"
+        )
+        for index in range(3)
+    ]
+    reel_filter = ";".join(scale_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"])
+    still_filters = [
+        (
+            f"[{index}:v]select='gte(t,3)',setpts=PTS-STARTPTS,"
+            "scale=640:360:force_original_aspect_ratio=decrease,"
+            f"pad=640:360:(ow-iw)/2:(oh-ih)/2:black[v{index}]"
+        )
+        for index in range(3)
+    ]
+    still_filter = ";".join(still_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"])
+    try:
+        _run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(candidates[0]),
+                "-i",
+                str(candidates[1]),
+                "-i",
+                str(candidates[2]),
+                "-filter_complex",
+                reel_filter,
+                "-map",
+                "[outv]",
+                "-t",
+                "30",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "18",
+                "-movflags",
+                "+faststart",
+                str(comparison_reel),
+            ],
+            cwd=attempt,
+        )
+        _run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(candidates[0]),
+                "-i",
+                str(candidates[1]),
+                "-i",
+                str(candidates[2]),
+                "-filter_complex",
+                still_filter,
+                "-map",
+                "[outv]",
+                "-frames:v",
+                "1",
+                str(contact_sheet),
+            ],
+            cwd=attempt,
+        )
+        comparison_duration = _media_duration(comparison_reel)
+    except (RuntimeError, subprocess.CalledProcessError, ValueError) as exc:
+        delivery["blocking_reasons"].append(f"comparison render failed: {exc}")
+        return delivery
+    if (
+        not comparison_reel.exists()
+        or comparison_reel.stat().st_size == 0
+        or not contact_sheet.exists()
+        or contact_sheet.stat().st_size == 0
+    ):
+        delivery["blocking_reasons"].append("comparison surfaces are missing or empty")
+        return delivery
+    delivery["comparison_duration_seconds"] = comparison_duration
+    if comparison_duration < 29.5:
+        delivery["blocking_reasons"].append(
+            "comparison reel must contain the full first 30 seconds; "
+            f"found {comparison_duration:.3f}s"
+        )
+        return delivery
+    delivery["status"] = "pass"
+    return delivery
 
 
 def _write_caption_words_for_segments(

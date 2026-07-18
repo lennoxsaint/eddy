@@ -8,6 +8,7 @@ from eddy.audio_effect import store_effect_cache
 from eddy.pipeline import (
     PipelineRunner,
     _apply_privacy_masks,
+    _build_opening_visual_surfaces,
     _combine_segment_receipts,
     _concat,
     _enhance_audio,
@@ -20,7 +21,7 @@ from eddy.pipeline import (
 )
 from eddy.plan import EditPlanV3
 from eddy.runtime import JobManager, JobState
-from test_runtime import valid_plan
+from test_runtime import valid_plan, valid_plan_v31
 
 
 def test_discover_sources_prefers_named_camera_and_screen(tmp_path: Path) -> None:
@@ -54,6 +55,78 @@ def test_render_plan_has_one_shared_body_and_three_ranked_outputs(tmp_path: Path
         {"span": [20.0, 22.0], "reason": "retake_group:repeat-1"},
     ]
     assert all(item.body_cutlist == render_plan.body_cutlist for item in render_plan.longs)
+
+
+def test_v31_builds_three_way_opening_comparison_surfaces(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate_order = (
+        ("proof", "long-primary.mp4"),
+        ("speed", "long-alt-1.mp4"),
+        ("cost", "long-alt-2.mp4"),
+    )
+    for _, name in candidate_order:
+        (tmp_path / name).write_bytes(b"rendered candidate")
+    (tmp_path / "long-stray.mp4").write_bytes(b"must not enter comparison")
+
+    def fake_run(command: list[str], *, cwd: Path) -> None:
+        Path(command[-1]).write_bytes(b"rendered comparison surface")
+
+    monkeypatch.setattr("eddy.pipeline._run", fake_run)
+    monkeypatch.setattr("eddy.pipeline._media_duration", lambda _: 30.0)
+    contract = valid_plan_v31()["opening_visual_contract"]
+
+    result = _build_opening_visual_surfaces(tmp_path, contract, candidate_order)
+
+    assert result is not None
+    assert result["status"] == "pass"
+    assert result["variant_count"] == 3
+    assert result["candidate_paths"] == [
+        "long-primary.mp4",
+        "long-alt-1.mp4",
+        "long-alt-2.mp4",
+    ]
+    assert result["candidate_variants"][0] == {
+        "position": 1,
+        "hook_id": "proof",
+        "variant_id": "opening-1",
+        "path": "long-primary.mp4",
+    }
+    assert result["comparison_duration_seconds"] == 30.0
+    assert (tmp_path / result["comparison_reel_path"]).exists()
+    assert (tmp_path / result["contact_sheet_path"]).exists()
+
+
+def test_v31_rejects_short_opening_comparison_reel(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate_order = (
+        ("proof", "long-primary.mp4"),
+        ("speed", "long-alt-1.mp4"),
+        ("cost", "long-alt-2.mp4"),
+    )
+    for _, name in candidate_order:
+        (tmp_path / name).write_bytes(b"rendered candidate")
+
+    def fake_run(command: list[str], *, cwd: Path) -> None:
+        Path(command[-1]).write_bytes(b"rendered comparison surface")
+
+    monkeypatch.setattr("eddy.pipeline._run", fake_run)
+    monkeypatch.setattr("eddy.pipeline._media_duration", lambda _: 12.0)
+
+    result = _build_opening_visual_surfaces(
+        tmp_path,
+        valid_plan_v31()["opening_visual_contract"],
+        candidate_order,
+    )
+
+    assert result is not None
+    assert result["status"] == "fail"
+    assert result["blocking_reasons"] == [
+        "comparison reel must contain the full first 30 seconds; found 12.000s"
+    ]
 
 
 def test_render_plan_uses_snapshot_sources_for_finalization(tmp_path: Path) -> None:
