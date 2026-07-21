@@ -39,6 +39,14 @@ def build_server() -> Any:
     def host_submit(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         return service.host_submit(job_id, payload)
 
+    @server.tool(name="eddy_opening_candidates")
+    def opening_candidates(job_id: str) -> dict[str, Any]:
+        return service.opening_candidates(job_id)
+
+    @server.tool(name="eddy_select_opening")
+    def select_opening(job_id: str, opening_id: str, reason: str) -> dict[str, Any]:
+        return service.select_opening(job_id, opening_id, reason=reason)
+
     @server.tool(name="eddy_finalize")
     def finalize(job_id: str) -> dict[str, Any]:
         return service.finalize(job_id)

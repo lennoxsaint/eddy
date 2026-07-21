@@ -24,8 +24,9 @@ eddy sync-doctor
 ## Workflow
 
 ```text
-eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3
--> eddy_host_submit -> eddy_finalize -> completed | awaiting_host_repair | blocked
+eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.2
+-> eddy_host_submit -> auto-selected | awaiting_opening_selection -> eddy_finalize
+-> completed | awaiting_host_repair | blocked
 ```
 
 The CLI provides the same recovery path when MCP is unavailable:
@@ -35,6 +36,8 @@ eddy options <source>
 eddy edit <source>
 eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
+eddy opening-candidates <job-id>
+eddy select-opening <job-id> <opening-id> --reason "<evidence>"
 eddy finalize <job-id>
 eddy repair-captions <job-id>
 eddy repair-privacy <job-id> privacy-repair.json
@@ -48,6 +51,11 @@ updates projections, GitHub `main`, CI proof, and the installed owner plugin as 
 The host model owns editorial taste. Eddy owns source locks, deterministic media mechanics,
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full
 product contract.
+
+Current `edit-plan-v3.2` projects treat frame one, second 3, and second 30 as separate retention
+surfaces. A hash-bound `frame.md` drives three opening compositions, one reused shared-body
+composition, and portrait Short timelines. HyperFrames controls full-frame proof, speaker geometry,
+illustrations, and semantically motivated transitions instead of merely adding small overlays.
 
 Preflight writes an Editorial Review Ledger. Final verification retranscribes every emitted video;
 source-plan timing never substitutes for delivered-media proof.

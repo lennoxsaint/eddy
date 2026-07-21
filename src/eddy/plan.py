@@ -6,6 +6,11 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from .choreography import (
+    ChoreographyValidationError,
+    validate_frame_contract,
+    validate_visual_choreography,
+)
 from .proof import screen_proof_share
 
 
@@ -90,6 +95,8 @@ class EditPlanV3:
     shorts: tuple[ShortPlan, ...]
     motion_beats: tuple[dict[str, Any], ...]
     opening_visual_contract: dict[str, Any] | None
+    frame_contract: dict[str, Any] | None
+    visual_choreography: dict[str, Any] | None
 
     @property
     def primary_hook(self) -> HookPlan:
@@ -112,12 +119,14 @@ class EditPlanV3:
             "shorts",
             "motion_beats",
             "opening_visual_contract",
+            "frame_contract",
+            "visual_choreography",
         }
         extra = sorted(set(payload) - allowed)
         if extra:
             raise PlanValidationError(f"unsupported_edit_plan_fields:{','.join(extra)}")
         schema_version = payload.get("schema_version")
-        if schema_version not in {"edit-plan-v3", "edit-plan-v3.1"}:
+        if schema_version not in {"edit-plan-v3", "edit-plan-v3.1", "edit-plan-v3.2"}:
             raise PlanValidationError("edit_plan_schema_version_invalid")
 
         raw_hooks = payload.get("hooks")
@@ -200,7 +209,7 @@ class EditPlanV3:
         _validate_motion_beats(
             motion_beats,
             label="long_motion",
-            require_semantics=schema_version == "edit-plan-v3.1",
+            require_semantics=schema_version in {"edit-plan-v3.1", "edit-plan-v3.2"},
         )
         for hook in hooks:
             applicable = tuple(
@@ -214,7 +223,7 @@ class EditPlanV3:
                 raise PlanValidationError(f"long_hook_motion_must_start_by_two_seconds:{hook.id}")
 
         opening_visual_contract = None
-        if schema_version == "edit-plan-v3.1":
+        if schema_version in {"edit-plan-v3.1", "edit-plan-v3.2"}:
             opening_visual_contract = _parse_opening_visual_contract(
                 payload.get("opening_visual_contract"),
                 hooks=hooks,
@@ -222,8 +231,53 @@ class EditPlanV3:
             )
         elif payload.get("opening_visual_contract") is not None:
             raise PlanValidationError(
-                "opening_visual_contract_requires_edit_plan_v3_1"
+                "opening_visual_contract_requires_edit_plan_v3_1_or_newer"
             )
+
+        frame_contract = None
+        visual_choreography = None
+        if schema_version == "edit-plan-v3.2":
+            if any(sum(end - start for start, end in hook.segments) < 30 for hook in hooks):
+                raise PlanValidationError("v3_2_opening_cut_must_cover_first_thirty_seconds")
+            try:
+                frame_contract = validate_frame_contract(payload.get("frame_contract"))
+                visual_choreography = validate_visual_choreography(
+                    payload.get("visual_choreography"),
+                    hook_ids=(hook.id for hook in hooks),
+                    short_ids=(short.id for short in shorts),
+                )
+                openings_by_hook = {
+                    str(opening["hook_id"]): opening
+                    for opening in visual_choreography["openings"]
+                }
+                for hook in hooks:
+                    planned_end = max(
+                        float(scene["end"])
+                        for scene in openings_by_hook[hook.id]["scenes"]
+                    )
+                    source_duration = sum(end - start for start, end in hook.segments)
+                    if planned_end + 0.01 < source_duration:
+                        raise PlanValidationError(
+                            f"opening_choreography_must_cover_complete_hook:{hook.id}"
+                        )
+                portrait_by_short = {
+                    str(item["short_id"]): item
+                    for item in visual_choreography["shorts"]
+                }
+                for short in shorts:
+                    planned_end = max(
+                        float(scene["end"])
+                        for scene in portrait_by_short[short.id]["scenes"]
+                    )
+                    source_duration = sum(end - start for start, end in short.segments)
+                    if planned_end + 0.01 < source_duration:
+                        raise PlanValidationError(
+                            f"portrait_choreography_must_cover_complete_short:{short.id}"
+                        )
+            except ChoreographyValidationError as exc:
+                raise PlanValidationError(str(exc)) from exc
+        elif payload.get("frame_contract") is not None or payload.get("visual_choreography") is not None:
+            raise PlanValidationError("visual_choreography_requires_edit_plan_v3_2")
 
         return cls(
             schema_version=schema_version,
@@ -236,6 +290,8 @@ class EditPlanV3:
             shorts=tuple(shorts),
             motion_beats=motion_beats,
             opening_visual_contract=opening_visual_contract,
+            frame_contract=frame_contract,
+            visual_choreography=visual_choreography,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -307,6 +363,10 @@ class EditPlanV3:
         }
         if self.opening_visual_contract is not None:
             payload["opening_visual_contract"] = self.opening_visual_contract
+        if self.frame_contract is not None:
+            payload["frame_contract"] = self.frame_contract
+        if self.visual_choreography is not None:
+            payload["visual_choreography"] = self.visual_choreography
         return payload
 
 

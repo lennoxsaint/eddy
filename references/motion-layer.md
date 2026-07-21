@@ -5,7 +5,25 @@ model turn static content into **dynamic animations** — animated section intro
 alive, varied slide+speaker layouts. We adopt this **scoped to high-leverage moments**, not the
 whole video, so it stays interactive without becoming bloated.
 
-## Where motion goes (scope)
+## V3.2 override: compose the argument, not an overlay
+
+For `edit-plan-v3.2`, HyperFrames owns the full visual canvas. The fixed-composite overlay rules
+below apply only to legacy v3/v3.1 jobs. A v3.2 scene chooses proof canvas, speaker full/edge/PiP,
+source screen, illustration canvas, or rare special emphasis. Use the real camera and screen cut
+masters as direct media and one paused GSAP timeline. Animate transforms and opacity, not layout
+properties, so frame seeking is deterministic.
+
+Frame one, 3s, and 30s are separate retention gates. Put motion and a legible premise on frame one;
+show the best honest money shot by 3s, real proof by 10s, and stakes by 30s. Openings require 8-12
+meaningful changes and at least three layouts. The body changes state every 6-12s, with a written
+reason for any hold beyond 8s. Shorts change every 4-8s after their opening. Quiet proof-reading time
+is good; unexplained stasis is not.
+
+Transition vocabulary is deliberately small: hard cut, continuation crossfade, semantic push,
+scale match, and rare brand-act wipe. Never use motion merely because the quota says so; every scene
+records the spoken cause and evidence authority.
+
+## Where motion goes (legacy scope)
 
 1. **Hook / first 60s** — the "$100k motion graphics." Animate the packaging promise. Highest
    priority; this is the 90%.

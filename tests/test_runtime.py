@@ -129,6 +129,146 @@ def valid_plan_v31() -> dict:
     return payload
 
 
+def _scene(
+    scene_id: str,
+    start: float,
+    end: float,
+    *,
+    job: str = "explain",
+    layout: str = "speaker_full",
+    authority: str = "raw_source",
+    transition: str = "hard_cut",
+    reason: str | None = None,
+) -> dict:
+    scene = {
+        "id": scene_id,
+        "start": start,
+        "end": end,
+        "speech_anchor": f"speech-{scene_id}",
+        "semantic_job": job,
+        "meaningful_change": f"Change the visual argument for {scene_id}",
+        "layout": layout,
+        "evidence_authority": authority,
+        "source_refs": ["camera.mp4"],
+        "motion_verb": "reveal",
+        "transition": transition,
+        "cause": "The spoken claim changes.",
+        "preview_safe": True,
+    }
+    if reason is not None:
+        scene["quiet_hold_reason"] = reason
+    return scene
+
+
+def valid_plan_v32() -> dict:
+    payload = valid_plan_v31()
+    payload["schema_version"] = "edit-plan-v3.2"
+    payload["hooks"][0]["segments"] = [[50.0, 80.0]]
+    payload["hooks"][1]["segments"] = [[70.0, 100.0]]
+    payload["hooks"][2]["segments"] = [[75.0, 105.0]]
+    for index, short in enumerate(payload["shorts"]):
+        start = float(index * 12)
+        short["segments"] = [[start, start + 12.0]]
+        short["screen_proof_segments"] = [[start, start + 3.0]]
+    openings = []
+    opening_layouts = [
+        "proof_canvas",
+        "speaker_edge_right",
+        "source_screen",
+        "speaker_full",
+        "illustration_canvas",
+        "speaker_pip",
+        "proof_canvas",
+        "special_emphasis",
+    ]
+    opening_jobs = [
+        "frame_one",
+        "money_shot",
+        "proof",
+        "explain",
+        "stakes",
+        "proof",
+        "explain",
+        "stakes",
+    ]
+    opening_starts = [0.0, 1.5, 3.0, 6.5, 10.0, 13.5, 18.0, 23.0]
+    for hook_index, hook in enumerate(payload["hooks"]):
+        scenes = []
+        for index, (layout, job) in enumerate(zip(opening_layouts, opening_jobs, strict=True)):
+            start = opening_starts[index]
+            end = opening_starts[index + 1] if index < 7 else 30.0
+            scenes.append(
+                _scene(
+                    f"{hook['id']}-scene-{index + 1}",
+                    start,
+                    end,
+                    job=job,
+                    layout=layout,
+                    authority="supplied_asset" if job in {"money_shot", "proof"} else "raw_source",
+                    reason=(
+                        "Let the viewer inspect the proof."
+                        if index in {1, 5, 6, 7}
+                        else None
+                    ),
+                )
+            )
+        openings.append(
+            {
+                "id": f"opening-{hook_index + 1}",
+                "hook_id": hook["id"],
+                "ranking_signals": {
+                    "frame_one": 1.0,
+                    "money_shot": 1.0,
+                    "proof": 1.0,
+                    "stakes": 1.0,
+                    "muted": 1.0,
+                    "mobile": (1.0, 0.7, 0.0)[hook_index],
+                    "semantic_density": (1.0, 1.0, 0.5)[hook_index],
+                    "taste": (1.0, 0.0, 0.0)[hook_index],
+                },
+                "ranking_evidence": [f"opening-review-{hook_index + 1}.json"],
+                "rank_confidence": "certain",
+                "scenes": scenes,
+            }
+        )
+
+    body_scenes = [
+        _scene(
+            f"body-{index + 1}",
+            index * 8.0,
+            43.0 if index == 5 else (index + 1) * 8.0,
+            layout=("speaker_full", "source_screen", "speaker_edge_left")[index % 3],
+            reason="The proof needs uninterrupted reading time." if index == 1 else None,
+        )
+        for index in range(6)
+    ]
+    portrait_scenes = [
+        _scene(
+            f"short-scene-{index + 1}",
+            index * 1.0,
+            12.0 if index == 7 else (index + 1) * 1.0,
+            job=("frame_one", "money_shot", "proof", "explain")[min(index, 3)],
+            layout=("speaker_full", "proof_canvas", "speaker_pip", "source_screen")[index % 4],
+        )
+        for index in range(8)
+    ]
+    payload["frame_contract"] = {
+        "schema_version": "eddy-project-frame-v1",
+        "ref": "frame.md",
+        "sha256": "d" * 64,
+    }
+    payload["visual_choreography"] = {
+        "schema_version": "eddy-visual-choreography-v1",
+        "openings": openings,
+        "shared_body": {"id": "shared-body", "scenes": body_scenes},
+        "shorts": [
+            {"short_id": short["id"], "scenes": portrait_scenes}
+            for short in payload["shorts"]
+        ],
+    }
+    return payload
+
+
 def plan_for_job(job) -> dict:
     payload = valid_plan()
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
@@ -340,6 +480,49 @@ def test_edit_plan_v31_binds_eight_semantic_beats_to_each_hook() -> None:
     missing_semantics["motion_beats"][0].pop("meaningful_change")
     with pytest.raises(PlanValidationError, match="long_motion_semantic_fields_required"):
         EditPlanV3.from_dict(missing_semantics)
+
+
+def test_edit_plan_v32_accepts_hash_bound_full_frame_choreography() -> None:
+    payload = valid_plan_v32()
+
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.schema_version == "edit-plan-v3.2"
+    assert plan.frame_contract == payload["frame_contract"]
+    assert plan.visual_choreography == payload["visual_choreography"]
+    assert plan.to_dict()["visual_choreography"]["shared_body"]["id"] == "shared-body"
+
+
+def test_edit_plan_v32_rejects_late_money_shot_and_body_cadence_gap() -> None:
+    late = valid_plan_v32()
+    late["visual_choreography"]["openings"][0]["scenes"][0]["end"] = 3.1
+    late["visual_choreography"]["openings"][0]["scenes"][1]["start"] = 3.1
+    late["visual_choreography"]["openings"][0]["scenes"][1]["end"] = 3.2
+    late["visual_choreography"]["openings"][0]["scenes"][2]["start"] = 3.2
+    with pytest.raises(PlanValidationError, match="opening_money_shot_must_arrive_by_three_seconds"):
+        EditPlanV3.from_dict(late)
+
+    sparse = valid_plan_v32()
+    sparse["visual_choreography"]["shared_body"]["scenes"][0]["end"] = 13.0
+    sparse["visual_choreography"]["shared_body"]["scenes"][1]["start"] = 13.0
+    with pytest.raises(PlanValidationError, match="visual_state_change_exceeds_twelve_seconds"):
+        EditPlanV3.from_dict(sparse)
+
+    incomplete = valid_plan_v32()
+    incomplete["visual_choreography"]["openings"][0]["scenes"][-1]["end"] = 29.0
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_choreography_must_cover_complete_hook:proof",
+    ):
+        EditPlanV3.from_dict(incomplete)
+
+    short_incomplete = valid_plan_v32()
+    short_incomplete["visual_choreography"]["shorts"][0]["scenes"][-1]["end"] = 11.0
+    with pytest.raises(
+        PlanValidationError,
+        match="portrait_choreography_must_cover_complete_short:short-0",
+    ):
+        EditPlanV3.from_dict(short_incomplete)
 
 
 def test_protected_span_cannot_be_dropped_or_omitted_from_shared_body() -> None:

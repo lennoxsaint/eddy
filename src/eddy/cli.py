@@ -35,6 +35,12 @@ def main(argv: list[str] | None = None) -> int:
     submit.add_argument("plan", help="EditPlanV3 JSON path, or - for stdin")
     finalize = sub.add_parser("finalize")
     finalize.add_argument("job_id")
+    opening_candidates = sub.add_parser("opening-candidates")
+    opening_candidates.add_argument("job_id")
+    select_opening = sub.add_parser("select-opening")
+    select_opening.add_argument("job_id")
+    select_opening.add_argument("opening_id")
+    select_opening.add_argument("--reason", required=True)
     status = sub.add_parser("status")
     status.add_argument("job_id")
     cancel = sub.add_parser("cancel")
@@ -59,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
         "packet": lambda: service.host_packet(args.job_id),
         "submit": lambda: service.host_submit(args.job_id, _read_plan(args.plan)),
         "finalize": lambda: service.finalize(args.job_id),
+        "opening-candidates": lambda: service.opening_candidates(args.job_id),
+        "select-opening": lambda: service.select_opening(
+            args.job_id, args.opening_id, reason=args.reason
+        ),
         "status": lambda: service.job_status(args.job_id),
         "cancel": lambda: service.cancel_job(args.job_id),
         "bundle": lambda: service.support_bundle(args.job_id, args.output),

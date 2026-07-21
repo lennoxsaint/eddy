@@ -38,6 +38,11 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Protected count** — `protected_count` (sacred spans) preserved end-to-end.
 - **Layout asserts** — PiP flush to the bottom-right corner at the right size/radius; screen fills
   the frame (no black bars) with slight rounded corners; Shorts stack geometry correct.
+- **V3.2 choreography contract** — frame hash matches; every source ref exists under the source
+  snapshot or run; opening/body/Short cadence, evidence authority, layout diversity, and transition
+  limits validate before render. HyperFrames lint, validate, and inspect receipts must be green.
+- **Opening selection** — ranking and selected opening are receipted. A top-two gap of five points
+  or less, or uncertain leading judgment, must pause before finalization.
 - **Caption sync** — cue timings align to word timings; no cue overlaps the next by >1 frame.
 - **Caption terminal punctuation** — the generated ASS token proof preserves source `.`, `?`, and
   `!` sentence endings while continuing to suppress stray decorative punctuation.
@@ -62,6 +67,8 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - Every cut logged with a one-line reason.
 - `spot-check.md` — cuts you were unsure about (timestamp + reason) for review. The no-review claim
   remains locked until five diverse owner-approved dogfoods are green.
+- `visual-choreography/` — project frame, opening ranking/selection, per-surface manifests,
+  animation maps, provenance, shared-body hash, and 0/1/3/10/30 comparison surfaces.
 - Final Second Brain run log through the canonical gateway.
 
 ## Setup failures & fallbacks (degrade gracefully, don't abort)

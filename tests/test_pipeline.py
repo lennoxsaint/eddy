@@ -9,6 +9,7 @@ from eddy.pipeline import (
     PipelineRunner,
     _apply_privacy_masks,
     _build_opening_visual_surfaces,
+    _collect_choreography_delivery,
     _combine_segment_receipts,
     _concat,
     _enhance_audio,
@@ -21,7 +22,7 @@ from eddy.pipeline import (
 )
 from eddy.plan import EditPlanV3
 from eddy.runtime import JobManager, JobState
-from test_runtime import valid_plan, valid_plan_v31
+from test_runtime import valid_plan, valid_plan_v31, valid_plan_v32
 
 
 def test_discover_sources_prefers_named_camera_and_screen(tmp_path: Path) -> None:
@@ -55,6 +56,65 @@ def test_render_plan_has_one_shared_body_and_three_ranked_outputs(tmp_path: Path
         {"span": [20.0, 22.0], "reason": "retake_group:repeat-1"},
     ]
     assert all(item.body_cutlist == render_plan.body_cutlist for item in render_plan.longs)
+
+
+def test_v32_selected_opening_becomes_primary_without_changing_shared_body(
+    tmp_path: Path,
+) -> None:
+    plan = EditPlanV3.from_dict(valid_plan_v32())
+
+    render_plan = build_render_plan(
+        plan,
+        tmp_path,
+        selected_opening_id="opening-2",
+    )
+
+    assert [item.hook.id for item in render_plan.longs] == ["speed", "proof", "cost"]
+    assert [item.output_name for item in render_plan.longs] == [
+        "long-primary.mp4",
+        "long-alternate-proof.mp4",
+        "long-alternate-cost.mp4",
+    ]
+    assert len({item.body_cutlist for item in render_plan.longs}) == 1
+
+
+def test_v32_collects_complete_choreography_proof_packet(tmp_path: Path) -> None:
+    plan = EditPlanV3.from_dict(valid_plan_v32())
+    stage = tmp_path / "stage"
+    attempt = tmp_path / "attempt"
+    run_dir = tmp_path / "run"
+    attempt.mkdir()
+    run_dir.mkdir()
+    required = (
+        "choreography-manifest.json",
+        "animation-map.json",
+        "provenance.json",
+        "render-receipt.json",
+        "hyperframes-lint.json",
+        "hyperframes-validate.json",
+        "hyperframes-inspect.json",
+        "hyperframes-render.json",
+        "storyboard.md",
+        "index.html",
+    )
+    labels = ["body", "opening-1", "opening-2", "opening-3", "short-0", "short-1", "short-2"]
+    for label in labels:
+        project = stage / f"choreography-{label}" / "project"
+        project.mkdir(parents=True)
+        for name in required:
+            (project / name).write_text(f"proof:{label}:{name}\n")
+    (stage / "body-choreographed.mp4").write_bytes(b"shared body")
+    for name in ("opening-ranking.json", "opening-selection.json", "frame.md"):
+        (run_dir / name).write_text(f"proof:{name}\n")
+
+    delivery = _collect_choreography_delivery(stage, attempt, run_dir, plan)
+
+    assert delivery is not None
+    assert delivery["status"] == "pass"
+    assert delivery["project_count"] == delivery["expected_project_count"] == 7
+    assert delivery["shared_body_sha256"]
+    assert not delivery["missing"]
+    assert (attempt / "visual-choreography" / "delivery.json").exists()
 
 
 def test_v31_builds_three_way_opening_comparison_surfaces(

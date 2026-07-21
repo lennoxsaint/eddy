@@ -1,7 +1,8 @@
 # Hook doctrine — the 90%
 
-The hook is ~90% of the video's value. Budget your effort accordingly: it is normal to iterate the
-first 60 seconds many times while the body gets one clean pass.
+The hook is ~90% of the video's value. The discovery hover preview makes the first visible frame,
+the first 3 seconds, and the first 30 seconds separate acceptance surfaces. Budget effort there
+accordingly while keeping the body produced and semantically paced.
 
 ## Step 1 — Establish the promise BEFORE editing the hook
 
@@ -57,3 +58,9 @@ Test & Compare measures a real like-for-like swap.
 The hook is where the "$100k motion graphics" go. Brief HyperFrames to animate the promise for the
 first 30-60s (see `motion-layer.md`). The visual and the spoken hook must reinforce the same
 promise — not compete.
+
+For v3.2, author three distinct semantic scene timelines and rank the treatments after muted/mobile
+inspection. Auto-select only when the leader is certain and more than five points clear. Otherwise
+use `eddy opening-candidates` and make a receipted `eddy select-opening` choice. Selection does not
+erase the alternates; it determines `long-primary.mp4`, while all three complete Longs still ship
+for like-for-like comparison.

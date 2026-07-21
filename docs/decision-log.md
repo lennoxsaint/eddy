@@ -258,3 +258,14 @@ owner's `~/.zshenv`; it never executes the file, expands shell expressions, or l
 Delivered intentional callbacks may be a reviewed subset of a larger source repeat candidate after
 false starts and discarded takes are removed. Eddy requires every delivered variant to match a
 distinct reviewed source variant; extra unreviewed delivered variants still block.
+
+## 2026-07-21 - Full-frame visual choreography replaces overlay-first motion for v3.2
+
+- Current projects use a hash-bound `frame.md` plus semantic opening, shared-body, and Short scene
+  timelines.
+- HyperFrames controls proof canvases, speaker geometry, illustrations, and transitions as one
+  composition; compact overlays remain only for backward-compatible v3/v3.1 plans.
+- Eddy auto-selects an opening only when its lead is certain and greater than five points. Close or
+  uncertain rankings pause in `awaiting_opening_selection` for a receipted choice.
+- The opening must move on frame one, show its money shot by 3s, real proof by 10s, stakes by 30s,
+  and contain 8-12 meaningful changes across at least three layout states.

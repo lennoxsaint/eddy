@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
@@ -11,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .choreography import rank_opening_candidates
 from .contract import canonical_contract
 from .caption_repair import repair_captions
 from .feedback import record_owner_feedback
@@ -93,6 +95,18 @@ class EddyService:
             if "screen" in relative.lower() or "display" in relative.lower()
         ]
         quality_profile_path = self.canonical_root / "references" / "creator-good-v1.json"
+        frame_path = job.run_dir / "frame.md"
+        if not frame_path.exists():
+            frame_path.write_text(
+                "# Eddy project frame\n\n"
+                "## Visual thesis\n\n"
+                "Lead with the strongest truthful proof, then change layout when the spoken argument changes.\n\n"
+                "## Opening contract\n\n"
+                "Frame one moves. Money shot by 3s. Real proof by 10s. Stakes by 30s.\n\n"
+                "## Evidence order\n\n"
+                "Raw source > supplied asset > pixel-faithful demo > diagram > clearly framed metaphor.\n"
+            )
+        frame_sha256 = hashlib.sha256(frame_path.read_bytes()).hexdigest()
         return {
             "schema_version": "eddy-host-packet-v3",
             "job_id": job.id,
@@ -129,12 +143,50 @@ class EddyService:
                         "max_unexplained_static_hold_seconds": 4,
                         "requires_muted_mobile_and_taste_passes": True,
                     },
+                    "adaptive_cadence": {
+                        "target_seconds": [6, 12],
+                        "reason_required_after_seconds": 8,
+                        "hard_max_seconds": 12,
+                        "max_same_layout_repeats": 2,
+                    },
                 },
                 "shorts": {
                     "minimum_screen_share": 0.25,
                     "minimum_animated_beats": 2,
                     "hook_beat_starts_by_s": 2.0,
-                }
+                    "adaptive_cadence_seconds": [4, 8],
+                    "brand_act_wipe_max": 1,
+                },
+                "visual_choreography": {
+                    "schema_version": "eddy-visual-choreography-v1",
+                    "opening_timelines": 3,
+                    "shared_body_timelines": 1,
+                    "portrait_timeline_per_short": True,
+                    "layouts": [
+                        "proof_canvas",
+                        "speaker_full",
+                        "speaker_edge_left",
+                        "speaker_edge_right",
+                        "speaker_pip",
+                        "source_screen",
+                        "illustration_canvas",
+                        "special_emphasis",
+                    ],
+                    "evidence_authority": [
+                        "raw_source",
+                        "supplied_asset",
+                        "pixel_faithful_demo",
+                        "diagram",
+                        "metaphor",
+                    ],
+                    "transitions": [
+                        "hard_cut",
+                        "continuation_crossfade",
+                        "semantic_push",
+                        "scale_match",
+                        "brand_act_wipe",
+                    ],
+                },
             },
             "prior_repair": (
                 json.loads((job.run_dir / "repair-packet.json").read_text())
@@ -146,8 +198,18 @@ class EddyService:
                 if (job.run_dir / "repair-packet.json").exists()
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
-            "edit_plan_schema": "edit-plan-v3.1",
-            "accepted_edit_plan_schemas": ["edit-plan-v3", "edit-plan-v3.1"],
+            "edit_plan_schema": "edit-plan-v3.2",
+            "accepted_edit_plan_schemas": [
+                "edit-plan-v3",
+                "edit-plan-v3.1",
+                "edit-plan-v3.2",
+            ],
+            "frame_contract": {
+                "schema_version": "eddy-project-frame-v1",
+                "path": str(frame_path),
+                "ref": "frame.md",
+                "sha256": frame_sha256,
+            },
             "quality_profile": json.loads(quality_profile_path.read_text()),
             "requirements": {
                 "primary_hooks": 1,
@@ -158,10 +220,89 @@ class EddyService:
         }
 
     def host_submit(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._job_payload(self.manager.submit_plan(job_id, payload))
+        job = self.manager.submit_plan(job_id, payload)
+        result = self._job_payload(job)
+        if payload.get("schema_version") == "edit-plan-v3.2":
+            opening_selection = self.opening_candidates(job_id)
+            result = {**self._job_payload(self.manager.load(job_id)), "opening_selection": opening_selection}
+        return result
+
+    def opening_candidates(self, job_id: str) -> dict[str, Any]:
+        job = self.manager.load(job_id)
+        if job.state not in {JobState.COMPILING, JobState.AWAITING_OPENING_SELECTION}:
+            raise RuntimeError(f"opening_candidates_unavailable:{job.state}")
+        plan = json.loads((job.run_dir / "edit-plan.json").read_text())
+        choreography = plan.get("visual_choreography")
+        if not isinstance(choreography, dict):
+            raise RuntimeError("opening_candidates_require_edit_plan_v3_2")
+        ranking = rank_opening_candidates(choreography.get("openings"))
+        ranking_path = job.run_dir / "opening-ranking.json"
+        ranking_path.write_text(json.dumps(ranking, indent=2, sort_keys=True) + "\n")
+        selection_path = job.run_dir / "opening-selection.json"
+        if selection_path.exists():
+            return {**ranking, **json.loads(selection_path.read_text())}
+        if ranking["status"] == "auto_selected":
+            selection = {
+                "status": "auto_selected",
+                "selected_opening_id": ranking["selected_opening_id"],
+                "reason": ranking["reason"],
+            }
+            selection_path.write_text(json.dumps(selection, indent=2, sort_keys=True) + "\n")
+            self.manager.receipt(
+                job_id,
+                "opening_auto_selected",
+                opening_id=selection["selected_opening_id"],
+                score_gap=ranking["score_gap"],
+            )
+            return {**ranking, **selection}
+        if job.state is JobState.COMPILING:
+            self.manager.transition(job_id, JobState.AWAITING_OPENING_SELECTION)
+        self.manager.receipt(
+            job_id,
+            "opening_selection_requested",
+            reason=ranking["reason"],
+            score_gap=ranking["score_gap"],
+        )
+        return ranking
+
+    def select_opening(self, job_id: str, opening_id: str, *, reason: str) -> dict[str, Any]:
+        job = self.manager.load(job_id)
+        if job.state is not JobState.AWAITING_OPENING_SELECTION:
+            raise RuntimeError(f"job_not_awaiting_opening_selection:{job.state}")
+        if not reason.strip():
+            raise ValueError("opening_selection_reason_required")
+        ranking = self.opening_candidates(job_id)
+        valid_ids = {str(row["opening_id"]) for row in ranking["candidates"]}
+        if opening_id not in valid_ids:
+            raise ValueError("opening_selection_unknown_candidate")
+        selection = {
+            "status": "manually_selected",
+            "selected_opening_id": opening_id,
+            "reason": reason.strip(),
+        }
+        job.run_dir.joinpath("opening-selection.json").write_text(
+            json.dumps(selection, indent=2, sort_keys=True) + "\n"
+        )
+        self.manager.receipt(
+            job_id,
+            "opening_manually_selected",
+            opening_id=opening_id,
+            reason=reason.strip(),
+        )
+        updated = self.manager.transition(job_id, JobState.COMPILING)
+        return {**self._job_payload(updated), "opening_selection": {**ranking, **selection}}
 
     def finalize(self, job_id: str) -> dict[str, Any]:
         self._recover_stale_finalize_claim(job_id)
+        plan_path = self.manager.load(job_id).run_dir / "edit-plan.json"
+        if plan_path.exists():
+            plan = json.loads(plan_path.read_text())
+            if plan.get("schema_version") == "edit-plan-v3.2":
+                selection = plan_path.parent / "opening-selection.json"
+                if not selection.exists():
+                    ranking = self.opening_candidates(job_id)
+                    if ranking["status"] == "selection_required":
+                        raise RuntimeError("opening_selection_required_before_finalize")
         job = self.manager.claim_finalize(job_id)
         try:
             self._launch_worker("finalize", job_id)

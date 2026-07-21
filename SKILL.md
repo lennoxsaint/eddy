@@ -29,18 +29,23 @@ For a normal "edit this" request, Eddy produces videos only:
 Titles, descriptions, chapters, thumbnails, uploads, publishing, sending, and scheduling are outside
 v3.0. Never mutate, move, delete, upload, or publish source media.
 
-The hook carries roughly 90% of the video's leverage. Spend disproportionate editorial effort on the
-first 30-60 seconds. Each hook must be self-contained, pay off a distinct angle, and show concrete
-proof on screen when the narration names an artifact. Rank one angle as primary; the other two are
-alternate hooks, not independently drifting body edits.
+The hook carries roughly 90% of the video's leverage. The discovery hover preview makes frame one,
+second 3, and second 30 separate product surfaces: frame one must already move, the strongest honest
+money shot lands by 3s, real proof lands by 10s, and the stakes are legible by 30s. Each hook is
+self-contained and shows concrete proof when the narration names it.
 
-For projects snapshotted against YouTube Strategy Profile V5, use `edit-plan-v3.1`. It keeps the
-same three-hooks/one-body architecture and adds a complete Opening Proof Trailer contract for every
-hook: visual activity on frame one, a money shot by second 3, real proof by second 10, stakes by
-second 30, at least eight meaningful visual beats in the first 30 seconds, no unexplained static
-hold over four seconds, and passing muted, mobile, and human-taste reviews. Eddy renders all three
-openings through HyperFrames, then emits a three-way 0-30s comparison reel and contact sheet.
-`edit-plan-v3` remains accepted for legacy project snapshots.
+Use `edit-plan-v3.2` for current work. It keeps the three-hooks/one-body architecture, hash-binds a
+project `frame.md`, and adds semantic visual choreography: three opening timelines, one reused body
+timeline, and one portrait timeline per Short. HyperFrames now owns full-frame composition — proof
+canvas, speaker full/edge/PiP, source screen, illustration canvas, and rare special emphasis — not
+small cards floating over a fixed edit. `edit-plan-v3` and `edit-plan-v3.1` remain accepted for
+legacy snapshots.
+
+Openings need 8-12 meaningful changes inside 30s and at least three layout states. Long bodies must
+change visual state at least every 12s; holds beyond 8s require a semantic reason. Shorts use the
+same 3s opening deadline and then change state every 4-8s. Never repeat a layout more than twice
+without an uninterrupted-proof reason. Evidence authority is explicit and ordered: raw source,
+supplied asset, pixel-faithful demo, diagram, then clearly framed metaphor.
 
 Preserve every unique substantive beat. Never gut a long recording into a summary clip, remove a
 protected or vulnerable moment, regenerate speech, overdub the speaker, or rewrite the opening line.
@@ -75,8 +80,12 @@ outputs proof-gated candidates.
 4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
    Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
    screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
-5. Call `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
-   bypassing them.
+5. Author the v3.2 choreography against the packet's hash-bound `frame.md`, then call
+   `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
+   bypassing them. Eddy auto-selects a clear, certain opening leader; when the top two are within
+   five points or uncertain, inspect `eddy_opening_candidates` and call `eddy_select_opening` with
+   the reason. The selected opening becomes `long-primary.mp4`; the other two remain complete
+   Alternate Longs and still reuse the same body.
 6. Call `eddy_finalize(job_id=...)`, poll with `eddy_job_status`, and return only final paths or exact
    blockers. Use `eddy_cancel_job` when the user cancels.
 7. When the owner reviews an Eddy output, record the explicit verdict and evidence with
@@ -92,6 +101,8 @@ eddy options <source>
 eddy edit <source>
 eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
+eddy opening-candidates <job-id>
+eddy select-opening <job-id> <opening-id> --reason "<evidence>"
 eddy finalize <job-id>
 eddy status <job-id>
 eddy repair-captions <job-id>
@@ -115,10 +126,12 @@ eddy record-feedback <job-id> owner-feedback.json
    explicit splices. Tighten gaps above 0.2s to 0.1s, preserve word-onset pre-roll, cap unprotected
    delivered gaps at 0.28s, and cap protected silence at 0.8s. Reuse one shared body receipt.
 7. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
-8. Render HyperFrames-native hook/section motion from a project-local frame and storyboard contract.
-   Place compact skeuomorphic panels against the real underlying frame, automatically choose the
-   quietest valid region, reserve the camera PiP/face/caption/footer geometry, and prove the rendered
-   overlay pixels stay inside their assigned regions before compositing.
+8. Compile the hash-bound frame and semantic scenes into one paused, seek-safe HyperFrames timeline.
+   Render three independent openings, one body composition reused byte-for-byte, and portrait
+   compositions for Shorts. Layout changes follow the spoken argument; camera geometry and real
+   proof are part of the composition. Use hard cuts by default, continuation crossfades only for
+   continuity, semantic pushes or scale matches when meaning motivates them, and no more than two
+   brand-act wipes per Long or one per Short.
 9. Apply every declared hook-scoped privacy mask to the deterministic Long render. Validate its
    delivered-relative range and 1920x1080 rectangle, render it before audio work, and block the
    attempt if the redacted artifact is missing. Never alter the immutable raw source.
@@ -147,6 +160,8 @@ eddy record-feedback <job-id> owner-feedback.json
 
 - Source hashes are identical before and after the run.
 - Exactly one shared body plan feeds all three longs; only their hook segments differ.
+- The project frame hash, source refs, choreography manifest, animation map, provenance, selected
+  opening, shared-body hash, and 0/1/3/10/30 comparison frames are inspectable.
 - Every `keep` beat and protected span survives.
 - Every delivered long and Short is retranscribed. No genuine retake, false start, reset loop, or
   unresolved repetition survives the delivered transcript. A deliberate callback is exempt only

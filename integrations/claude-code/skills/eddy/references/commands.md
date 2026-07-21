@@ -98,6 +98,8 @@ continues to remove stray commas/quotes. `--proof-out` is the blocking generated
 eddy repair-captions <job-id>
 eddy repair-privacy <job-id> privacy-repair.json
 eddy record-feedback <job-id> owner-feedback.json
+eddy opening-candidates <job-id>
+eddy select-opening <job-id> <opening-id> --reason "<evidence>"
 ```
 
 For a completed candidate that needs a real edit repair, submit typed owner feedback with
@@ -115,6 +117,20 @@ pixels, preserves all Long hashes and the existing Studio Sound audio stream byt
 keeps the original Short under `repairs/privacy-v1/originals/`.
 
 ## 7. HyperFrames motion — the DEFAULT engine (iconography-forward, threadify-fc)
+
+For v3.2, the runtime calls the full-frame compiler instead of the legacy overlay renderer:
+
+```bash
+python3 scripts/choreography_render.py --brief choreography-brief.json \
+  --run-dir work/choreography-opening-1 --out work/opening-1.mp4
+```
+
+The brief supplies the hash-bound frame, source root, synchronized camera/screen cut masters,
+semantic scenes, dimensions, and audio source. The script writes HyperFrames lint/validate/inspect
+receipts, `choreography-manifest.json`, `animation-map.json`, and `provenance.json`, then muxes the
+untouched cut-master audio under the rendered visual composition.
+
+### Legacy overlay engine
 
 ```
 # render an on-brand overlay AND composite it onto a base (keyed alpha; base continues after):

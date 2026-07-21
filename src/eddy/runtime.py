@@ -22,6 +22,7 @@ class JobState(StrEnum):
     PREFLIGHTING = "preflighting"
     AWAITING_HOST_PLAN = "awaiting_host_plan"
     AWAITING_HOST_REPAIR = "awaiting_host_repair"
+    AWAITING_OPENING_SELECTION = "awaiting_opening_selection"
     COMPILING = "compiling"
     RENDERING_PROXY = "rendering_proxy"
     ENHANCING_AUDIO = "enhancing_audio"
@@ -121,6 +122,37 @@ class JobManager:
         lock = json.loads((job.run_dir / "source-lock.json").read_text())
         if plan.source_hashes != lock["before"]:
             raise PlanValidationError("edit_plan_source_hash_mismatch")
+        if plan.frame_contract is not None:
+            frame_path = (job.run_dir / str(plan.frame_contract["ref"])).resolve()
+            _assert_inside(job.run_dir, frame_path)
+            if not frame_path.is_file():
+                raise PlanValidationError("frame_contract_file_missing")
+            if _sha256(frame_path) != plan.frame_contract["sha256"]:
+                raise PlanValidationError("frame_contract_hash_mismatch")
+        if plan.visual_choreography is not None:
+            timelines = [
+                *plan.visual_choreography["openings"],
+                plan.visual_choreography["shared_body"],
+                *plan.visual_choreography["shorts"],
+            ]
+            for timeline in timelines:
+                for scene in timeline["scenes"]:
+                    for raw_ref in scene["source_refs"]:
+                        ref = Path(str(raw_ref))
+                        if ref.is_absolute() or ".." in ref.parts:
+                            raise PlanValidationError("visual_scene_source_ref_invalid")
+                        found = False
+                        for root in (job.snapshot.resolve(), job.run_dir.resolve()):
+                            candidate = (root / ref).resolve()
+                            try:
+                                candidate.relative_to(root)
+                            except ValueError:
+                                continue
+                            if candidate.is_file():
+                                found = True
+                                break
+                        if not found:
+                            raise PlanValidationError(f"visual_scene_source_ref_missing:{raw_ref}")
         ledger_path = job.run_dir / "editorial-ledger.json"
         if ledger_path.exists():
             blockers = validate_editorial_review(
@@ -132,7 +164,12 @@ class JobManager:
         _write_json(job.run_dir / "edit-plan.json", plan.to_dict())
         updated = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.COMPILING)
         self._save(updated)
-        _receipt(updated, "host_plan_accepted")
+        _receipt(
+            updated,
+            "host_plan_accepted",
+            schema_version=plan.schema_version,
+            frame_sha256=(plan.frame_contract or {}).get("sha256"),
+        )
         return updated
 
     def transition(self, job_id: str, state: JobState) -> Job:

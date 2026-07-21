@@ -143,6 +143,70 @@ the first starting by second `0.04`. More than 12 is a taste warning in pre-prod
 licence to replace meaningful change with decorative busyness. When `tldraw_mode` is
 `prepared_live_reveal`, the variant also cites its `.tldr` canvas and capture plan.
 
+## V3.2 Semantic Visual Choreography extension
+
+Current projects set `schema_version` to `edit-plan-v3.2`, retain the v3.1 opening contract, and add
+a frame contract plus three opening timelines, one shared body, and one portrait timeline per Short:
+
+```json
+{
+  "frame_contract": {
+    "schema_version": "eddy-project-frame-v1",
+    "ref": "frame.md",
+    "sha256": "<sha256>"
+  },
+  "visual_choreography": {
+    "schema_version": "eddy-visual-choreography-v1",
+    "openings": [
+      {
+        "id": "opening-proof",
+        "hook_id": "proof",
+        "ranking_signals": {
+          "frame_one": 1.0,
+          "money_shot": 1.0,
+          "proof": 1.0,
+          "stakes": 1.0,
+          "muted": 1.0,
+          "mobile": 0.9,
+          "semantic_density": 0.9,
+          "taste": 0.8
+        },
+        "ranking_evidence": ["opening-review-proof.json"],
+        "rank_confidence": "certain",
+        "scenes": [
+          {
+            "id": "proof-frame-one",
+            "start": 0.0,
+            "end": 1.4,
+            "speech_anchor": "The post did forty-six thousand views",
+            "semantic_job": "frame_one",
+            "meaningful_change": "Open on the real post already moving into view",
+            "layout": "proof_canvas",
+            "evidence_authority": "supplied_asset",
+            "source_refs": ["post.png"],
+            "motion_verb": "reveal",
+            "transition": "hard_cut",
+            "cause": "The claim names the receipt.",
+            "preview_safe": true
+          }
+        ]
+      }
+    ],
+    "shared_body": {"id": "shared-body", "scenes": []},
+    "shorts": [{"short_id": "proof-short", "scenes": []}]
+  }
+}
+```
+
+The abbreviated arrays above show shape only. Production plans require exactly three openings in
+hook-rank order, populated shared-body scenes, and populated scenes for every Short. Allowed layouts
+are `proof_canvas`, `speaker_full`, `speaker_edge_left`, `speaker_edge_right`, `speaker_pip`,
+`source_screen`, `illustration_canvas`, and `special_emphasis`. Evidence authority is one of
+`raw_source`, `supplied_asset`, `pixel_faithful_demo`, `diagram`, or `metaphor`.
+Eddy computes the 100-point opening score from the eight normalized signals with weights
+`15/20/20/10/10/10/10/5` in the order shown. `ranking_evidence` names the muted/mobile/taste review
+artifacts behind those numbers; a naked subjective total is not accepted.
+
 ## Invariants
 
 - Source hashes use source-relative paths and must exactly match the job's source lock.
@@ -164,6 +228,16 @@ licence to replace meaningful change with decorative busyness. When `tldraw_mode
 - Each long hook receives at least two host-authored HyperFrames beats through `motion_beats`.
 - V5 `edit-plan-v3.1` hooks receive at least eight semantic Opening Proof Trailer beats in the first
   30 seconds and pass the money-shot, proof, stakes, static-hold, muted, mobile, and taste gates.
+- V3.2 opening scenes contain 8-12 meaningful changes in the first 30s, start by `0.04`, land a
+  money shot by 3s, real proof by 10s, stakes by 30s, and use at least three layout states.
+- V3.2 body state changes never exceed 12s; a hold over 8s needs `quiet_hold_reason`. Short changes
+  never exceed 8s. Three consecutive identical layouts require an uninterrupted-proof reason.
+- Scene coverage is continuous: no unexplained black gap over 0.1s. Every opening scene is
+  `preview_safe`; a `metaphor` authority explicitly identifies itself as a metaphor in `cause`.
+- Opening scenes cover the complete hook cut (at least 30s), and portrait scenes cover the complete
+  Short. The runtime rechecks the delivered opening is at least 29.5s after cadence tightening.
+- `brand_act_wipe` is limited to two uses per Long timeline and one per Short. Prefer `hard_cut`;
+  `continuation_crossfade`, `semantic_push`, and `scale_match` require a semantic cause.
 - Eddy emits `opening-comparison-reel.mp4` and `opening-contact-sheet.png` for V3.1 jobs so the
   three hypotheses can be reviewed together before candidate selection.
 - Eddy resolves each motion beat against the real base frame into a compact contextual panel. Host

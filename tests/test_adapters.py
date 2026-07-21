@@ -53,6 +53,14 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
             calls.append(("finalize", job_id))
             return {"worker": "started"}
 
+        def opening_candidates(self, job_id):
+            calls.append(("opening-candidates", job_id))
+            return {"status": "auto_selected"}
+
+        def select_opening(self, job_id, opening_id, *, reason):
+            calls.append(("select-opening", job_id, opening_id, reason))
+            return {"state": "compiling"}
+
         def repair_captions(self, job_id):
             calls.append(("repair-captions", job_id))
             return {"status": "pass"}
@@ -70,6 +78,12 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
     capsys.readouterr()
     assert cli.main(["finalize", "job-1"]) == 0
     capsys.readouterr()
+    assert cli.main(["opening-candidates", "job-1"]) == 0
+    capsys.readouterr()
+    assert cli.main(
+        ["select-opening", "job-1", "opening-2", "--reason", "stronger proof"]
+    ) == 0
+    capsys.readouterr()
     assert cli.main(["repair-captions", "job-1"]) == 0
     capsys.readouterr()
 
@@ -78,6 +92,8 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
         ("packet", "job-1"),
         ("submit", "job-1", {"schema_version": "edit-plan-v3"}),
         ("finalize", "job-1"),
+        ("opening-candidates", "job-1"),
+        ("select-opening", "job-1", "opening-2", "stronger proof"),
         ("repair-captions", "job-1"),
     ]
 
@@ -93,6 +109,8 @@ def test_mcp_server_exposes_every_public_tool(tmp_path: Path, monkeypatch) -> No
         "eddy_edit_start",
         "eddy_host_packet",
         "eddy_host_submit",
+        "eddy_opening_candidates",
+        "eddy_select_opening",
         "eddy_finalize",
         "eddy_job_status",
         "eddy_cancel_job",

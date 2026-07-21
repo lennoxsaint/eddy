@@ -100,6 +100,7 @@ def build_render_plan(
     work: Path,
     *,
     ledger: dict[str, Any] | None = None,
+    selected_opening_id: str | None = None,
 ) -> RenderPlan:
     work.mkdir(parents=True, exist_ok=True)
     sacred = [[float(item["start"]), float(item["end"])] for item in plan.protected]
@@ -163,8 +164,24 @@ def build_render_plan(
         seen_spans.add(key)
         unique_rows.append(row)
     _write_json(body_dropfile, {"explicit_drops": unique_rows})
+    selected_hook_id = plan.primary_hook.id
+    if plan.visual_choreography is not None:
+        selected = next(
+            (
+                opening
+                for opening in plan.visual_choreography["openings"]
+                if opening["id"] == selected_opening_id
+            ),
+            None,
+        )
+        if selected is None:
+            raise ValueError("selected_opening_missing_or_invalid")
+        selected_hook_id = str(selected["hook_id"])
+    ordered_hooks = tuple(
+        sorted(plan.hooks, key=lambda hook: (hook.id != selected_hook_id, hook.rank))
+    )
     renders: list[LongRenderPlan] = []
-    for hook in plan.hooks:
+    for hook in ordered_hooks:
         hook_path = work / f"hook-{hook.rank}-{_slug(hook.id)}-cutlist.json"
         _write_json(
             hook_path,
@@ -176,7 +193,7 @@ def build_render_plan(
         )
         output_name = (
             "long-primary.mp4"
-            if hook.rank == 1
+            if hook.id == selected_hook_id
             else f"long-alternate-{_slug(hook.id)}.mp4"
         )
         renders.append(LongRenderPlan(hook, hook_path, body_cutlist, output_name))
@@ -256,7 +273,21 @@ class PipelineRunner:
         attempt.mkdir(parents=True, exist_ok=True)
         ledger_path = job.run_dir / "editorial-ledger.json"
         ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else None
-        render_plan = build_render_plan(plan, stage / "plans", ledger=ledger)
+        selected_opening_id = None
+        if plan.visual_choreography is not None:
+            selection_path = job.run_dir / "opening-selection.json"
+            if not selection_path.is_file():
+                raise RuntimeError("opening_selection_required_before_finalize")
+            selected_opening_id = str(
+                json.loads(selection_path.read_text()).get("selected_opening_id", "")
+            )
+        render_plan = build_render_plan(
+            plan,
+            stage / "plans",
+            ledger=ledger,
+            selected_opening_id=selected_opening_id,
+        )
+        primary_hook_rank = render_plan.longs[0].hook.rank
         self.manager.transition(job_id, JobState.RENDERING_PROXY)
 
         body_camera = stage / "body-camera.mp4"
@@ -321,6 +352,46 @@ class PipelineRunner:
         fake_hyperframes = bool(os.environ.get("EDDY_FAKE_HYPERFRAMES"))
         fatal_audio_failure = False
         fatal_privacy_failure = False
+        body_visual = body_composite
+        body_choreography_green = plan.visual_choreography is None
+        if plan.visual_choreography is not None and plan.frame_contract is not None:
+            shared_body = plan.visual_choreography["shared_body"]
+            body_choreographed = stage / "body-choreographed.mp4"
+            body_choreography = _render_visual_choreography(
+                self.root,
+                stage / "body-choreography-brief.json",
+                stage / "choreography-body",
+                body_choreographed,
+                scenes=tuple(shared_body["scenes"]),
+                camera=body_camera,
+                screen=body_screen,
+                audio_source=body_composite,
+                source_roots=(job.snapshot, job.run_dir),
+                frame=job.run_dir / str(plan.frame_contract["ref"]),
+                frame_sha256=str(plan.frame_contract["sha256"]),
+                portrait=False,
+                fake=fake_hyperframes,
+            )
+            body_choreography_green = bool(
+                body_choreography.returncode == 0
+                and body_choreographed.exists()
+                and not fake_hyperframes
+            )
+            self.manager.receipt(
+                job_id,
+                "visual_choreography_rendered",
+                surface="shared_body",
+                status="pass" if body_choreography_green else "fail",
+                frame_sha256=plan.frame_contract["sha256"],
+            )
+            if body_choreography_green:
+                body_visual = body_choreographed
+            else:
+                blockers.append(
+                    "hyperframes_test_fixture_not_final"
+                    if fake_hyperframes
+                    else "shared_body_choreography_failed"
+                )
 
         def finish_attempt() -> None:
             opening_visual_delivery = _build_opening_visual_surfaces(
@@ -336,6 +407,17 @@ class PipelineRunner:
                 gates["opening_visual_comparison_surfaces"] = opening_green
                 if not opening_green:
                     blockers.append("opening_visual_comparison_surfaces_failed")
+            choreography_delivery = _collect_choreography_delivery(
+                stage,
+                attempt,
+                job.run_dir,
+                plan,
+            )
+            if choreography_delivery is not None:
+                choreography_green = choreography_delivery["status"] == "pass"
+                gates["visual_choreography_delivery"] = choreography_green
+                if not choreography_green:
+                    blockers.append("visual_choreography_delivery_failed")
             _write_json(
                 attempt / "qa.json",
                 {
@@ -344,9 +426,10 @@ class PipelineRunner:
                     "gates": gates,
                     "blockers": blockers,
                     "opening_visual_delivery": opening_visual_delivery,
+                    "visual_choreography_delivery": choreography_delivery,
                 },
             )
-            primary_words = stage / "final-words-1.json"
+            primary_words = stage / f"final-words-{primary_hook_rank}.json"
             _write_transcript_markdown(
                 primary_words if primary_words.exists() else transcript,
                 attempt / "transcript.md",
@@ -378,6 +461,7 @@ class PipelineRunner:
                 body_camera.with_name("body-camera.segments.json"),
                 long_segments,
             )
+            screen_hook = None
             if sources.screen and body_screen:
                 screen_hook = stage / f"hook-screen-{item.hook.rank}.mp4"
                 _splice(
@@ -420,58 +504,126 @@ class PipelineRunner:
                     cwd=self.root,
                 )
             composite = stage / f"composite-{item.hook.rank}.mp4"
-            _concat(hook_composite, body_composite, composite)
+            opening_choreography_green = plan.visual_choreography is None
+            hook_visual = hook_composite
+            if plan.visual_choreography is not None and plan.frame_contract is not None:
+                opening = next(
+                    row
+                    for row in plan.visual_choreography["openings"]
+                    if row["hook_id"] == item.hook.id
+                )
+                opening_choreographed = stage / f"opening-choreographed-{item.hook.rank}.mp4"
+                opening_duration_green = _media_duration(hook_composite) >= 29.5
+                opening_choreography = _render_visual_choreography(
+                    self.root,
+                    stage / f"opening-choreography-brief-{item.hook.rank}.json",
+                    stage / f"choreography-opening-{item.hook.rank}",
+                    opening_choreographed,
+                    scenes=tuple(opening["scenes"]),
+                    camera=camera_hook,
+                    screen=screen_hook,
+                    audio_source=hook_composite,
+                    source_roots=(job.snapshot, job.run_dir),
+                    frame=job.run_dir / str(plan.frame_contract["ref"]),
+                    frame_sha256=str(plan.frame_contract["sha256"]),
+                    portrait=False,
+                    fake=fake_hyperframes,
+                )
+                opening_choreography_green = bool(
+                    opening_choreography.returncode == 0
+                    and opening_choreographed.exists()
+                    and opening_duration_green
+                    and not fake_hyperframes
+                )
+                self.manager.receipt(
+                    job_id,
+                    "visual_choreography_rendered",
+                    surface="opening",
+                    hook_id=item.hook.id,
+                    opening_id=opening["id"],
+                    status="pass" if opening_choreography_green else "fail",
+                    frame_sha256=plan.frame_contract["sha256"],
+                )
+                if not opening_duration_green:
+                    blockers.append(f"opening_cut_under_thirty_seconds:{item.hook.id}")
+                if opening_choreography_green:
+                    hook_visual = opening_choreographed
+            _concat(hook_visual, body_visual, composite)
 
             self.manager.transition(job_id, JobState.RENDERING_FINAL)
-            motion_overlay = stage / f"motion-overlay-{item.hook.rank}.mp4"
-            motioned = stage / f"motioned-{item.hook.rank}.mp4"
             long_beats = _motion_beats_for_hook(plan.motion_beats, item.hook.id)
-            long_brief = stage / f"motion-brief-{item.hook.rank}.json"
-            _write_motion_brief(long_brief, long_beats, portrait=False)
-            motion = None
-            if long_beats:
-                motion_command = [
-                    sys.executable,
-                    str(self.root / "scripts" / "motion_render.py"),
-                    "--brief",
-                    str(long_brief),
-                    "--run-dir",
-                    str(stage / f"motion-{item.hook.rank}"),
-                    "--out",
-                    str(motion_overlay),
-                    "--composite-over",
-                    str(composite),
-                    "--composite-out",
-                    str(motioned),
-                ]
-                if fake_hyperframes:
-                    motion_command.append("--fake")
-                motion = subprocess.run(
-                    motion_command,
-                    cwd=self.root,
-                    capture_output=True,
-                    text=True,
+            motioned = composite
+            if plan.visual_choreography is not None:
+                scene_count = len(
+                    next(
+                        row["scenes"]
+                        for row in plan.visual_choreography["openings"]
+                        if row["hook_id"] == item.hook.id
+                    )
                 )
-            motion_activity = (
-                measure_motion_activity(motion_overlay, long_beats)
-                if motion is not None and motion.returncode == 0 and motion_overlay.exists()
-                else {"pass": False, "failed_beats": ["motion_render_missing"], "beats": []}
-            )
-            motion_placement = _read_motion_context_proof(
-                stage / f"motion-{item.hook.rank}" / "long-overlay" / "placement-proof.json",
-                expected_beats=len(long_beats),
-            )
-            motion_context = contextual_motion_verdict(motion_overlay, motion_placement)
-            context_green = bool(motion_context["pass"])
+                motion_green = opening_choreography_green and body_choreography_green
+                motion_activity = {
+                    "pass": motion_green,
+                    "mode": "full_frame_visual_choreography",
+                    "meaningful_scene_count": scene_count,
+                    "failed_beats": [] if motion_green else ["choreography_render_missing"],
+                    "beats": [],
+                }
+                motion_context = {
+                    "pass": motion_green,
+                    "mode": "semantic_layout_contract",
+                    "full_frame": True,
+                }
+                context_green = motion_green
+            else:
+                motion_overlay = stage / f"motion-overlay-{item.hook.rank}.mp4"
+                motioned = stage / f"motioned-{item.hook.rank}.mp4"
+                long_brief = stage / f"motion-brief-{item.hook.rank}.json"
+                _write_motion_brief(long_brief, long_beats, portrait=False)
+                motion = None
+                if long_beats:
+                    motion_command = [
+                        sys.executable,
+                        str(self.root / "scripts" / "motion_render.py"),
+                        "--brief",
+                        str(long_brief),
+                        "--run-dir",
+                        str(stage / f"motion-{item.hook.rank}"),
+                        "--out",
+                        str(motion_overlay),
+                        "--composite-over",
+                        str(composite),
+                        "--composite-out",
+                        str(motioned),
+                    ]
+                    if fake_hyperframes:
+                        motion_command.append("--fake")
+                    motion = subprocess.run(
+                        motion_command,
+                        cwd=self.root,
+                        capture_output=True,
+                        text=True,
+                    )
+                motion_activity = (
+                    measure_motion_activity(motion_overlay, long_beats)
+                    if motion is not None and motion.returncode == 0 and motion_overlay.exists()
+                    else {"pass": False, "failed_beats": ["motion_render_missing"], "beats": []}
+                )
+                motion_placement = _read_motion_context_proof(
+                    stage / f"motion-{item.hook.rank}" / "long-overlay" / "placement-proof.json",
+                    expected_beats=len(long_beats),
+                )
+                motion_context = contextual_motion_verdict(motion_overlay, motion_placement)
+                context_green = bool(motion_context["pass"])
+                motion_green = (
+                    motion is not None
+                    and motion.returncode == 0
+                    and motioned.exists()
+                    and not fake_hyperframes
+                    and bool(motion_activity["pass"])
+                    and context_green
+                )
             gates[f"contextual_motion_hook_{item.hook.rank}"] = context_green
-            motion_green = (
-                motion is not None
-                and motion.returncode == 0
-                and motioned.exists()
-                and not fake_hyperframes
-                and bool(motion_activity["pass"])
-                and context_green
-            )
             gates[f"hyperframes_motion_hook_{item.hook.rank}"] = motion_green
             if not motion_green:
                 blockers.append(
@@ -596,7 +748,7 @@ class PipelineRunner:
                     blockers.append("deterministic_qa_failed")
 
         gates["three_long_variants"] = len(list(long_dir.glob("*.mp4"))) == 3
-        gates["shared_body"] = body_camera.exists()
+        gates["shared_body"] = body_camera.exists() and body_choreography_green
         if fatal_audio_failure or fatal_privacy_failure:
             gates["shorts_quality"] = False
             gates["shorts_count"] = False
@@ -646,6 +798,7 @@ class PipelineRunner:
                     short_camera,
                     drop=short_dropfile,
                 )
+                short_screen = None
                 if sources.screen:
                     short_screen = stage / f"short-{short_id}-screen.mp4"
                     _splice(
@@ -687,6 +840,45 @@ class PipelineRunner:
                         ],
                         cwd=self.root,
                     )
+                short_visual = short_composite
+                short_choreography_green = plan.visual_choreography is None
+                if plan.visual_choreography is not None and plan.frame_contract is not None:
+                    portrait_plan = next(
+                        row
+                        for row in plan.visual_choreography["shorts"]
+                        if row["short_id"] == short.id
+                    )
+                    short_choreographed = stage / f"short-{short_id}-choreographed.mp4"
+                    short_choreography = _render_visual_choreography(
+                        self.root,
+                        stage / f"short-{short_id}-choreography-brief.json",
+                        stage / f"choreography-short-{short_id}",
+                        short_choreographed,
+                        scenes=tuple(portrait_plan["scenes"]),
+                        camera=short_camera,
+                        screen=short_screen,
+                        audio_source=short_composite,
+                        source_roots=(job.snapshot, job.run_dir),
+                        frame=job.run_dir / str(plan.frame_contract["ref"]),
+                        frame_sha256=str(plan.frame_contract["sha256"]),
+                        portrait=True,
+                        fake=fake_hyperframes,
+                    )
+                    short_choreography_green = bool(
+                        short_choreography.returncode == 0
+                        and short_choreographed.exists()
+                        and not fake_hyperframes
+                    )
+                    self.manager.receipt(
+                        job_id,
+                        "visual_choreography_rendered",
+                        surface="short",
+                        short_id=short.id,
+                        status="pass" if short_choreography_green else "fail",
+                        frame_sha256=plan.frame_contract["sha256"],
+                    )
+                    if short_choreography_green:
+                        short_visual = short_choreographed
                 short_words = stage / f"short-{short_id}-words.json"
                 _write_caption_words_for_segments(
                     transcript,
@@ -706,7 +898,7 @@ class PipelineRunner:
                         str(short_ass),
                         "--burn",
                         "--in",
-                        str(short_composite),
+                        str(short_visual),
                         "--video-out",
                         str(captioned),
                         "--max-words",
@@ -716,58 +908,75 @@ class PipelineRunner:
                     ],
                     cwd=self.root,
                 )
-                short_motion_overlay = stage / f"short-{short_id}-motion-overlay.mp4"
-                short_motioned = stage / f"short-{short_id}-motioned.mp4"
-                short_brief = stage / f"short-{short_id}-motion-brief.json"
-                _write_motion_brief(short_brief, short.motion_beats, portrait=True)
-                motion_command = [
-                    sys.executable,
-                    str(self.root / "scripts" / "motion_render.py"),
-                    "--brief",
-                    str(short_brief),
-                    "--portrait",
-                    "--run-dir",
-                    str(stage / f"motion-short-{short_id}"),
-                    "--out",
-                    str(short_motion_overlay),
-                    "--composite-over",
-                    str(captioned),
-                    "--composite-out",
-                    str(short_motioned),
-                ]
-                if fake_hyperframes:
-                    motion_command.append("--fake")
-                short_motion = subprocess.run(
-                    motion_command,
-                    cwd=self.root,
-                    capture_output=True,
-                    text=True,
-                )
-                short_motion_activity = (
-                    measure_motion_activity(short_motion_overlay, short.motion_beats)
-                    if short_motion.returncode == 0 and short_motion_overlay.exists()
-                    else {"pass": False, "failed_beats": ["motion_render_missing"], "beats": []}
-                )
-                short_motion_placement = _read_motion_context_proof(
-                    stage
-                    / f"motion-short-{short_id}"
-                    / "shorts-card"
-                    / "placement-proof.json",
-                    expected_beats=len(short.motion_beats),
-                )
-                short_motion_context = contextual_motion_verdict(
-                    short_motion_overlay,
-                    short_motion_placement,
-                )
-                short_context_green = bool(short_motion_context["pass"])
+                short_motioned = captioned
+                if plan.visual_choreography is not None:
+                    short_motion_green = short_choreography_green
+                    short_motion_activity = {
+                        "pass": short_motion_green,
+                        "mode": "portrait_visual_choreography",
+                        "meaningful_scene_count": len(portrait_plan["scenes"]),
+                        "failed_beats": [] if short_motion_green else ["choreography_render_missing"],
+                        "beats": [],
+                    }
+                    short_motion_context = {
+                        "pass": short_motion_green,
+                        "mode": "semantic_layout_contract",
+                        "full_frame": True,
+                    }
+                    short_context_green = short_motion_green
+                else:
+                    short_motion_overlay = stage / f"short-{short_id}-motion-overlay.mp4"
+                    short_motioned = stage / f"short-{short_id}-motioned.mp4"
+                    short_brief = stage / f"short-{short_id}-motion-brief.json"
+                    _write_motion_brief(short_brief, short.motion_beats, portrait=True)
+                    motion_command = [
+                        sys.executable,
+                        str(self.root / "scripts" / "motion_render.py"),
+                        "--brief",
+                        str(short_brief),
+                        "--portrait",
+                        "--run-dir",
+                        str(stage / f"motion-short-{short_id}"),
+                        "--out",
+                        str(short_motion_overlay),
+                        "--composite-over",
+                        str(captioned),
+                        "--composite-out",
+                        str(short_motioned),
+                    ]
+                    if fake_hyperframes:
+                        motion_command.append("--fake")
+                    short_motion = subprocess.run(
+                        motion_command,
+                        cwd=self.root,
+                        capture_output=True,
+                        text=True,
+                    )
+                    short_motion_activity = (
+                        measure_motion_activity(short_motion_overlay, short.motion_beats)
+                        if short_motion.returncode == 0 and short_motion_overlay.exists()
+                        else {"pass": False, "failed_beats": ["motion_render_missing"], "beats": []}
+                    )
+                    short_motion_placement = _read_motion_context_proof(
+                        stage
+                        / f"motion-short-{short_id}"
+                        / "shorts-card"
+                        / "placement-proof.json",
+                        expected_beats=len(short.motion_beats),
+                    )
+                    short_motion_context = contextual_motion_verdict(
+                        short_motion_overlay,
+                        short_motion_placement,
+                    )
+                    short_context_green = bool(short_motion_context["pass"])
+                    short_motion_green = (
+                        short_motion.returncode == 0
+                        and short_motioned.exists()
+                        and not fake_hyperframes
+                        and bool(short_motion_activity["pass"])
+                        and short_context_green
+                    )
                 short_context_greens.append(short_context_green)
-                short_motion_green = (
-                    short_motion.returncode == 0
-                    and short_motioned.exists()
-                    and not fake_hyperframes
-                    and bool(short_motion_activity["pass"])
-                    and short_context_green
-                )
                 short_motion_greens.append(short_motion_green)
                 if not short_motion_green:
                     blockers.append(f"short_motion_failed:{short_id}")
@@ -1395,6 +1604,52 @@ def _write_motion_brief(
     )
 
 
+def _render_visual_choreography(
+    root: Path,
+    brief_path: Path,
+    run_dir: Path,
+    output: Path,
+    *,
+    scenes: tuple[dict[str, Any], ...],
+    camera: Path,
+    screen: Path | None,
+    audio_source: Path,
+    source_roots: tuple[Path, ...],
+    frame: Path,
+    frame_sha256: str,
+    portrait: bool,
+    fake: bool,
+) -> subprocess.CompletedProcess[str]:
+    _write_json(
+        brief_path,
+        {
+            "schema_version": "eddy-choreography-render-brief-v1",
+            "width": 1080 if portrait else 1920,
+            "height": 1920 if portrait else 1080,
+            "camera": str(camera),
+            "screen": str(screen) if screen else None,
+            "audio_source": str(audio_source),
+            "source_roots": [str(root) for root in source_roots],
+            "frame": str(frame),
+            "frame_sha256": frame_sha256,
+            "scenes": list(scenes),
+        },
+    )
+    command = [
+        sys.executable,
+        str(root / "scripts" / "choreography_render.py"),
+        "--brief",
+        str(brief_path),
+        "--run-dir",
+        str(run_dir),
+        "--out",
+        str(output),
+    ]
+    if fake:
+        command.append("--fake")
+    return subprocess.run(command, cwd=root, capture_output=True, text=True)
+
+
 def _build_opening_visual_surfaces(
     attempt: Path,
     contract: dict[str, Any] | None,
@@ -1429,6 +1684,13 @@ def _build_opening_visual_surfaces(
         "candidate_variants": candidate_variants,
         "comparison_reel_path": "opening-comparison-reel.mp4",
         "contact_sheet_path": "opening-contact-sheet.png",
+        "comparison_frame_paths": {
+            "0": "opening-frame-00s.png",
+            "1": "opening-frame-01s.png",
+            "3": "opening-contact-sheet.png",
+            "10": "opening-frame-10s.png",
+            "30": "opening-frame-30s.png",
+        },
         "status": "fail",
         "blocking_reasons": [],
     }
@@ -1464,15 +1726,6 @@ def _build_opening_visual_surfaces(
         for index in range(3)
     ]
     reel_filter = ";".join(scale_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"])
-    still_filters = [
-        (
-            f"[{index}:v]select='gte(t,3)',setpts=PTS-STARTPTS,"
-            "scale=640:360:force_original_aspect_ratio=decrease,"
-            f"pad=640:360:(ow-iw)/2:(oh-ih)/2:black[v{index}]"
-        )
-        for index in range(3)
-    ]
-    still_filter = ";".join(still_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"])
     try:
         _run(
             [
@@ -1503,26 +1756,39 @@ def _build_opening_visual_surfaces(
             ],
             cwd=attempt,
         )
-        _run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(candidates[0]),
-                "-i",
-                str(candidates[1]),
-                "-i",
-                str(candidates[2]),
-                "-filter_complex",
-                still_filter,
-                "-map",
-                "[outv]",
-                "-frames:v",
-                "1",
-                str(contact_sheet),
-            ],
-            cwd=attempt,
-        )
+        for label, output_name in delivery["comparison_frame_paths"].items():
+            second = min(float(label), 29.9)
+            still_filters = [
+                (
+                    f"[{index}:v]select='gte(t,{second})',setpts=PTS-STARTPTS,"
+                    "scale=640:360:force_original_aspect_ratio=decrease,"
+                    f"pad=640:360:(ow-iw)/2:(oh-ih)/2:black[v{index}]"
+                )
+                for index in range(3)
+            ]
+            still_filter = ";".join(
+                still_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"]
+            )
+            _run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(candidates[0]),
+                    "-i",
+                    str(candidates[1]),
+                    "-i",
+                    str(candidates[2]),
+                    "-filter_complex",
+                    still_filter,
+                    "-map",
+                    "[outv]",
+                    "-frames:v",
+                    "1",
+                    str(attempt / str(output_name)),
+                ],
+                cwd=attempt,
+            )
         comparison_duration = _media_duration(comparison_reel)
     except (RuntimeError, subprocess.CalledProcessError, ValueError) as exc:
         delivery["blocking_reasons"].append(f"comparison render failed: {exc}")
@@ -1532,6 +1798,11 @@ def _build_opening_visual_surfaces(
         or comparison_reel.stat().st_size == 0
         or not contact_sheet.exists()
         or contact_sheet.stat().st_size == 0
+        or any(
+            not (attempt / str(path)).is_file()
+            or (attempt / str(path)).stat().st_size == 0
+            for path in delivery["comparison_frame_paths"].values()
+        )
     ):
         delivery["blocking_reasons"].append("comparison surfaces are missing or empty")
         return delivery
@@ -1543,6 +1814,66 @@ def _build_opening_visual_surfaces(
         )
         return delivery
     delivery["status"] = "pass"
+    return delivery
+
+
+def _collect_choreography_delivery(
+    stage: Path,
+    attempt: Path,
+    run_dir: Path,
+    plan: EditPlanV3,
+) -> dict[str, Any] | None:
+    if plan.visual_choreography is None or plan.frame_contract is None:
+        return None
+    output = attempt / "visual-choreography"
+    output.mkdir(parents=True, exist_ok=True)
+    files: list[str] = []
+    missing: list[str] = []
+    projects = sorted(stage.glob("choreography-*/project"))
+    for project in projects:
+        label = project.parent.name.removeprefix("choreography-")
+        for source_name in (
+            "choreography-manifest.json",
+            "animation-map.json",
+            "provenance.json",
+            "render-receipt.json",
+            "hyperframes-lint.json",
+            "hyperframes-validate.json",
+            "hyperframes-inspect.json",
+            "hyperframes-render.json",
+            "storyboard.md",
+            "index.html",
+        ):
+            source = project / source_name
+            if not source.is_file():
+                missing.append(f"{label}-{source_name}")
+                continue
+            destination = output / f"{label}-{source_name}"
+            shutil.copy2(source, destination)
+            files.append(destination.name)
+    for source_name in ("opening-ranking.json", "opening-selection.json", "frame.md"):
+        source = run_dir / source_name
+        if source.is_file():
+            shutil.copy2(source, output / source_name)
+            files.append(source_name)
+    shared_body = stage / "body-choreographed.mp4"
+    expected_project_count = 4 + len(plan.visual_choreography["shorts"])
+    project_count_green = len(projects) == expected_project_count
+    delivery = {
+        "schema_version": "eddy-visual-choreography-delivery-v1",
+        "frame_sha256": plan.frame_contract["sha256"],
+        "shared_body_sha256": _sha256_file(shared_body) if shared_body.is_file() else None,
+        "files": sorted(files),
+        "project_count": len(projects),
+        "expected_project_count": expected_project_count,
+        "status": (
+            "pass"
+            if shared_body.is_file() and bool(files) and project_count_green and not missing
+            else "fail"
+        ),
+        "missing": sorted(missing),
+    }
+    _write_json(output / "delivery.json", delivery)
     return delivery
 
 

@@ -34,6 +34,7 @@ CANONICAL_SURFACES = (
     "references/retention-policy.md",
     "references/sop.md",
     "references/verification.md",
+    "scripts/choreography_render.py",
     "scripts/composite_render.py",
     "scripts/descript_studio_sound.py",
     "scripts/karaoke_ass.py",
