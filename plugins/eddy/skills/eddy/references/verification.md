@@ -38,9 +38,13 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Protected count** — `protected_count` (sacred spans) preserved end-to-end.
 - **Layout asserts** — PiP flush to the bottom-right corner at the right size/radius; screen fills
   the frame (no black bars) with slight rounded corners; Shorts stack geometry correct.
-- **V3.2 choreography contract** — frame hash matches; every source ref exists under the source
+- **V3.2+ choreography contract** — frame hash matches; every source ref exists under the source
   snapshot or run; opening/body/Short cadence, evidence authority, layout diversity, and transition
   limits validate before render. HyperFrames lint, validate, and inspect receipts must be green.
+- **V3.3 body-structure contract** — the source contract ref/hash is present; route clarity is at or
+  before second 30; 3-5 section IDs match Sage order; every shared-body scene maps exactly once;
+  every section has a real proof scene; and every non-final boundary has a reset scene, transition
+  card, and spoken callback.
 - **Opening selection** — ranking and selected opening are receipted. A top-two gap of five points
   or less, or uncertain leading judgment, must pause before finalization.
 - **Caption sync** — cue timings align to word timings; no cue overlaps the next by >1 frame.

@@ -207,6 +207,66 @@ Eddy computes the 100-point opening score from the eight normalized signals with
 `15/20/20/10/10/10/10/5` in the order shown. `ranking_evidence` names the muted/mobile/taste review
 artifacts behind those numbers; a naked subjective total is not accepted.
 
+## V3.3 Sage-owned body structure extension
+
+Current writers set `schema_version` to `edit-plan-v3.3`, retain the complete v3.2 frame and visual
+choreography contract, and add:
+
+```json
+{
+  "body_structure_contract": {
+    "schema_version": "eddy-body-structure-v1",
+    "source_contract_ref": "pre-production/review/script-structure-contract.json#body_structure",
+    "source_contract_sha256": "<sha256>",
+    "major_order_authority": "sage_locked_eddy_may_not_reorder",
+    "mode": "live_test",
+    "route_contract": {
+      "proof": "Four operators rejected the first report.",
+      "promise": "The viewer gets one consequence test.",
+      "plan": "Run three increasingly consequential tests.",
+      "understood_by_second": 28,
+      "progress_unit": "round",
+      "section_ids": ["SEC-01", "SEC-02", "SEC-03"]
+    },
+    "sections": [
+      {
+        "section_id": "SEC-01",
+        "label": "The failure",
+        "question": "Why did the first run fail?",
+        "scene_ids": ["body-1", "body-2"],
+        "proof_scene_ids": ["body-2"],
+        "payoff": "The first run optimized the wrong result.",
+        "viewer_action": "Name the decision before running the tool.",
+        "next_loop": "Can the corrected run change a real decision?",
+        "story_role": "evidence",
+        "story_source_ref": "receipt:R-01"
+      }
+    ],
+    "progress_cues": [
+      {
+        "after_section_id": "SEC-01",
+        "scene_id": "body-3",
+        "transition_card": "1 of 3: Failure",
+        "spoken_callback": "The first run failed. Now the rerun has to change a decision."
+      }
+    ],
+    "final_payoff": {
+      "section_id": "SEC-03",
+      "verdict": "The consequential result",
+      "resulting_action": "The resulting operator action",
+      "earned_cta_relationship": "Why the one CTA is earned after the result"
+    }
+  }
+}
+```
+
+The abbreviated example shows one section and boundary. Production plans require 3-5 sections,
+every shared-body scene mapped exactly once and in Sage order, at least one proof scene per section,
+and one progress cue for each non-final boundary. Each shared-body scene carries the matching
+`body_section_id`; the progress-cue scene is the first scene of the next section and uses
+`semantic_job: reset`. Proof scenes use `raw_source`, `supplied_asset`, or `pixel_faithful_demo`.
+Story roles are `none`, `evidence`, `stakes`, or `decision`; background biography is rejected.
+
 ## Invariants
 
 - Source hashes use source-relative paths and must exactly match the job's source lock.
@@ -232,6 +292,9 @@ artifacts behind those numbers; a naked subjective total is not accepted.
   money shot by 3s, real proof by 10s, stakes by 30s, and use at least three layout states.
 - V3.2 body state changes never exceed 12s; a hold over 8s needs `quiet_hold_reason`. Short changes
   never exceed 8s. Three consecutive identical layouts require an uninterrupted-proof reason.
+- V3.3 preserves every v3.2 invariant and adds a body source ref/hash, route clarity by second 30,
+  3-5 Sage-ordered macro sections, exact scene coverage, proof scenes, boundary cues, and a final
+  payoff. `major_order_authority` has one legal value: `sage_locked_eddy_may_not_reorder`.
 - Scene coverage is continuous: no unexplained black gap over 0.1s. Every opening scene is
   `preview_safe`; a `metaphor` authority explicitly identifies itself as a metaphor in `cause`.
 - Opening scenes cover the complete hook cut (at least 30s), and portrait scenes cover the complete

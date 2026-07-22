@@ -59,7 +59,7 @@ The hook is where the "$100k motion graphics" go. Brief HyperFrames to animate t
 first 30-60s (see `motion-layer.md`). The visual and the spoken hook must reinforce the same
 promise — not compete.
 
-For v3.2, author three distinct semantic scene timelines and rank the treatments after muted/mobile
+For v3.2 and newer, author three distinct semantic scene timelines and rank the treatments after muted/mobile
 inspection. Auto-select only when the leader is certain and more than five points clear. Otherwise
 use `eddy opening-candidates` and make a receipted `eddy select-opening` choice. Selection does not
 erase the alternates; it determines `long-primary.mp4`, while all three complete Longs still ship
