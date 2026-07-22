@@ -118,7 +118,7 @@ keeps the original Short under `repairs/privacy-v1/originals/`.
 
 ## 7. HyperFrames motion — the DEFAULT engine (iconography-forward, threadify-fc)
 
-For v3.2, the runtime calls the full-frame compiler instead of the legacy overlay renderer:
+For v3.2 and newer, the runtime calls the full-frame compiler instead of the legacy overlay renderer:
 
 ```bash
 python3 scripts/choreography_render.py --brief choreography-brief.json \

@@ -24,7 +24,7 @@ eddy sync-doctor
 ## Workflow
 
 ```text
-eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.2
+eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.3
 -> eddy_host_submit -> auto-selected | awaiting_opening_selection -> eddy_finalize
 -> completed | awaiting_host_repair | blocked
 ```
@@ -52,10 +52,12 @@ The host model owns editorial taste. Eddy owns source locks, deterministic media
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full
 product contract.
 
-Current `edit-plan-v3.2` projects treat frame one, second 3, and second 30 as separate retention
-surfaces. A hash-bound `frame.md` drives three opening compositions, one reused shared-body
-composition, and portrait Short timelines. HyperFrames controls full-frame proof, speaker geometry,
-illustrations, and semantically motivated transitions instead of merely adding small overlays.
+Current `edit-plan-v3.3` projects retain v3.2's opening choreography and add a hash-bound,
+Sage-owned body spine. A route understood by second 30 resolves through 3-5 ordered sections; Eddy
+maps every body scene to those sections and cannot silently reorder them. A hash-bound `frame.md`
+still drives three opening compositions, one reused shared-body composition, and portrait Short
+timelines. HyperFrames controls full-frame proof, speaker geometry, illustrations, and semantically
+motivated transitions instead of merely adding small overlays.
 
 Preflight writes an Editorial Review Ledger. Final verification retranscribes every emitted video;
 source-plan timing never substitutes for delivered-media proof.

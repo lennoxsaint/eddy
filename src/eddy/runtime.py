@@ -169,6 +169,14 @@ class JobManager:
             "host_plan_accepted",
             schema_version=plan.schema_version,
             frame_sha256=(plan.frame_contract or {}).get("sha256"),
+            body_structure_source_sha256=(plan.body_structure_contract or {}).get(
+                "source_contract_sha256"
+            ),
+            body_structure_mode=(plan.body_structure_contract or {}).get("mode"),
+            body_structure_section_ids=[
+                section["section_id"]
+                for section in (plan.body_structure_contract or {}).get("sections", [])
+            ],
         )
         return updated
 

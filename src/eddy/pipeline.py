@@ -418,6 +418,12 @@ class PipelineRunner:
                 gates["visual_choreography_delivery"] = choreography_green
                 if not choreography_green:
                     blockers.append("visual_choreography_delivery_failed")
+                body_structure_delivery = choreography_delivery.get("body_structure_delivery")
+                if isinstance(body_structure_delivery, dict):
+                    body_structure_green = body_structure_delivery.get("status") == "pass"
+                    gates["body_structure_delivery"] = body_structure_green
+                    if not body_structure_green:
+                        blockers.append("body_structure_delivery_failed")
             _write_json(
                 attempt / "qa.json",
                 {
@@ -1857,18 +1863,55 @@ def _collect_choreography_delivery(
             shutil.copy2(source, output / source_name)
             files.append(source_name)
     shared_body = stage / "body-choreographed.mp4"
+    shared_body_sha256 = _sha256_file(shared_body) if shared_body.is_file() else None
+    body_structure_delivery = None
+    if plan.body_structure_contract is not None:
+        contract = plan.body_structure_contract
+        body_structure_delivery = {
+            "schema_version": "eddy-body-structure-delivery-v1",
+            "source_contract_ref": contract["source_contract_ref"],
+            "source_contract_sha256": contract["source_contract_sha256"],
+            "major_order_authority": contract["major_order_authority"],
+            "mode": contract["mode"],
+            "route_understood_by_second": contract["route_contract"]["understood_by_second"],
+            "section_ids": [section["section_id"] for section in contract["sections"]],
+            "section_scene_ids": {
+                section["section_id"]: list(section["scene_ids"])
+                for section in contract["sections"]
+            },
+            "proof_scene_ids": {
+                section["section_id"]: list(section["proof_scene_ids"])
+                for section in contract["sections"]
+            },
+            "progress_cue_scene_ids": [cue["scene_id"] for cue in contract["progress_cues"]],
+            "final_payoff_section_id": contract["final_payoff"]["section_id"],
+            "shared_body_sha256": shared_body_sha256,
+            "status": "pass" if shared_body_sha256 else "fail",
+        }
+        _write_json(output / "body-structure-delivery.json", body_structure_delivery)
+        files.append("body-structure-delivery.json")
     expected_project_count = 4 + len(plan.visual_choreography["shorts"])
     project_count_green = len(projects) == expected_project_count
     delivery = {
         "schema_version": "eddy-visual-choreography-delivery-v1",
         "frame_sha256": plan.frame_contract["sha256"],
-        "shared_body_sha256": _sha256_file(shared_body) if shared_body.is_file() else None,
+        "shared_body_sha256": shared_body_sha256,
+        "body_structure_delivery": body_structure_delivery,
         "files": sorted(files),
         "project_count": len(projects),
         "expected_project_count": expected_project_count,
         "status": (
             "pass"
-            if shared_body.is_file() and bool(files) and project_count_green and not missing
+            if (
+                shared_body.is_file()
+                and bool(files)
+                and project_count_green
+                and not missing
+                and (
+                    body_structure_delivery is None
+                    or body_structure_delivery["status"] == "pass"
+                )
+            )
             else "fail"
         ),
         "missing": sorted(missing),

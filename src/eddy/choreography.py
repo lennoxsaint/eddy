@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 
 class ChoreographyValidationError(ValueError):
-    """The v3.2 scene plan cannot produce an honest, paced composition."""
+    """The v3.2+ scene plan cannot produce an honest, paced composition."""
 
 
 LAYOUTS = {

@@ -269,6 +269,95 @@ def valid_plan_v32() -> dict:
     return payload
 
 
+def valid_plan_v33() -> dict:
+    payload = valid_plan_v32()
+    payload["schema_version"] = "edit-plan-v3.3"
+    body_scenes = payload["visual_choreography"]["shared_body"]["scenes"]
+    body_scenes[2]["semantic_job"] = "reset"
+    body_scenes[4]["semantic_job"] = "reset"
+    for section_id, scene_indexes in (
+        ("SEC-01", (0, 1)),
+        ("SEC-02", (2, 3)),
+        ("SEC-03", (4, 5)),
+    ):
+        for scene_index in scene_indexes:
+            body_scenes[scene_index]["body_section_id"] = section_id
+    payload["body_structure_contract"] = {
+        "schema_version": "eddy-body-structure-v1",
+        "source_contract_ref": "pre-production/review/script-structure-contract.json#body_structure",
+        "source_contract_sha256": "e" * 64,
+        "major_order_authority": "sage_locked_eddy_may_not_reorder",
+        "mode": "live_test",
+        "route_contract": {
+            "proof": "Four operators rejected the first report.",
+            "promise": "The viewer gets one test for deciding whether an AI workflow works.",
+            "plan": "Run the workflow through three increasingly consequential tests.",
+            "understood_by_second": 28,
+            "progress_unit": "round",
+            "section_ids": ["SEC-01", "SEC-02", "SEC-03"],
+        },
+        "sections": [
+            {
+                "section_id": "SEC-01",
+                "label": "The failure",
+                "question": "Why did the first run fail?",
+                "scene_ids": ["body-1", "body-2"],
+                "proof_scene_ids": ["body-2"],
+                "payoff": "The first run optimized the wrong result.",
+                "viewer_action": "Name the decision before running the tool.",
+                "next_loop": "Can the corrected run change a real decision?",
+                "story_role": "evidence",
+                "story_source_ref": "receipt:R-01",
+            },
+            {
+                "section_id": "SEC-02",
+                "label": "The rerun",
+                "question": "Can the corrected run survive the receipt test?",
+                "scene_ids": ["body-3", "body-4"],
+                "proof_scene_ids": ["body-4"],
+                "payoff": "The rerun names one defensible workflow.",
+                "viewer_action": "Compare the recommendation with the action log.",
+                "next_loop": "Will Lennox actually change the workflow?",
+                "story_role": "none",
+                "story_source_ref": None,
+            },
+            {
+                "section_id": "SEC-03",
+                "label": "The verdict",
+                "question": "Does the recommendation cause action?",
+                "scene_ids": ["body-5", "body-6"],
+                "proof_scene_ids": ["body-6"],
+                "payoff": "The workflow changes from active to paused.",
+                "viewer_action": "Run the same consequence test on one workflow.",
+                "next_loop": None,
+                "story_role": "decision",
+                "story_source_ref": "screen:workflow-status",
+            },
+        ],
+        "progress_cues": [
+            {
+                "after_section_id": "SEC-01",
+                "scene_id": "body-3",
+                "transition_card": "1 of 3: Failure",
+                "spoken_callback": "The first run failed. Now the rerun has to change a decision.",
+            },
+            {
+                "after_section_id": "SEC-02",
+                "scene_id": "body-5",
+                "transition_card": "2 of 3: Rerun",
+                "spoken_callback": "The rerun passed. Now it has to cause action.",
+            },
+        ],
+        "final_payoff": {
+            "section_id": "SEC-03",
+            "verdict": "The workflow only keeps its job if it changes operating state.",
+            "resulting_action": "Pause the workflow for seven days.",
+            "earned_cta_relationship": "Invite the viewer after the reusable test is complete.",
+        },
+    }
+    return payload
+
+
 def plan_for_job(job) -> dict:
     payload = valid_plan()
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
@@ -491,6 +580,69 @@ def test_edit_plan_v32_accepts_hash_bound_full_frame_choreography() -> None:
     assert plan.frame_contract == payload["frame_contract"]
     assert plan.visual_choreography == payload["visual_choreography"]
     assert plan.to_dict()["visual_choreography"]["shared_body"]["id"] == "shared-body"
+
+
+def test_edit_plan_v33_accepts_locked_body_spine_and_round_trips() -> None:
+    payload = valid_plan_v33()
+
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.schema_version == "edit-plan-v3.3"
+    assert plan.body_structure_contract == payload["body_structure_contract"]
+    assert plan.to_dict()["body_structure_contract"]["route_contract"]["section_ids"] == [
+        "SEC-01",
+        "SEC-02",
+        "SEC-03",
+    ]
+
+
+def test_edit_plan_v33_requires_body_contract_and_three_to_five_sections() -> None:
+    missing = valid_plan_v33()
+    missing.pop("body_structure_contract")
+    with pytest.raises(PlanValidationError, match="body_structure_contract_required"):
+        EditPlanV3.from_dict(missing)
+
+    too_few = valid_plan_v33()
+    too_few["body_structure_contract"]["sections"] = too_few["body_structure_contract"]["sections"][:2]
+    with pytest.raises(PlanValidationError, match="body_structure_sections_must_be_3_to_5"):
+        EditPlanV3.from_dict(too_few)
+
+
+def test_edit_plan_v33_rejects_reordered_or_unmapped_body_scenes() -> None:
+    reordered = valid_plan_v33()
+    reordered["body_structure_contract"]["sections"].reverse()
+    with pytest.raises(PlanValidationError, match="body_structure_section_order_mismatch"):
+        EditPlanV3.from_dict(reordered)
+
+    unmapped = valid_plan_v33()
+    unmapped["body_structure_contract"]["sections"][-1]["scene_ids"].pop()
+    unmapped["body_structure_contract"]["sections"][-1]["proof_scene_ids"] = ["body-5"]
+    with pytest.raises(PlanValidationError, match="body_structure_scene_coverage_mismatch"):
+        EditPlanV3.from_dict(unmapped)
+
+
+def test_edit_plan_v33_requires_proof_and_progress_cues() -> None:
+    no_proof = valid_plan_v33()
+    no_proof["body_structure_contract"]["sections"][0]["proof_scene_ids"] = []
+    with pytest.raises(PlanValidationError, match="body_structure_proof_scene_required"):
+        EditPlanV3.from_dict(no_proof)
+
+    no_cue = valid_plan_v33()
+    no_cue["body_structure_contract"]["progress_cues"].pop()
+    with pytest.raises(PlanValidationError, match="body_structure_progress_cues_mismatch"):
+        EditPlanV3.from_dict(no_cue)
+
+
+def test_edit_plan_v33_rejects_background_biography_and_editor_reordering_authority() -> None:
+    biography = valid_plan_v33()
+    biography["body_structure_contract"]["sections"][0]["story_role"] = "background"
+    with pytest.raises(PlanValidationError, match="body_structure_story_role_invalid"):
+        EditPlanV3.from_dict(biography)
+
+    authority = valid_plan_v33()
+    authority["body_structure_contract"]["major_order_authority"] = "eddy_may_reorder"
+    with pytest.raises(PlanValidationError, match="body_structure_major_order_authority_invalid"):
+        EditPlanV3.from_dict(authority)
 
 
 def test_edit_plan_v32_rejects_late_money_shot_and_body_cadence_gap() -> None:

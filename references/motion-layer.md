@@ -5,10 +5,10 @@ model turn static content into **dynamic animations** — animated section intro
 alive, varied slide+speaker layouts. We adopt this **scoped to high-leverage moments**, not the
 whole video, so it stays interactive without becoming bloated.
 
-## V3.2 override: compose the argument, not an overlay
+## V3.2+ override: compose the argument, not an overlay
 
-For `edit-plan-v3.2`, HyperFrames owns the full visual canvas. The fixed-composite overlay rules
-below apply only to legacy v3/v3.1 jobs. A v3.2 scene chooses proof canvas, speaker full/edge/PiP,
+For `edit-plan-v3.2` and newer, HyperFrames owns the full visual canvas. The fixed-composite overlay rules
+below apply only to legacy v3/v3.1 jobs. A v3.2+ scene chooses proof canvas, speaker full/edge/PiP,
 source screen, illustration canvas, or rare special emphasis. Use the real camera and screen cut
 masters as direct media and one paused GSAP timeline. Animate transforms and opacity, not layout
 properties, so frame seeking is deterministic.

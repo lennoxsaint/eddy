@@ -34,12 +34,15 @@ second 3, and second 30 separate product surfaces: frame one must already move, 
 money shot lands by 3s, real proof lands by 10s, and the stakes are legible by 30s. Each hook is
 self-contained and shows concrete proof when the narration names it.
 
-Use `edit-plan-v3.2` for current work. It keeps the three-hooks/one-body architecture, hash-binds a
-project `frame.md`, and adds semantic visual choreography: three opening timelines, one reused body
-timeline, and one portrait timeline per Short. HyperFrames now owns full-frame composition — proof
+Use `edit-plan-v3.3` for current work. It keeps the v3.2 three-hooks/one-body choreography and adds
+a Sage-owned body-structure contract: one mode, a route understood by second 30, 3-5 ordered macro
+sections, proof scenes, payoff relays, and brief progress cues. Eddy may tighten within a section or
+flag a broken spine; it may never invent, remove, or reorder the macro sections. The plan still
+hash-binds a project `frame.md`, with three opening timelines, one reused body timeline, and one
+portrait timeline per Short. HyperFrames owns full-frame composition — proof
 canvas, speaker full/edge/PiP, source screen, illustration canvas, and rare special emphasis — not
 small cards floating over a fixed edit. `edit-plan-v3` and `edit-plan-v3.1` remain accepted for
-legacy snapshots.
+legacy snapshots; `edit-plan-v3.2` remains a readable choreography-only input.
 
 Openings need 8-12 meaningful changes inside 30s and at least three layout states. Long bodies must
 change visual state at least every 12s; holds beyond 8s require a semantic reason. Shorts use the
@@ -80,7 +83,7 @@ outputs proof-gated candidates.
 4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
    Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
    screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
-5. Author the v3.2 choreography against the packet's hash-bound `frame.md`, then call
+5. Author the v3.3 body contract and choreography against the packet's hash-bound `frame.md`, then call
    `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
    bypassing them. Eddy auto-selects a clear, certain opening leader; when the top two are within
    five points or uncertain, inspect `eddy_opening_candidates` and call `eddy_select_opening` with
@@ -162,6 +165,8 @@ eddy record-feedback <job-id> owner-feedback.json
 - Exactly one shared body plan feeds all three longs; only their hook segments differ.
 - The project frame hash, source refs, choreography manifest, animation map, provenance, selected
   opening, shared-body hash, and 0/1/3/10/30 comparison frames are inspectable.
+- The body contract hash/ref, mode, route, ordered section IDs, proof-scene mapping, progress cues,
+  and final payoff are inspectable. Every shared-body scene belongs to exactly one locked section.
 - Every `keep` beat and protected span survives.
 - Every delivered long and Short is retranscribed. No genuine retake, false start, reset loop, or
   unresolved repetition survives the delivered transcript. A deliberate callback is exempt only

@@ -11,6 +11,7 @@ from .choreography import (
     validate_frame_contract,
     validate_visual_choreography,
 )
+from .body_structure import BodyStructureValidationError, validate_body_structure_contract
 from .proof import screen_proof_share
 
 
@@ -97,6 +98,7 @@ class EditPlanV3:
     opening_visual_contract: dict[str, Any] | None
     frame_contract: dict[str, Any] | None
     visual_choreography: dict[str, Any] | None
+    body_structure_contract: dict[str, Any] | None
 
     @property
     def primary_hook(self) -> HookPlan:
@@ -121,12 +123,13 @@ class EditPlanV3:
             "opening_visual_contract",
             "frame_contract",
             "visual_choreography",
+            "body_structure_contract",
         }
         extra = sorted(set(payload) - allowed)
         if extra:
             raise PlanValidationError(f"unsupported_edit_plan_fields:{','.join(extra)}")
         schema_version = payload.get("schema_version")
-        if schema_version not in {"edit-plan-v3", "edit-plan-v3.1", "edit-plan-v3.2"}:
+        if schema_version not in {"edit-plan-v3", "edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3"}:
             raise PlanValidationError("edit_plan_schema_version_invalid")
 
         raw_hooks = payload.get("hooks")
@@ -209,7 +212,7 @@ class EditPlanV3:
         _validate_motion_beats(
             motion_beats,
             label="long_motion",
-            require_semantics=schema_version in {"edit-plan-v3.1", "edit-plan-v3.2"},
+            require_semantics=schema_version in {"edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3"},
         )
         for hook in hooks:
             applicable = tuple(
@@ -223,7 +226,7 @@ class EditPlanV3:
                 raise PlanValidationError(f"long_hook_motion_must_start_by_two_seconds:{hook.id}")
 
         opening_visual_contract = None
-        if schema_version in {"edit-plan-v3.1", "edit-plan-v3.2"}:
+        if schema_version in {"edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3"}:
             opening_visual_contract = _parse_opening_visual_contract(
                 payload.get("opening_visual_contract"),
                 hooks=hooks,
@@ -236,7 +239,7 @@ class EditPlanV3:
 
         frame_contract = None
         visual_choreography = None
-        if schema_version == "edit-plan-v3.2":
+        if schema_version in {"edit-plan-v3.2", "edit-plan-v3.3"}:
             if any(sum(end - start for start, end in hook.segments) < 30 for hook in hooks):
                 raise PlanValidationError("v3_2_opening_cut_must_cover_first_thirty_seconds")
             try:
@@ -279,6 +282,20 @@ class EditPlanV3:
         elif payload.get("frame_contract") is not None or payload.get("visual_choreography") is not None:
             raise PlanValidationError("visual_choreography_requires_edit_plan_v3_2")
 
+        body_structure_contract = None
+        if schema_version == "edit-plan-v3.3":
+            if visual_choreography is None:
+                raise PlanValidationError("body_structure_requires_visual_choreography")
+            try:
+                body_structure_contract = validate_body_structure_contract(
+                    payload.get("body_structure_contract"),
+                    visual_choreography=visual_choreography,
+                )
+            except BodyStructureValidationError as exc:
+                raise PlanValidationError(str(exc)) from exc
+        elif payload.get("body_structure_contract") is not None:
+            raise PlanValidationError("body_structure_contract_requires_edit_plan_v3_3")
+
         return cls(
             schema_version=schema_version,
             source_hashes=dict(hashes),
@@ -292,6 +309,7 @@ class EditPlanV3:
             opening_visual_contract=opening_visual_contract,
             frame_contract=frame_contract,
             visual_choreography=visual_choreography,
+            body_structure_contract=body_structure_contract,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -367,6 +385,8 @@ class EditPlanV3:
             payload["frame_contract"] = self.frame_contract
         if self.visual_choreography is not None:
             payload["visual_choreography"] = self.visual_choreography
+        if self.body_structure_contract is not None:
+            payload["body_structure_contract"] = self.body_structure_contract
         return payload
 
 

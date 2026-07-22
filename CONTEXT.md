@@ -77,7 +77,7 @@ the visible desktop environment while leaving the source proof legible around it
 _Avoid_: Full-screen title card, opaque proof replacement, giant text over UI
 
 **Project Frame Contract**:
-A run-local `frame.md` whose SHA-256 is bound into `edit-plan-v3.2`; it records the visual thesis,
+A run-local `frame.md` whose SHA-256 is bound into `edit-plan-v3.2` and newer; it records the visual thesis,
 evidence order, layout grammar, and transition restraint before rendering.
 _Avoid_: Unversioned style prompt, global brand guess
 
@@ -94,6 +94,16 @@ _Avoid_: Guessing the winner, rank-1 hook as implicit visual winner
 **Shared-Body Composition Hash**:
 The SHA-256 of the single HyperFrames body render reused by all three Longs.
 _Avoid_: Three similar body renders, visual drift described as reuse
+
+**Body Structure Contract**:
+The hash-bound Sage route, body mode, ordered macro sections, proof-scene mapping, progress cues,
+and final payoff consumed by `edit-plan-v3.3`.
+_Avoid_: Editor outline, suggested chapters
+
+**Macro Order Authority**:
+The rule `sage_locked_eddy_may_not_reorder`: Eddy can tighten and visually improve a section but
+cannot invent, remove, or reorder sections.
+_Avoid_: Editorial discretion over the script spine, silent restructuring
 
 **Evidence-Bearing Short**:
 A dual-source Short with at least 25% real source-mapped screen proof, an animated hook beat in its

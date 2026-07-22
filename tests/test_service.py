@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from eddy.service import EddyService
-from test_runtime import valid_plan_v32
+from test_runtime import valid_plan_v32, valid_plan_v33
 
 
 def test_edit_options_returns_one_runnable_skill_first_path(tmp_path: Path) -> None:
@@ -47,12 +47,16 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["motion_requirements"]["longs"]["adaptive_cadence"]["hard_max_seconds"] == 12
     assert packet["motion_requirements"]["visual_choreography"]["opening_timelines"] == 3
     assert "speaker_edge_right" in packet["motion_requirements"]["visual_choreography"]["layouts"]
-    assert packet["edit_plan_schema"] == "edit-plan-v3.2"
+    assert packet["edit_plan_schema"] == "edit-plan-v3.3"
     assert packet["accepted_edit_plan_schemas"] == [
         "edit-plan-v3",
         "edit-plan-v3.1",
         "edit-plan-v3.2",
+        "edit-plan-v3.3",
     ]
+    assert packet["requirements"]["body_structure_contract"]["schema_version"] == "eddy-body-structure-v1"
+    assert packet["requirements"]["body_structure_contract"]["section_count"] == [3, 5]
+    assert packet["requirements"]["body_structure_contract"]["major_order_authority"] == "sage_locked_eddy_may_not_reorder"
     assert Path(packet["frame_contract"]["path"]).name == "frame.md"
     assert packet["quality_profile"]["id"] == "creator_good_v1"
     assert packet["quality_profile"]["captions"]["terminal_punctuation"] == [".", "?", "!"]
@@ -127,6 +131,18 @@ def _v32_for_started_job(service: EddyService, started: dict) -> dict:
     return payload
 
 
+def _v33_for_started_job(service: EddyService, started: dict) -> dict:
+    packet = service.host_packet(started["job_id"])
+    payload = valid_plan_v33()
+    payload["source_hashes"] = packet["source_hashes"]
+    payload["frame_contract"] = {
+        "schema_version": "eddy-project-frame-v1",
+        "ref": packet["frame_contract"]["ref"],
+        "sha256": packet["frame_contract"]["sha256"],
+    }
+    return payload
+
+
 def test_v32_host_submit_auto_selects_clear_opening_leader(tmp_path: Path) -> None:
     source = tmp_path / "camera.mp4"
     source.write_bytes(b"raw")
@@ -139,6 +155,21 @@ def test_v32_host_submit_auto_selects_clear_opening_leader(tmp_path: Path) -> No
     assert result["opening_selection"]["status"] == "auto_selected"
     selection = json.loads((Path(started["run_dir"]) / "opening-selection.json").read_text())
     assert selection["selected_opening_id"] == "opening-1"
+
+
+def test_v33_host_submit_preserves_locked_body_contract_and_selects_opening(tmp_path: Path) -> None:
+    source = tmp_path / "camera.mp4"
+    source.write_bytes(b"raw")
+    service = EddyService(tmp_path / "runs", auto_prepare=False)
+    started = service.edit_start(str(source))
+    payload = _v33_for_started_job(service, started)
+
+    result = service.host_submit(started["job_id"], payload)
+
+    assert result["state"] == "compiling"
+    assert result["opening_selection"]["status"] == "auto_selected"
+    saved = json.loads((Path(started["run_dir"]) / "edit-plan.json").read_text())
+    assert saved["body_structure_contract"] == payload["body_structure_contract"]
 
 
 def test_v32_close_opening_scores_pause_until_explicit_selection(tmp_path: Path) -> None:

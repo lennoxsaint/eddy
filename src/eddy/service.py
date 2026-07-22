@@ -198,11 +198,12 @@ class EddyService:
                 if (job.run_dir / "repair-packet.json").exists()
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
-            "edit_plan_schema": "edit-plan-v3.2",
+            "edit_plan_schema": "edit-plan-v3.3",
             "accepted_edit_plan_schemas": [
                 "edit-plan-v3",
                 "edit-plan-v3.1",
                 "edit-plan-v3.2",
+                "edit-plan-v3.3",
             ],
             "frame_contract": {
                 "schema_version": "eddy-project-frame-v1",
@@ -216,13 +217,22 @@ class EddyService:
                 "alternate_hooks": 2,
                 "shared_body": True,
                 "packaging": False,
+                "body_structure_contract": {
+                    "schema_version": "eddy-body-structure-v1",
+                    "modes": ["countable_guide", "live_test", "proof_led_argument"],
+                    "section_count": [3, 5],
+                    "route_understood_by_second": 30,
+                    "progress_cue_per_non_final_boundary": True,
+                    "major_order_authority": "sage_locked_eddy_may_not_reorder",
+                    "source_ref": "pre-production/review/script-structure-contract.json#body_structure",
+                },
             },
         }
 
     def host_submit(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         job = self.manager.submit_plan(job_id, payload)
         result = self._job_payload(job)
-        if payload.get("schema_version") == "edit-plan-v3.2":
+        if payload.get("schema_version") in {"edit-plan-v3.2", "edit-plan-v3.3"}:
             opening_selection = self.opening_candidates(job_id)
             result = {**self._job_payload(self.manager.load(job_id)), "opening_selection": opening_selection}
         return result
@@ -297,7 +307,7 @@ class EddyService:
         plan_path = self.manager.load(job_id).run_dir / "edit-plan.json"
         if plan_path.exists():
             plan = json.loads(plan_path.read_text())
-            if plan.get("schema_version") == "edit-plan-v3.2":
+            if plan.get("schema_version") in {"edit-plan-v3.2", "edit-plan-v3.3"}:
                 selection = plan_path.parent / "opening-selection.json"
                 if not selection.exists():
                     ranking = self.opening_candidates(job_id)
