@@ -1,0 +1,113 @@
+{
+  "schema_version": "eddy-professional-youtube-rubric-v1",
+  "maximum_score": 100,
+  "passing_score": 100,
+  "points_per_check": 1,
+  "evidence_types": ["file", "frame", "timestamp", "hash", "playback", "measurement"],
+  "categories": [
+    {
+      "id": "source_editorial_integrity",
+      "points": 10,
+      "checks": [
+        "source hashes unchanged", "source snapshot matches", "all transcript chunks reviewed",
+        "all ledger candidates resolved", "retakes removed", "repeated first words removed",
+        "false starts and chatter removed", "word gaps meet policy", "mute stretches resolved",
+        "delivered media retranscribed with coherent joins"
+      ]
+    },
+    {
+      "id": "opening",
+      "points": 10,
+      "checks": [
+        "frame one active", "truthful hook by 3s", "money shot legible by 3s",
+        "real proof by 10s", "stakes clear by 30s", "route clear by 30s",
+        "0-3 mobile playback passes", "0-30 muted playback passes",
+        "opening visual density passes", "three ranked hooks have distinct truthful treatments"
+      ]
+    },
+    {
+      "id": "story",
+      "points": 10,
+      "checks": [
+        "shared body is hash-identical", "major section order preserved",
+        "section boundaries are legible", "progress cues support orientation",
+        "no substantive beat is gutted", "joins preserve argument causality",
+        "pacing changes serve meaning", "CTA follows delivered value",
+        "ending resolves the opening promise", "full-body playback has no dead zone"
+      ]
+    },
+    {
+      "id": "proof",
+      "points": 10,
+      "checks": [
+        "real source proof preferred", "constructed proof is clearly framed",
+        "labels match source truth", "proof is mobile-legible", "proof context is preserved",
+        "screen color remains faithful", "private data is masked", "proof is not obstructed",
+        "evidence provenance is recorded", "claims have visible support"
+      ]
+    },
+    {
+      "id": "motion_layout",
+      "points": 10,
+      "checks": [
+        "hero frames pass static review", "layout changes have semantic reasons",
+        "zooms have communication jobs", "no automated drift", "no filler punch-ins",
+        "mental models replace weak explanation", "authored text stays sparse",
+        "safe zones pass", "proof UI collision checks pass", "animation maps pass review"
+      ]
+    },
+    {
+      "id": "audio",
+      "points": 10,
+      "checks": [
+        "dialogue is intelligible", "dialogue treatment survives export",
+        "upbeat lo-fi bed is present", "music provenance is recorded",
+        "music licence is recorded", "music cue and purpose are recorded",
+        "music mix level is recorded", "state-change SFX are restrained",
+        "SFX provenance and licence are recorded", "full playback has no audio discontinuity"
+      ]
+    },
+    {
+      "id": "captions_mobile_privacy",
+      "points": 10,
+      "checks": [
+        "prior words remain visible", "active word is highlighted", "future words stay invisible",
+        "caption onset matches speech", "duplicate source captions are suppressed",
+        "caption band is respected", "caption contrast passes", "terminal punctuation is correct",
+        "mobile preview is readable", "privacy masks survive final export"
+      ]
+    },
+    {
+      "id": "shorts",
+      "points": 10,
+      "checks": [
+        "three to five Shorts delivered", "no quota padding", "each Short stands alone",
+        "each Short has a hook", "each Short reaches payoff", "portrait frame contract passes",
+        "speaker-top screen-bottom is available", "Short proof is legible",
+        "Short captions pass progressive policy", "every Short passes complete playback"
+      ]
+    },
+    {
+      "id": "technical_color",
+      "points": 10,
+      "checks": [
+        "long resolution and aspect pass", "Short resolution and aspect pass",
+        "no black or blank frames", "no dropped or duplicate output frames",
+        "natural skin grade passes", "exposure consistency passes",
+        "white balance consistency passes", "screen recording color is preserved",
+        "all deliverables decode end-to-end", "artifact hashes are recorded"
+      ]
+    },
+    {
+      "id": "completion_evidence",
+      "points": 10,
+      "checks": [
+        "minimum three full passes recorded", "failed attempts are quarantined",
+        "repair strategy changes are recorded", "contract hashes match host packet",
+        "contract hashes match edit plan", "contract hashes match receipts",
+        "every rubric point has allowed evidence", "audience performance is NOT_RUN",
+        "100 score is mechanically recomputed", "final state remains owner taste locked"
+      ]
+    }
+  ]
+}

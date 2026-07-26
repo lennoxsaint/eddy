@@ -299,6 +299,8 @@ class PipelineRunner:
             body_camera,
             drop=render_plan.body_dropfile,
         )
+        if plan.grade_plan is not None:
+            _grade_camera_footage(body_camera)
         body_screen = None
         if sources.screen:
             body_screen = stage / "body-screen.mp4"
@@ -354,6 +356,10 @@ class PipelineRunner:
         fatal_privacy_failure = False
         body_visual = body_composite
         body_choreography_green = plan.visual_choreography is None
+        design_contract = job.run_dir / "design.md"
+        design_sha256 = (
+            _sha256_file(design_contract) if design_contract.is_file() else "legacy-unbound"
+        )
         if plan.visual_choreography is not None and plan.frame_contract is not None:
             shared_body = plan.visual_choreography["shared_body"]
             body_choreographed = stage / "body-choreographed.mp4"
@@ -367,6 +373,8 @@ class PipelineRunner:
                 screen=body_screen,
                 audio_source=body_composite,
                 source_roots=(job.snapshot, job.run_dir),
+                design=design_contract,
+                design_sha256=design_sha256,
                 frame=job.run_dir / str(plan.frame_contract["ref"]),
                 frame_sha256=str(plan.frame_contract["sha256"]),
                 portrait=False,
@@ -382,6 +390,7 @@ class PipelineRunner:
                 "visual_choreography_rendered",
                 surface="shared_body",
                 status="pass" if body_choreography_green else "fail",
+                design_sha256=design_sha256,
                 frame_sha256=plan.frame_contract["sha256"],
             )
             if body_choreography_green:
@@ -461,6 +470,8 @@ class PipelineRunner:
                 camera_hook,
                 drop=render_plan.body_dropfile,
             )
+            if plan.grade_plan is not None:
+                _grade_camera_footage(camera_hook)
             long_segments = stage / f"camera-long-{item.hook.rank}.segments.json"
             _combine_segment_receipts(
                 camera_hook.with_name(f"hook-camera-{item.hook.rank}.segments.json"),
@@ -530,6 +541,8 @@ class PipelineRunner:
                     screen=screen_hook,
                     audio_source=hook_composite,
                     source_roots=(job.snapshot, job.run_dir),
+                    design=design_contract,
+                    design_sha256=design_sha256,
                     frame=job.run_dir / str(plan.frame_contract["ref"]),
                     frame_sha256=str(plan.frame_contract["sha256"]),
                     portrait=False,
@@ -548,6 +561,7 @@ class PipelineRunner:
                     hook_id=item.hook.id,
                     opening_id=opening["id"],
                     status="pass" if opening_choreography_green else "fail",
+                    design_sha256=design_sha256,
                     frame_sha256=plan.frame_contract["sha256"],
                 )
                 if not opening_duration_green:
@@ -698,6 +712,8 @@ class PipelineRunner:
                 fatal_audio_failure = True
                 break
             if audio_green:
+                if plan.audio_plan is not None:
+                    _mix_audio_plan(job.run_dir, enhanced, plan.audio_plan)
                 final_words = stage / f"final-words-{item.hook.rank}.json"
                 _transcribe_final(self.root, enhanced, final_words)
                 cadence_repaired = _repair_delivered_cadence(
@@ -804,6 +820,8 @@ class PipelineRunner:
                     short_camera,
                     drop=short_dropfile,
                 )
+                if plan.grade_plan is not None:
+                    _grade_camera_footage(short_camera)
                 short_screen = None
                 if sources.screen:
                     short_screen = stage / f"short-{short_id}-screen.mp4"
@@ -849,6 +867,8 @@ class PipelineRunner:
                 short_visual = short_composite
                 short_choreography_green = plan.visual_choreography is None
                 if plan.visual_choreography is not None and plan.frame_contract is not None:
+                    portrait_frame = job.run_dir / "shorts" / "frame.md"
+                    portrait_frame_sha256 = _sha256_file(portrait_frame)
                     portrait_plan = next(
                         row
                         for row in plan.visual_choreography["shorts"]
@@ -865,8 +885,10 @@ class PipelineRunner:
                         screen=short_screen,
                         audio_source=short_composite,
                         source_roots=(job.snapshot, job.run_dir),
-                        frame=job.run_dir / str(plan.frame_contract["ref"]),
-                        frame_sha256=str(plan.frame_contract["sha256"]),
+                        design=design_contract,
+                        design_sha256=design_sha256,
+                        frame=portrait_frame,
+                        frame_sha256=portrait_frame_sha256,
                         portrait=True,
                         fake=fake_hyperframes,
                     )
@@ -881,7 +903,8 @@ class PipelineRunner:
                         surface="short",
                         short_id=short.id,
                         status="pass" if short_choreography_green else "fail",
-                        frame_sha256=plan.frame_contract["sha256"],
+                        design_sha256=design_sha256,
+                        frame_sha256=portrait_frame_sha256,
                     )
                     if short_choreography_green:
                         short_visual = short_choreographed
@@ -890,6 +913,11 @@ class PipelineRunner:
                     transcript,
                     short_camera.with_name(f"short-{short_id}-camera.segments.json"),
                     short_words,
+                    suppress_ranges=(
+                        (plan.caption_policy or {})
+                        .get("source_caption_intervals", {})
+                        .get(short.id, [])
+                    ),
                 )
                 short_ass = stage / f"short-{short_id}.ass"
                 short_punctuation_proof = stage / f"short-{short_id}-caption-punctuation.json"
@@ -1001,6 +1029,8 @@ class PipelineRunner:
                     self.manager.runs_root.parent / "cache" / "descript-effects",
                     fake_descript=fake_descript,
                 )
+                if audio.passed and plan.audio_plan is not None:
+                    _mix_audio_plan(job.run_dir, short_final, plan.audio_plan)
                 if audio.cache_manifest is not None:
                     self.manager.receipt(
                         job_id,
@@ -1621,6 +1651,8 @@ def _render_visual_choreography(
     screen: Path | None,
     audio_source: Path,
     source_roots: tuple[Path, ...],
+    design: Path,
+    design_sha256: str,
     frame: Path,
     frame_sha256: str,
     portrait: bool,
@@ -1636,6 +1668,8 @@ def _render_visual_choreography(
             "screen": str(screen) if screen else None,
             "audio_source": str(audio_source),
             "source_roots": [str(root) for root in source_roots],
+            "design": str(design),
+            "design_sha256": design_sha256,
             "frame": str(frame),
             "frame_sha256": frame_sha256,
             "scenes": list(scenes),
@@ -1654,6 +1688,110 @@ def _render_visual_choreography(
     if fake:
         command.append("--fake")
     return subprocess.run(command, cwd=root, capture_output=True, text=True)
+
+
+def _grade_camera_footage(path: Path) -> None:
+    """Apply the conservative camera-only baseline; never touches screen capture."""
+
+    temporary = path.with_name(f"{path.stem}.graded{path.suffix}")
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            str(path),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-vf",
+            "eq=contrast=1.02:saturation=1.03:brightness=0.002",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "16",
+            "-preset",
+            "medium",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(temporary),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not temporary.is_file():
+        raise RuntimeError(f"camera_grade_failed:{result.stderr[-600:]}")
+    os.replace(temporary, path)
+
+
+def _mix_audio_plan(run_dir: Path, media: Path, plan: dict[str, Any]) -> None:
+    """Mix documented music and state-change SFX under the treated dialogue."""
+
+    command = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(media)]
+    rows: list[tuple[str, dict[str, Any], int]] = []
+    input_index = 1
+    for cue in plan["music"]:
+        command.extend(
+            [
+                "-stream_loop",
+                "-1",
+                "-i",
+                str(run_dir / str(cue["ref"])),
+            ]
+        )
+        rows.append(("music", cue, input_index))
+        input_index += 1
+    for cue in plan["sfx"]:
+        command.extend(["-i", str(run_dir / str(cue["ref"]))])
+        rows.append(("sfx", cue, input_index))
+        input_index += 1
+
+    filters = ["[0:a]volume=1[dialogue]"]
+    mix_inputs = ["[dialogue]"]
+    for kind, cue, index in rows:
+        label = f"audio{index}"
+        parts = [f"[{index}:a]volume={float(cue['mix_db']):.2f}dB"]
+        if kind == "sfx":
+            try:
+                delay_ms = max(0, round(float(cue["cue"]) * 1000))
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(f"audio_sfx_cue_invalid:{cue['cue']}") from exc
+            parts.append(f"adelay={delay_ms}|{delay_ms}")
+        filters.append(",".join(parts) + f"[{label}]")
+        mix_inputs.append(f"[{label}]")
+    filters.append(
+        "".join(mix_inputs)
+        + f"amix=inputs={len(mix_inputs)}:duration=first:normalize=0[mix]"
+    )
+    temporary = media.with_name(f"{media.stem}.mixed{media.suffix}")
+    command.extend(
+        [
+            "-filter_complex",
+            ";".join(filters),
+            "-map",
+            "0:v:0",
+            "-map",
+            "[mix]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(temporary),
+        ]
+    )
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0 or not temporary.is_file():
+        raise RuntimeError(f"audio_plan_mix_failed:{result.stderr[-600:]}")
+    os.replace(temporary, media)
 
 
 def _build_opening_visual_surfaces(
@@ -1924,6 +2062,8 @@ def _write_caption_words_for_segments(
     transcript: Path,
     segment_receipt: Path,
     output: Path,
+    *,
+    suppress_ranges: list[list[float]] | None = None,
 ) -> None:
     words = json.loads(transcript.read_text()).get("words", [])
     segments = json.loads(segment_receipt.read_text()).get("segments", [])
@@ -1941,11 +2081,18 @@ def _write_caption_words_for_segments(
             clipped_end = min(word_end, segment_end)
             if clipped_end <= clipped_start:
                 continue
+            mapped_start = round(output_cursor + clipped_start - segment_start, 3)
+            mapped_end = round(output_cursor + clipped_end - segment_start, 3)
+            if any(
+                mapped_start < float(end) and mapped_end > float(start)
+                for start, end in (suppress_ranges or [])
+            ):
+                continue
             mapped.append(
                 {
                     "word": word.get("word", ""),
-                    "start": round(output_cursor + clipped_start - segment_start, 3),
-                    "end": round(output_cursor + clipped_end - segment_start, 3),
+                    "start": mapped_start,
+                    "end": mapped_end,
                     "source_start": round(clipped_start, 3),
                     "source_end": round(clipped_end, 3),
                 }

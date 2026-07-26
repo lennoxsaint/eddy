@@ -1,0 +1,28 @@
+{
+  "schema_version": "eddy-correction-evals-v1",
+  "profile_id": "lennox-professional-youtube-v1",
+  "privacy": "Reusable behavior only. No raw private session text.",
+  "cases": [
+    {"id": "duplicate-takes", "input": "Two versions of one line survive.", "expected": "Select one clean intended take and remove the duplicate."},
+    {"id": "repeated-first-word", "input": "A sentence begins with a repeated first word.", "expected": "Remove the false start and verify the join by retranscription."},
+    {"id": "long-silence", "input": "An unprotected word gap or mute stretch interrupts momentum.", "expected": "Tighten to the profile target without deleting protected intent."},
+    {"id": "weak-hook", "input": "The first three seconds do not create a truthful reason to continue.", "expected": "Repair the 0-3 second window before body polish."},
+    {"id": "weak-opening-route", "input": "The first 30 seconds lack proof, stakes, or a clear route.", "expected": "Repair the complete 0-30 second viewer-leverage window."},
+    {"id": "constructed-proof", "input": "A recreation replaces available product footage.", "expected": "Use real source screen proof when it truthfully shows the action."},
+    {"id": "wrong-label", "input": "A callout or diagram label misstates the source.", "expected": "Correct or remove the label; never improve clarity by changing the fact."},
+    {"id": "tiny-preview", "input": "The important product state is too small on mobile.", "expected": "Promote proof to a legible layout and preserve its context."},
+    {"id": "duplicate-captions", "input": "Eddy captions overlap readable captions in source footage.", "expected": "Suppress Eddy captions for the collision interval."},
+    {"id": "obstructed-ui", "input": "Speaker, captions, or graphics cover a proof target.", "expected": "Change layout or safe zones and rerun collision checks."},
+    {"id": "excessive-text", "input": "A motion frame explains itself with paragraphs.", "expected": "Replace prose with a sparse label, icon, diagram, or mental model."},
+    {"id": "missing-mental-model", "input": "Talking head or screen footage poorly explains a relationship.", "expected": "Use HyperFrames to show the relationship spatially."},
+    {"id": "purposeless-transition", "input": "A transition decorates without clarifying a state change.", "expected": "Use a hard cut or assign a truthful semantic job."},
+    {"id": "purposeless-zoom", "input": "An automated punch-in adds motion but no meaning.", "expected": "Remove it or document the exact communication job."},
+    {"id": "missing-music", "input": "The candidate has no suitable upbeat lo-fi bed.", "expected": "Block until license-safe local, supplied, bundled, or locally generated music is documented."},
+    {"id": "missing-sfx", "input": "A meaningful state change has no restrained sonic cue.", "expected": "Add a licensed, provenance-recorded cue when it improves comprehension."},
+    {"id": "missing-grade", "input": "Camera exposure, skin, or white balance changes across shots.", "expected": "Grade camera footage consistently while preserving screen color."},
+    {"id": "weak-short", "input": "A Short exists only to meet quota.", "expected": "Drop it; output three to five only when each stands alone."},
+    {"id": "caption-onset", "input": "A future word appears before it is spoken.", "expected": "Keep future words invisible and highlight only the active word."},
+    {"id": "abrupt-cta", "input": "The CTA arrives without a narrative bridge.", "expected": "Repair the transition so the CTA follows the delivered value."},
+    {"id": "false-perfect-score", "input": "A 100 score has checks without evidence.", "expected": "Reject the score until every point has file, frame, timestamp, hash, playback, or measurement evidence."}
+  ]
+}

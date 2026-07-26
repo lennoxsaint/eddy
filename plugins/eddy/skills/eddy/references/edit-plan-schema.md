@@ -1,5 +1,52 @@
 # EditPlanV3 schema
 
+## Current: `edit-plan-v3.4`
+
+V3.4 retains the complete v3.3 body structure and adds:
+
+```json
+{
+  "schema_version": "edit-plan-v3.4",
+  "contract_bundle": {
+    "schema_version": "eddy-contract-bundle-ref-v1",
+    "ref": "contracts/contract-bundle.json",
+    "sha256": "<sha256>"
+  },
+  "audio_plan": {
+    "schema_version": "eddy-audio-plan-v1",
+    "music": [{"ref": "assets/audio/music.wav", "provenance": "local", "license": "owned", "cue": "0-end", "purpose": "upbeat_lofi_bed", "mix_db": -24}],
+    "sfx": [{"ref": "assets/audio/click.wav", "provenance": "bundled", "license": "CC0", "cue": "12.4", "purpose": "state_change", "mix_db": -18}],
+    "paid_retrieval_allowed": false
+  },
+  "grade_plan": {
+    "schema_version": "eddy-grade-plan-v1",
+    "camera_goal": "natural_skin_exposure_white_balance_consistency",
+    "screen_recording_policy": "preserve_source_color_fidelity",
+    "shot_checks": ["camera-a"]
+  },
+  "caption_policy": {
+    "schema_version": "eddy-caption-policy-v1",
+    "prior_words": "visible",
+    "active_word": "highlighted",
+    "future_words": "invisible",
+    "source_caption_collision": "suppress_eddy_captions"
+  },
+  "production_review": {
+    "schema_version": "eddy-production-review-v1",
+    "minimum_complete_passes": 3,
+    "target_score": 100,
+    "maximum_score": 100,
+    "audience_performance": "NOT_RUN",
+    "final_authority": "owner_taste_lock",
+    "repair_policy": "change_strategy_until_green_or_exact_blocker",
+    "strategy_id": "opening-proof-route-v1"
+  }
+}
+```
+
+Legacy readers through v3.3 remain accepted. A legacy plan cannot claim the
+`lennox-professional-youtube-v1` completion state.
+
 `edit-plan.json` is the host-authored editorial contract consumed by `eddy_host_submit`. It selects
 source evidence; it never contains generated speech or packaging.
 

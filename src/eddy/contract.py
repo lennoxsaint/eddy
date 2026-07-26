@@ -13,7 +13,9 @@ class EddyContract:
     shared_body: bool = True
     shorts_range: tuple[int, int] = (3, 5)
     packaging_enabled: bool = False
-    max_repair_attempts: int = 3
+    minimum_full_review_passes: int = 3
+    repair_attempt_limit: int | None = None
+    repair_policy: str = "change_strategy_until_green_or_exact_blocker"
     red_attempt_destination: str = "quarantine"
     red_attempt_is_final: bool = False
     no_review_dogfoods_required: int = 5

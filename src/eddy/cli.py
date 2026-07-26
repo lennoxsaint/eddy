@@ -25,9 +25,11 @@ def main(argv: list[str] | None = None) -> int:
     edit = sub.add_parser("edit")
     edit.add_argument("source")
     edit.add_argument("--format", default="youtube")
+    edit.add_argument("--profile-id", default=None)
     options = sub.add_parser("options")
     options.add_argument("source")
     options.add_argument("--format", default="youtube")
+    options.add_argument("--profile-id", default=None)
     packet = sub.add_parser("packet")
     packet.add_argument("job_id")
     submit = sub.add_parser("submit")
@@ -56,12 +58,23 @@ def main(argv: list[str] | None = None) -> int:
     feedback = sub.add_parser("record-feedback")
     feedback.add_argument("job_id")
     feedback.add_argument("feedback", help="owner-feedback-v1 JSON path, or - for stdin")
+    revise_design = sub.add_parser("revise-design")
+    revise_design.add_argument("job_id")
+    revise_design.add_argument("revision", help="design-contract-revision-v1 JSON path, or -")
     sub.add_parser("sync-doctor")
     args = parser.parse_args(argv)
     service = _service(args.runs_root)
     actions: dict[str, Any] = {
-        "edit": lambda: service.edit_start(args.source, format=args.format),
-        "options": lambda: service.edit_options(args.source, format=args.format),
+        "edit": lambda: service.edit_start(
+            args.source,
+            format=args.format,
+            profile_id=args.profile_id,
+        ),
+        "options": lambda: service.edit_options(
+            args.source,
+            format=args.format,
+            profile_id=args.profile_id,
+        ),
         "packet": lambda: service.host_packet(args.job_id),
         "submit": lambda: service.host_submit(args.job_id, _read_plan(args.plan)),
         "finalize": lambda: service.finalize(args.job_id),
@@ -75,6 +88,11 @@ def main(argv: list[str] | None = None) -> int:
         "repair-captions": lambda: service.repair_captions(args.job_id),
         "repair-privacy": lambda: service.repair_privacy(args.job_id, _read_plan(args.repair)),
         "record-feedback": lambda: service.record_feedback(args.job_id, _read_plan(args.feedback)),
+        "revise-design": lambda: _revise_design(
+            service,
+            args.job_id,
+            _read_plan(args.revision),
+        ),
         "sync-doctor": service.sync_doctor,
     }
     try:
@@ -92,6 +110,22 @@ def _read_plan(value: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("edit_plan_must_be_json_object")
     return payload
+
+
+def _revise_design(
+    service: EddyService,
+    job_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    if payload.get("schema_version") != "design-contract-revision-v1":
+        raise ValueError("design_contract_revision_schema_invalid")
+    return service.revise_design_contracts(
+        job_id,
+        reason=str(payload.get("reason", "")),
+        design_markdown=payload.get("design_markdown"),
+        long_frame_markdown=payload.get("long_frame_markdown"),
+        short_frame_markdown=payload.get("short_frame_markdown"),
+    )
 
 
 if __name__ == "__main__":

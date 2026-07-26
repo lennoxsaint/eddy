@@ -66,3 +66,23 @@ def test_karaoke_ass_contains_terminal_punctuation_in_every_word_state() -> None
 
     assert "WORKS." in ass
     assert "WORKS{" not in ass
+
+
+def test_progressive_karaoke_never_shows_future_words() -> None:
+    karaoke = _karaoke_module()
+    words = [
+        {"word": "Prior", "start": 0.0, "end": 0.2},
+        {"word": "Active", "start": 0.2, "end": 0.4},
+        {"word": "Future", "start": 0.4, "end": 0.6},
+    ]
+
+    events = [
+        line
+        for line in karaoke.build(words, 1080, 1920, 1155, 68, 5, True).splitlines()
+        if line.startswith("Dialogue:")
+    ]
+
+    assert "ACTIVE" not in events[0]
+    assert "FUTURE" not in events[0]
+    assert "PRIOR" in events[1] and "ACTIVE" in events[1]
+    assert "FUTURE" not in events[1]

@@ -358,6 +358,66 @@ def valid_plan_v33() -> dict:
     return payload
 
 
+def valid_plan_v34() -> dict:
+    payload = valid_plan_v33()
+    payload["schema_version"] = "edit-plan-v3.4"
+    payload["frame_contract"]["schema_version"] = "eddy-project-frame-v2"
+    payload["contract_bundle"] = {
+        "schema_version": "eddy-contract-bundle-ref-v1",
+        "ref": "contracts/contract-bundle.json",
+        "sha256": "f" * 64,
+    }
+    payload["audio_plan"] = {
+        "schema_version": "eddy-audio-plan-v1",
+        "music": [
+            {
+                "ref": "assets/audio/music.wav",
+                "provenance": "local",
+                "license": "owned",
+                "cue": "0-end",
+                "purpose": "upbeat_lofi_bed",
+                "mix_db": -24,
+            }
+        ],
+        "sfx": [
+            {
+                "ref": "assets/audio/click.wav",
+                "provenance": "bundled",
+                "license": "CC0",
+                "cue": "1.25",
+                "purpose": "state_change",
+                "mix_db": -18,
+            }
+        ],
+        "paid_retrieval_allowed": False,
+    }
+    payload["grade_plan"] = {
+        "schema_version": "eddy-grade-plan-v1",
+        "camera_goal": "natural_skin_exposure_white_balance_consistency",
+        "screen_recording_policy": "preserve_source_color_fidelity",
+        "shot_checks": ["camera-a"],
+    }
+    payload["caption_policy"] = {
+        "schema_version": "eddy-caption-policy-v1",
+        "prior_words": "visible",
+        "active_word": "highlighted",
+        "future_words": "invisible",
+        "source_caption_collision": "suppress_eddy_captions",
+        "source_caption_intervals": {"short-0": [[0.0, 1.0]]},
+    }
+    payload["production_review"] = {
+        "schema_version": "eddy-production-review-v1",
+        "minimum_complete_passes": 3,
+        "target_score": 100,
+        "maximum_score": 100,
+        "audience_performance": "NOT_RUN",
+        "final_authority": "owner_taste_lock",
+        "repair_policy": "change_strategy_until_green_or_exact_blocker",
+        "strategy_id": "opening-proof-route-v1",
+    }
+    return payload
+
+
 def plan_for_job(job) -> dict:
     payload = valid_plan()
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
@@ -731,10 +791,11 @@ def test_completed_job_can_be_reopened_for_one_receipted_owner_repair(tmp_path: 
     assert (job.run_dir / "quarantine" / "attempt-1" / "long-primary.mp4").exists()
     packet = json.loads((job.run_dir / "repair-packet.json").read_text())
     assert packet["blockers"] == ["owner_directed_repair"]
-    assert packet["remaining_attempts"] == 2
+    assert packet["remaining_attempts"] is None
+    assert packet["minimum_complete_passes"] == 3
 
 
-def test_owner_repair_rejection_after_third_attempt_blocks_job(tmp_path: Path) -> None:
+def test_owner_repair_after_third_attempt_still_requests_changed_strategy(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
     (source / "camera.mp4").write_bytes(b"raw-media")
@@ -745,18 +806,20 @@ def test_owner_repair_rejection_after_third_attempt_blocks_job(tmp_path: Path) -
     (quarantine / "attempt-2").mkdir()
     final = job.run_dir / "final"
     final.mkdir()
+    (final / "long-primary.mp4").write_bytes(b"candidate")
     state = json.loads((job.run_dir / "state.json").read_text())
     state["state"] = "completed"
     (job.run_dir / "state.json").write_text(json.dumps(state))
 
-    blocked = manager.request_owner_repair(
+    repair = manager.request_owner_repair(
         job.id,
-        reason="A second owner rejection is terminal.",
+        reason="The third treatment still needs a different proof route.",
     )
 
-    assert blocked.state is JobState.BLOCKED
-    assert blocked.blockers == ("owner_repair_attempts_exhausted",)
-    assert final.exists()
+    assert repair.state is JobState.AWAITING_HOST_REPAIR
+    assert repair.blockers == ("owner_directed_repair",)
+    assert not final.exists()
+    assert (quarantine / "attempt-3" / "long-primary.mp4").is_file()
 
 
 def test_top_level_raw_media_excludes_nested_prior_run_artifacts(tmp_path: Path) -> None:
@@ -821,7 +884,10 @@ def test_red_attempt_is_quarantined_and_requests_host_repair(tmp_path: Path) -> 
 
     assert repair.state is JobState.AWAITING_HOST_REPAIR
     assert (repair.run_dir / "quarantine" / "attempt-1" / "long-primary.mp4").exists()
-    assert json.loads((repair.run_dir / "repair-packet.json").read_text())["remaining_attempts"] == 2
+    assert (
+        json.loads((repair.run_dir / "repair-packet.json").read_text())["remaining_attempts"]
+        is None
+    )
     assert not (repair.run_dir / "final").exists()
 
 
@@ -842,7 +908,7 @@ def test_missing_required_verification_gates_can_never_promote(tmp_path: Path) -
     assert not (repair.run_dir / "final").exists()
 
 
-def test_third_failed_attempt_becomes_terminal_blocker(tmp_path: Path) -> None:
+def test_third_failed_attempt_still_requests_a_changed_strategy(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
     (source / "camera.mp4").write_bytes(b"raw-media")
@@ -862,8 +928,26 @@ def test_third_failed_attempt_becomes_terminal_blocker(tmp_path: Path) -> None:
             blockers=["retake_clean_failed"],
         )
 
-    assert result.state is JobState.BLOCKED
-    assert json.loads((job.run_dir / "repair-packet.json").read_text())["remaining_attempts"] == 0
+    assert result.state is JobState.AWAITING_HOST_REPAIR
+    packet = json.loads((job.run_dir / "repair-packet.json").read_text())
+    assert packet["remaining_attempts"] is None
+    assert packet["repair_policy"] == "change_strategy_until_green_or_exact_blocker"
+
+
+def test_v34_requires_all_bound_production_contracts() -> None:
+    plan = EditPlanV3.from_dict(valid_plan_v34())
+
+    assert plan.schema_version == "edit-plan-v3.4"
+    assert plan.contract_bundle is not None
+    assert plan.audio_plan is not None
+    assert plan.grade_plan is not None
+    assert plan.caption_policy is not None
+    assert plan.production_review is not None
+
+    missing = valid_plan_v34()
+    del missing["audio_plan"]
+    with pytest.raises(PlanValidationError, match="audio_plan_schema_invalid"):
+        EditPlanV3.from_dict(missing)
 
 
 def test_cancelled_job_has_terminal_receipt(tmp_path: Path) -> None:

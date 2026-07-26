@@ -37,8 +37,8 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
     calls = []
 
     class FakeService:
-        def edit_options(self, source, *, format="youtube"):
-            calls.append(("options", source, format))
+        def edit_options(self, source, *, format="youtube", profile_id=None):
+            calls.append(("options", source, format, profile_id))
             return {"requires_choice": False}
 
         def host_packet(self, job_id):
@@ -88,7 +88,7 @@ def test_cli_exposes_options_packet_submit_and_finalize(tmp_path: Path, capsys, 
     capsys.readouterr()
 
     assert calls == [
-        ("options", "source-folder", "youtube"),
+        ("options", "source-folder", "youtube", None),
         ("packet", "job-1"),
         ("submit", "job-1", {"schema_version": "edit-plan-v3"}),
         ("finalize", "job-1"),

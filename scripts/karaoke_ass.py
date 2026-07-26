@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Karaoke ASS burner — the clean V1 "anchor" look, self-contained.
 
-Builds an .ass subtitle with per-word highlight (current word on a cyan fill, spoken words white,
-upcoming dimmed — the frozen style in layout-constants.md) and burns it with ffmpeg. Used for the
+Builds an .ass subtitle with per-word highlight (current word cyan, spoken words white, future
+words invisible) and burns it with ffmpeg. Used for the
 Shorts caption strip, where `embedded-captions` (talking-head matting) doesn't fit the split stack.
 
 One Dialogue event per word-state gives exact control and stays calm (never a per-word storm):
@@ -22,7 +22,6 @@ from pathlib import Path
 # ASS colours are &HAABBGGRR. From layout-constants.md:
 WHITE = "&H00FFFFFF"          # spoken words
 CYAN = "&H00FFA34A"           # current word (RGBA 74,163,255)
-DIM = "&H00A09184"            # upcoming words (RGBA 132,145,160)
 STROKE = "&H00160A01"         # dark navy outline
 
 
@@ -135,7 +134,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             elif j == i:
                 parts.append(f"{{\\c{CYAN}\\b1}}{txt}{{\\b0}}")
             else:
-                parts.append(f"{{\\c{DIM}}}{txt}")
+                continue
         if brk:
             body = " ".join(parts[:brk]) + "\\N" + " ".join(parts[brk:])
         else:

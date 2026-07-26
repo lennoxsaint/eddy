@@ -29,20 +29,27 @@ For a normal "edit this" request, Eddy produces videos only:
 Titles, descriptions, chapters, thumbnails, uploads, publishing, sending, and scheduling are outside
 v3.0. Never mutate, move, delete, upload, or publish source media.
 
-The hook carries roughly 90% of the video's leverage. The discovery hover preview makes frame one,
-second 3, and second 30 separate product surfaces: frame one must already move, the strongest honest
-money shot lands by 3s, real proof lands by 10s, and the stakes are legible by 30s. Each hook is
-self-contained and shows concrete proof when the narration names it.
+For the owner channel, resolve `lennox-professional-youtube-v1` automatically unless the run
+explicitly selects another profile. Generic creators continue to use `creator_good_v1`. Normal Eddy
+runs are single-editor workflows and never launch a bake-off. Only an explicit bake-off request may
+hand Eddy's frozen contract bundle to the standalone `video-edit-bakeoff` skill.
 
-Use `edit-plan-v3.3` for current work. It keeps the v3.2 three-hooks/one-body choreography and adds
-a Sage-owned body-structure contract: one mode, a route understood by second 30, 3-5 ordered macro
-sections, proof scenes, payoff relays, and brief progress cues. Eddy may tighten within a section or
-flag a broken spine; it may never invent, remove, or reorder the macro sections. The plan still
-hash-binds a project `frame.md`, with three opening timelines, one reused body timeline, and one
-portrait timeline per Short. HyperFrames owns full-frame composition — proof
-canvas, speaker full/edge/PiP, source screen, illustration canvas, and rare special emphasis — not
-small cards floating over a fixed edit. `edit-plan-v3` and `edit-plan-v3.1` remain accepted for
-legacy snapshots; `edit-plan-v3.2` remains a readable choreography-only input.
+Treat 0-3 seconds and 0-30 seconds as hard-gated Viewer-Leverage Windows and the first repair
+priority, without weakening the body. Frame one moves, the strongest honest money shot lands by 3s,
+real proof lands by 10s, and stakes plus route are legible by 30s.
+
+Use `edit-plan-v3.4` for current work. It retains the v3.3 Sage-owned body structure and binds
+`contracts/contract-bundle.json`, `design.md`, landscape `frame.md`, portrait `shorts/frame.md`,
+the selected quality profile, HyperFrames v0.7.3 doctrine, audio plan, grade plan, progressive
+caption policy, correction evals, and 100-point rubric. Legacy plans through v3.3 remain readable
+but cannot claim Lennox-profile completion.
+
+HyperFrames owns full-frame composition. Use talking head as the human anchor, real screen
+recording for product action and proof, and authored mental models when a concept, relationship, or
+result is clearer than the recording. Available layouts include full speaker, all four PiP corners,
+vertical speaker left/right, embedded split left/right, speaker plus mental model, proof canvas, and
+portrait speaker-top/screen-bottom. Every layout change, zoom, transition, and motion beat needs a
+communication job. Reject automated drift and filler punch-ins.
 
 Openings need 8-12 meaningful changes inside 30s and at least three layout states. Long bodies must
 change visual state at least every 12s; holds beyond 8s require a semantic reason. Shorts use the
@@ -60,9 +67,10 @@ clipping word onsets or compressing protected pauses.
 A **Proof-Gated Edit** has every mandatory deterministic and configured quality gate green. Only this
 state may populate `final/` or be described as complete.
 
-A **Blocked Attempt** is a playable inspection artifact with exact blockers and receipts. After at
-most three repair attempts, keep the best red attempt under `quarantine/attempt-<n>/`; never promote
-it into `final/` or call it ship-ready.
+A **Blocked Attempt** is a playable inspection artifact with exact blockers and receipts. Complete
+at least three full watch/critique/repair passes, then keep changing repair strategy until every
+evidenced point is green or an exact external or technical blocker remains. Keep every red attempt
+under `quarantine/attempt-<n>/`; never promote it into `final/` or call it ship-ready.
 
 A completed proof-gated edit may be reopened only by typed owner feedback with
 `verdict: changes_requested`; Eddy moves that exact candidate to its numbered quarantine attempt
@@ -79,11 +87,13 @@ outputs proof-gated candidates.
 2. Call `eddy_edit_options(source=<path>, format="youtube")`. If there is one runnable path, start it
    without asking. If a material route choice remains, show only runnable options with privacy, cost,
    and quality tradeoffs.
-3. Call `eddy_edit_start(...)`, then poll until `awaiting_host_plan`.
+3. Call `eddy_edit_start(...)`, optionally with explicit `profile_id`, then poll until
+   `awaiting_host_plan`. Eddy creates and hashes the design contracts before host planning.
 4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
    Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
    screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
-5. Author the v3.3 body contract and choreography against the packet's hash-bound `frame.md`, then call
+5. Author the v3.4 body contract, audio plan, grade plan, caption policy, production review, and
+   choreography against the packet's frozen bundle, then call
    `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
    bypassing them. Eddy auto-selects a clear, certain opening leader; when the top two are within
    five points or uncertain, inspect `eddy_opening_candidates` and call `eddy_select_opening` with
@@ -95,13 +105,17 @@ outputs proof-gated candidates.
    `eddy_record_feedback`. Repair the current run first. Promote a lesson into code, a quality
    profile, an eval, or doctrine only when it generalizes, and require a regression test before the
    guarded ship command refreshes projections, GitHub `main`, and the installed owner plugin.
+8. If critique reveals a systemic project design defect, call `eddy_revise_design_contracts` (or
+   `eddy revise-design`) with the new contract text and reason. This increments revisions,
+   invalidates dependent renders, and requires adherence checks again. At owner approval, propose
+   reusable corrections for profile promotion; never globalize them automatically.
 
 If MCP tools are unavailable, continue automatically through the equivalent CLI commands; do not
 make the user restart the edit:
 
 ```bash
 eddy options <source>
-eddy edit <source>
+eddy edit <source> [--profile-id <id>]
 eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
 eddy opening-candidates <job-id>
@@ -111,6 +125,7 @@ eddy status <job-id>
 eddy repair-captions <job-id>
 eddy repair-privacy <job-id> privacy-repair.json
 eddy record-feedback <job-id> owner-feedback.json
+eddy revise-design <job-id> design-contract-revision.json
 ```
 
 ## Ordered edit
@@ -150,14 +165,18 @@ eddy record-feedback <job-id> owner-feedback.json
    prior green Studio Sound result only when the exact pre-audio MP4 hash,
    cached output hash, private provenance, and effect-survival receipt validate. Re-transcribe and QA
    cache hits normally. Never silently substitute local processing.
-11. Render quality-gated Shorts from source-locked camera/screen inputs with one-line karaoke.
-    Project every caption word through the exact splice receipt and verify its timing against a fresh
-    delivered transcript. A dual-source Short needs at least 25% verified raw-screen proof plus two
-    compact animated HyperFrames beats: an opening hook beat by 2s and a later supporting proof beat.
+11. Render quality-gated Shorts from source-locked camera/screen inputs with progressive captions:
+    prior words stay visible, the active word is highlighted, and future words stay invisible.
+    Suppress Eddy captions wherever the source screen already carries readable captions. Project
+    every word through the exact splice receipt and verify against a fresh delivered transcript.
 12. Iterate with proxies; render full resolution only after the final plan is green.
-13. Re-transcribe every emitted long and Short. Actual delivered silence is the hard pacing truth.
-    If word timing shows sustained slow p95 cadence or an extreme gap above 0.8s, run up to three
-    improving time-only repairs, re-transcribe after each pass, verify, then re-hash all sources.
+13. Mix documented license-safe upbeat lo-fi music and restrained state-change SFX. Record source,
+    licence, cue, purpose, and mix level. Missing suitable audio blocks; never retrieve paid audio
+    silently. Grade camera footage for natural skin, exposure, white balance, and shot consistency
+    while preserving screen-recording color fidelity.
+14. Re-transcribe every emitted long and Short. Complete at least three full watch/critique/repair
+    passes, change strategy after any failed attempt, and continue until the mechanically recomputed
+    rubric is 100/100 or an exact blocker remains.
 
 ## Hard gates
 

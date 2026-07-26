@@ -22,6 +22,16 @@ LAYOUTS = {
     "speaker_edge_left",
     "speaker_edge_right",
     "speaker_pip",
+    "pip_bottom_right",
+    "pip_bottom_left",
+    "pip_top_right",
+    "pip_top_left",
+    "vertical_speaker_left",
+    "vertical_speaker_right",
+    "embedded_split_left",
+    "embedded_split_right",
+    "speaker_plus_mental_model",
+    "speaker_top_screen_bottom",
     "source_screen",
     "illustration_canvas",
     "special_emphasis",
@@ -65,7 +75,10 @@ RANKING_WEIGHTS = {
 def validate_frame_contract(value: object) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ChoreographyValidationError("frame_contract_required")
-    if value.get("schema_version") != "eddy-project-frame-v1":
+    if value.get("schema_version") not in {
+        "eddy-project-frame-v1",
+        "eddy-project-frame-v2",
+    }:
         raise ChoreographyValidationError("frame_contract_schema_invalid")
     ref = value.get("ref")
     if (
@@ -196,6 +209,8 @@ def build_hyperframes_project(
     frame_sha256: str,
     width: int,
     height: int,
+    design_markdown: str = "# Project design\n",
+    design_sha256: str = "legacy-unbound",
     gsap_source: Path | None = None,
     source_root: Path | None = None,
     source_roots: Iterable[Path] | None = None,
@@ -312,6 +327,7 @@ def build_hyperframes_project(
 """
     (project / "index.html").write_text(document)
     (project / "hyperframes.json").write_text(json.dumps({"entry": "index.html"}, indent=2) + "\n")
+    (project / "design.md").write_text(design_markdown)
     (project / "frame.md").write_text(frame_markdown)
     storyboard = "# Storyboard\n\n" + "\n".join(
         f"- {row['start']:.3f}-{row['end']:.3f}s: {row['layout']} — {row['cause']}"
@@ -322,6 +338,7 @@ def build_hyperframes_project(
         "schema_version": "eddy-hyperframes-animation-map-v1",
         "duration": duration,
         "frame_sha256": frame_sha256,
+        "design_sha256": design_sha256,
         "scenes": animation_rows,
     }
     (project / "animation-map.json").write_text(json.dumps(animation_map, indent=2, sort_keys=True) + "\n")
@@ -368,6 +385,15 @@ def _parse_scenes(value: object, *, label: str) -> tuple[dict[str, Any], ...]:
         prior_start = start
         for field in ("speech_anchor", "meaningful_change", "motion_verb", "cause"):
             _required_text(raw, field, f"visual_scene_{field}_required:{label}")
+        motion_verb = str(raw["motion_verb"]).strip().lower()
+        if motion_verb in {"automated_drift", "filler_punch_in"}:
+            raise ChoreographyValidationError(f"visual_scene_decorative_camera_move:{label}")
+        if any(token in motion_verb for token in ("zoom", "push_in", "punch_in")):
+            _required_text(
+                raw,
+                "communication_job",
+                f"visual_scene_communication_job_required:{label}",
+            )
         if raw.get("semantic_job") not in SEMANTIC_JOBS:
             raise ChoreographyValidationError(f"visual_scene_semantic_job_invalid:{label}")
         if raw.get("layout") not in LAYOUTS:

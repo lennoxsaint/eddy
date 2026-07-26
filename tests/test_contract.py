@@ -21,7 +21,9 @@ def test_canonical_contract_is_videos_only_with_three_ranked_longs() -> None:
 def test_red_attempts_are_quarantined_not_delivered() -> None:
     contract = canonical_contract()
 
-    assert contract.max_repair_attempts == 3
+    assert contract.minimum_full_review_passes == 3
+    assert contract.repair_attempt_limit is None
+    assert contract.repair_policy == "change_strategy_until_green_or_exact_blocker"
     assert contract.red_attempt_destination == "quarantine"
     assert contract.red_attempt_is_final is False
 

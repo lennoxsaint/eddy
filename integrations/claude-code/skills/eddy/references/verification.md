@@ -1,9 +1,9 @@
-# Verification + self-heal (≤3)
+# Verification + self-heal (minimum three full passes)
 
-Work is not done until emitted behaviour is checked. Two layers: deterministic gates (machine) and
-model rubrics (you). On any failure, redo the offending stage up to **3 times**. If a required gate
-is still red, quarantine the best playable render as a **Blocked Attempt** with exact blockers; never
-promote it to `final/` or call it ship-ready.
+Work is not done until emitted behaviour is checked. Complete at least three full
+watch/critique/repair passes. On any failure, quarantine the red candidate and change strategy.
+Continue until all evidenced checks score 100/100 or an exact `external_blocker:` or
+`technical_blocker:` remains. A retry count alone is never a terminal blocker.
 
 ## Deterministic gates (`scripts/verify.py`)
 
@@ -51,6 +51,12 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Caption terminal punctuation** — the generated ASS token proof preserves source `.`, `?`, and
   `!` sentence endings while continuing to suppress stray decorative punctuation.
 - **Loudness** — final mix hits the loudness target; no clipping.
+- **Contract binding** — host packet, v3.4 plan, receipts, and final evidence expose matching
+  profile, design, landscape frame, portrait frame, HyperFrames doctrine, correction-eval, and
+  rubric hashes.
+- **100-point evidence** — exactly 100 one-point checks pass. Every point has a file, frame,
+  timestamp, hash, playback, or measurement reference. Audience performance remains `NOT_RUN`;
+  final authority remains `owner_taste_lock`.
 
 ## Model rubrics (you judge; trigger a redo)
 

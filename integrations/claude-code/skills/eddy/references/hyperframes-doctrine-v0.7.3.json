@@ -1,0 +1,11 @@
+{
+  "schema_version": "eddy-hyperframes-doctrine-lock-v1",
+  "version": "0.7.3",
+  "commit": "997823b6b523eb4d43e0f03c140f5897f13ce780",
+  "references": {
+    "design-spec.md": "2287b88dab08bbbab4314e52f2770f34f6937e6eb69d37249c6b6fa8e1339d13",
+    "house-style.md": "61e260aebcab552dcd42fd2dcaf4431349b51f043fe155c8f670f156d09b69dd",
+    "video-composition.md": "6aae0bc1e79e9e8c1451ced986b5bbb4d59680c94276a299b6ecf67e3f440b09",
+    "design-adherence.md": "ff21deb80143c8e09092958a6f40bc712173a43d23c5ea88742566573a2a7241"
+  }
+}

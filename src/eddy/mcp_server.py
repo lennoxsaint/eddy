@@ -24,12 +24,20 @@ def build_server() -> Any:
     service = _service()
 
     @server.tool(name="eddy_edit_options")
-    def edit_options(source: str, format: str = "youtube") -> dict[str, Any]:
-        return service.edit_options(source, format=format)
+    def edit_options(
+        source: str,
+        format: str = "youtube",
+        profile_id: str | None = None,
+    ) -> dict[str, Any]:
+        return service.edit_options(source, format=format, profile_id=profile_id)
 
     @server.tool(name="eddy_edit_start")
-    def edit_start(source: str, format: str = "youtube") -> dict[str, Any]:
-        return service.edit_start(source, format=format)
+    def edit_start(
+        source: str,
+        format: str = "youtube",
+        profile_id: str | None = None,
+    ) -> dict[str, Any]:
+        return service.edit_start(source, format=format, profile_id=profile_id)
 
     @server.tool(name="eddy_host_packet")
     def host_packet(job_id: str) -> dict[str, Any]:
@@ -74,6 +82,22 @@ def build_server() -> Any:
     @server.tool(name="eddy_repair_privacy")
     def repair_privacy(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         return service.repair_privacy(job_id, payload)
+
+    @server.tool(name="eddy_revise_design_contracts")
+    def revise_design_contracts(
+        job_id: str,
+        reason: str,
+        design_markdown: str | None = None,
+        long_frame_markdown: str | None = None,
+        short_frame_markdown: str | None = None,
+    ) -> dict[str, Any]:
+        return service.revise_design_contracts(
+            job_id,
+            reason=reason,
+            design_markdown=design_markdown,
+            long_frame_markdown=long_frame_markdown,
+            short_frame_markdown=short_frame_markdown,
+        )
 
     return server
 

@@ -12,6 +12,7 @@ from eddy.choreography import (
     build_hyperframes_project,
     rank_opening_candidates,
     validate_frame_contract,
+    validate_visual_choreography,
 )
 from eddy.plan import EditPlanV3, PlanValidationError
 from test_runtime import valid_plan_v32
@@ -149,6 +150,29 @@ def test_choreography_render_fake_proves_project_and_audio_mux(tmp_path: Path) -
 def test_frame_contract_fails_closed(contract: dict, blocker: str) -> None:
     with pytest.raises(ChoreographyValidationError, match=blocker):
         validate_frame_contract(contract)
+
+
+@pytest.mark.parametrize(
+    ("motion_verb", "blocker"),
+    [
+        ("semantic_zoom", "visual_scene_communication_job_required"),
+        ("automated_drift", "visual_scene_decorative_camera_move"),
+        ("filler_punch_in", "visual_scene_decorative_camera_move"),
+    ],
+)
+def test_camera_movement_requires_a_semantic_job(
+    motion_verb: str,
+    blocker: str,
+) -> None:
+    payload = valid_plan_v32()["visual_choreography"]
+    payload["openings"][0]["scenes"][0]["motion_verb"] = motion_verb
+
+    with pytest.raises(ChoreographyValidationError, match=blocker):
+        validate_visual_choreography(
+            payload,
+            hook_ids=("proof", "speed", "cost"),
+            short_ids=("short-0", "short-1", "short-2"),
+        )
 
 
 def test_v32_rejects_decorative_proof_and_unreasoned_layout_repetition() -> None:

@@ -13,6 +13,14 @@ from .choreography import (
 )
 from .body_structure import BodyStructureValidationError, validate_body_structure_contract
 from .proof import screen_proof_share
+from .quality import (
+    QualityContractError,
+    validate_audio_plan,
+    validate_caption_policy,
+    validate_contract_ref,
+    validate_grade_plan,
+    validate_production_review,
+)
 
 
 class PlanValidationError(ValueError):
@@ -99,6 +107,11 @@ class EditPlanV3:
     frame_contract: dict[str, Any] | None
     visual_choreography: dict[str, Any] | None
     body_structure_contract: dict[str, Any] | None
+    contract_bundle: dict[str, Any] | None
+    audio_plan: dict[str, Any] | None
+    grade_plan: dict[str, Any] | None
+    caption_policy: dict[str, Any] | None
+    production_review: dict[str, Any] | None
 
     @property
     def primary_hook(self) -> HookPlan:
@@ -124,12 +137,23 @@ class EditPlanV3:
             "frame_contract",
             "visual_choreography",
             "body_structure_contract",
+            "contract_bundle",
+            "audio_plan",
+            "grade_plan",
+            "caption_policy",
+            "production_review",
         }
         extra = sorted(set(payload) - allowed)
         if extra:
             raise PlanValidationError(f"unsupported_edit_plan_fields:{','.join(extra)}")
         schema_version = payload.get("schema_version")
-        if schema_version not in {"edit-plan-v3", "edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3"}:
+        if schema_version not in {
+            "edit-plan-v3",
+            "edit-plan-v3.1",
+            "edit-plan-v3.2",
+            "edit-plan-v3.3",
+            "edit-plan-v3.4",
+        }:
             raise PlanValidationError("edit_plan_schema_version_invalid")
 
         raw_hooks = payload.get("hooks")
@@ -212,7 +236,8 @@ class EditPlanV3:
         _validate_motion_beats(
             motion_beats,
             label="long_motion",
-            require_semantics=schema_version in {"edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3"},
+            require_semantics=schema_version
+            in {"edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3", "edit-plan-v3.4"},
         )
         for hook in hooks:
             applicable = tuple(
@@ -226,7 +251,12 @@ class EditPlanV3:
                 raise PlanValidationError(f"long_hook_motion_must_start_by_two_seconds:{hook.id}")
 
         opening_visual_contract = None
-        if schema_version in {"edit-plan-v3.1", "edit-plan-v3.2", "edit-plan-v3.3"}:
+        if schema_version in {
+            "edit-plan-v3.1",
+            "edit-plan-v3.2",
+            "edit-plan-v3.3",
+            "edit-plan-v3.4",
+        }:
             opening_visual_contract = _parse_opening_visual_contract(
                 payload.get("opening_visual_contract"),
                 hooks=hooks,
@@ -239,7 +269,7 @@ class EditPlanV3:
 
         frame_contract = None
         visual_choreography = None
-        if schema_version in {"edit-plan-v3.2", "edit-plan-v3.3"}:
+        if schema_version in {"edit-plan-v3.2", "edit-plan-v3.3", "edit-plan-v3.4"}:
             if any(sum(end - start for start, end in hook.segments) < 30 for hook in hooks):
                 raise PlanValidationError("v3_2_opening_cut_must_cover_first_thirty_seconds")
             try:
@@ -283,7 +313,7 @@ class EditPlanV3:
             raise PlanValidationError("visual_choreography_requires_edit_plan_v3_2")
 
         body_structure_contract = None
-        if schema_version == "edit-plan-v3.3":
+        if schema_version in {"edit-plan-v3.3", "edit-plan-v3.4"}:
             if visual_choreography is None:
                 raise PlanValidationError("body_structure_requires_visual_choreography")
             try:
@@ -295,6 +325,38 @@ class EditPlanV3:
                 raise PlanValidationError(str(exc)) from exc
         elif payload.get("body_structure_contract") is not None:
             raise PlanValidationError("body_structure_contract_requires_edit_plan_v3_3")
+
+        contract_bundle = None
+        audio_plan = None
+        grade_plan = None
+        caption_policy = None
+        production_review = None
+        if schema_version == "edit-plan-v3.4":
+            try:
+                contract_bundle = validate_contract_ref(
+                    payload.get("contract_bundle"),
+                    schema="eddy-contract-bundle-ref-v1",
+                    label="contract_bundle",
+                )
+                audio_plan = validate_audio_plan(payload.get("audio_plan"))
+                grade_plan = validate_grade_plan(payload.get("grade_plan"))
+                caption_policy = validate_caption_policy(payload.get("caption_policy"))
+                production_review = validate_production_review(
+                    payload.get("production_review")
+                )
+            except QualityContractError as exc:
+                raise PlanValidationError(str(exc)) from exc
+        elif any(
+            payload.get(key) is not None
+            for key in (
+                "contract_bundle",
+                "audio_plan",
+                "grade_plan",
+                "caption_policy",
+                "production_review",
+            )
+        ):
+            raise PlanValidationError("production_contracts_require_edit_plan_v3_4")
 
         return cls(
             schema_version=schema_version,
@@ -310,6 +372,11 @@ class EditPlanV3:
             frame_contract=frame_contract,
             visual_choreography=visual_choreography,
             body_structure_contract=body_structure_contract,
+            contract_bundle=contract_bundle,
+            audio_plan=audio_plan,
+            grade_plan=grade_plan,
+            caption_policy=caption_policy,
+            production_review=production_review,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -387,6 +454,16 @@ class EditPlanV3:
             payload["visual_choreography"] = self.visual_choreography
         if self.body_structure_contract is not None:
             payload["body_structure_contract"] = self.body_structure_contract
+        if self.contract_bundle is not None:
+            payload["contract_bundle"] = self.contract_bundle
+        if self.audio_plan is not None:
+            payload["audio_plan"] = self.audio_plan
+        if self.grade_plan is not None:
+            payload["grade_plan"] = self.grade_plan
+        if self.caption_policy is not None:
+            payload["caption_policy"] = self.caption_policy
+        if self.production_review is not None:
+            payload["production_review"] = self.production_review
         return payload
 
 

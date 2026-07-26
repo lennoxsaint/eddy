@@ -33,8 +33,12 @@ def _render(project: Path, output: Path, *, fake: bool, width: int, height: int,
         ("validate", "hyperframes-validate.json"),
         ("inspect", "hyperframes-inspect.json"),
     ):
+        command_args = ["npx", "hyperframes", command, str(project)]
+        if command == "inspect":
+            command_args.append("--strict")
+        command_args.append("--json")
         result = subprocess.run(
-            ["npx", "hyperframes", command, str(project), "--json"],
+            command_args,
             capture_output=True,
             text=True,
             check=False,
@@ -42,6 +46,27 @@ def _render(project: Path, output: Path, *, fake: bool, width: int, height: int,
         (project / receipt).write_text(result.stdout or result.stderr or "{}")
         if result.returncode != 0:
             return False
+    snapshots = subprocess.run(
+        ["npx", "hyperframes", "snapshot", str(project), "--frames", "5"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    (project / "hyperframes-snapshot.json").write_text(
+        json.dumps(
+            {
+                "event": "hyperframes_snapshot",
+                "returncode": snapshots.returncode,
+                "stdout_tail": snapshots.stdout[-1200:],
+                "stderr_tail": snapshots.stderr[-1200:],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    if snapshots.returncode != 0 or len(list((project / "snapshots").glob("*.png"))) < 5:
+        return False
     result = subprocess.run(
         [
             "npx", "hyperframes", "render", str(project), "--quality", "draft",
@@ -107,9 +132,15 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.out)
     output.parent.mkdir(parents=True, exist_ok=True)
     frame_path = Path(brief["frame"])
+    design_path = Path(brief.get("design", brief["frame"]))
     actual_frame_sha256 = hashlib.sha256(frame_path.read_bytes()).hexdigest()
     if actual_frame_sha256 != str(brief["frame_sha256"]):
         print("frame_contract_hash_mismatch", file=sys.stderr)
+        return 2
+    actual_design_sha256 = hashlib.sha256(design_path.read_bytes()).hexdigest()
+    expected_design_sha256 = str(brief.get("design_sha256", actual_design_sha256))
+    if actual_design_sha256 != expected_design_sha256:
+        print("design_contract_hash_mismatch", file=sys.stderr)
         return 2
     audio_source = Path(brief.get("audio_source", brief["camera"]))
     manifest = build_hyperframes_project(
@@ -117,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
         scenes=brief["scenes"],
         camera=Path(brief["camera"]),
         screen=Path(brief["screen"]) if brief.get("screen") else None,
+        design_markdown=design_path.read_text(),
+        design_sha256=expected_design_sha256,
         frame_markdown=frame_path.read_text(),
         frame_sha256=str(brief["frame_sha256"]),
         width=int(brief["width"]),
@@ -142,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     provenance = {
         "schema_version": "eddy-visual-provenance-v1",
         "frame_sha256": brief["frame_sha256"],
+        "design_sha256": expected_design_sha256,
         "camera_sha256": manifest["camera_sha256"],
         "screen_sha256": manifest["screen_sha256"],
         "asset_sha256": manifest["asset_sha256"],

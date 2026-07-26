@@ -15,9 +15,11 @@ from typing import Any
 from .choreography import rank_opening_candidates
 from .contract import canonical_contract
 from .caption_repair import repair_captions
+from .design_contracts import create_contract_bundle, revise_contract_bundle
 from .feedback import record_owner_feedback
 from .owner_plugin import owner_plugin_status
 from .privacy_repair import repair_short_privacy
+from .quality import resolve_quality_profile
 from .runtime import JobManager, JobState
 from .sync import CANONICAL_SURFACES, canonical_surface_commit, check_projection
 from .support import create_support_bundle
@@ -40,12 +42,22 @@ class EddyService:
         )
         self.auto_prepare = auto_prepare
 
-    def edit_options(self, source: str, *, format: str = "youtube") -> dict[str, Any]:
+    def edit_options(
+        self,
+        source: str,
+        *,
+        format: str = "youtube",
+        profile_id: str | None = None,
+    ) -> dict[str, Any]:
         path = Path(source).expanduser().resolve()
         if format != "youtube":
             raise ValueError(f"unsupported_format:{format}")
         if not path.exists():
             raise FileNotFoundError(f"source_not_found:{path}")
+        profile, _ = resolve_quality_profile(
+            self.canonical_root,
+            explicit_profile_id=profile_id,
+        )
         option = {
             "id": "skill_first",
             "name": "Eddy",
@@ -58,11 +70,46 @@ class EddyService:
             "requires_choice": False,
             "selected_option_id": "skill_first",
             "options": [option],
+            "quality_profile_id": profile["id"],
         }
 
-    def edit_start(self, source: str, *, format: str = "youtube") -> dict[str, Any]:
-        self.edit_options(source, format=format)
+    def edit_start(
+        self,
+        source: str,
+        *,
+        format: str = "youtube",
+        profile_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.edit_options(source, format=format, profile_id=profile_id)
+        profile, profile_path = resolve_quality_profile(
+            self.canonical_root,
+            explicit_profile_id=profile_id,
+        )
         job = self.manager.start(Path(source))
+        source_lock = json.loads((job.run_dir / "source-lock.json").read_text())
+        create_contract_bundle(
+            job.run_dir,
+            source=job.source,
+            canonical_root=self.canonical_root,
+            profile=profile,
+            profile_path=profile_path,
+            source_hashes=source_lock["before"],
+        )
+        created_bundle = json.loads(
+            (job.run_dir / "contracts" / "contract-bundle.json").read_text()
+        )
+        self.manager.receipt(
+            job.id,
+            "quality_contract_bundle_created",
+            profile_id=profile["id"],
+            contract_bundle_sha256=hashlib.sha256(
+                (job.run_dir / "contracts" / "contract-bundle.json").read_bytes()
+            ).hexdigest(),
+            quality_profile_sha256=created_bundle["profile"]["sha256"],
+            design_sha256=created_bundle["design_contracts"]["design"]["sha256"],
+            long_frame_sha256=created_bundle["design_contracts"]["long_frame"]["sha256"],
+            short_frame_sha256=created_bundle["design_contracts"]["short_frame"]["sha256"],
+        )
         if self.auto_prepare:
             self._launch_worker("prepare", job.id)
         else:
@@ -94,21 +141,20 @@ class EddyService:
             for relative in source_lock["before"]
             if "screen" in relative.lower() or "display" in relative.lower()
         ]
-        quality_profile_path = self.canonical_root / "references" / "creator-good-v1.json"
+        bundle_path = job.run_dir / "contracts" / "contract-bundle.json"
+        if not bundle_path.is_file():
+            raise RuntimeError("contract_bundle_missing")
+        bundle = json.loads(bundle_path.read_text())
+        quality_profile_path = job.run_dir / str(bundle["profile"]["ref"])
         frame_path = job.run_dir / "frame.md"
-        if not frame_path.exists():
-            frame_path.write_text(
-                "# Eddy project frame\n\n"
-                "## Visual thesis\n\n"
-                "Lead with the strongest truthful proof, then change layout when the spoken argument changes.\n\n"
-                "## Opening contract\n\n"
-                "Frame one moves. Money shot by 3s. Real proof by 10s. Stakes by 30s.\n\n"
-                "## Evidence order\n\n"
-                "Raw source > supplied asset > pixel-faithful demo > diagram > clearly framed metaphor.\n"
-            )
+        short_frame_path = job.run_dir / "shorts" / "frame.md"
+        design_path = job.run_dir / "design.md"
         frame_sha256 = hashlib.sha256(frame_path.read_bytes()).hexdigest()
+        short_frame_sha256 = hashlib.sha256(short_frame_path.read_bytes()).hexdigest()
+        design_sha256 = hashlib.sha256(design_path.read_bytes()).hexdigest()
+        bundle_sha256 = hashlib.sha256(bundle_path.read_bytes()).hexdigest()
         return {
-            "schema_version": "eddy-host-packet-v3",
+            "schema_version": "eddy-host-packet-v3.1",
             "job_id": job.id,
             "state": job.state.value,
             "source_hashes": source_lock["before"],
@@ -168,6 +214,16 @@ class EddyService:
                         "speaker_edge_left",
                         "speaker_edge_right",
                         "speaker_pip",
+                        "pip_bottom_right",
+                        "pip_bottom_left",
+                        "pip_top_right",
+                        "pip_top_left",
+                        "vertical_speaker_left",
+                        "vertical_speaker_right",
+                        "embedded_split_left",
+                        "embedded_split_right",
+                        "speaker_plus_mental_model",
+                        "speaker_top_screen_bottom",
                         "source_screen",
                         "illustration_canvas",
                         "special_emphasis",
@@ -198,20 +254,54 @@ class EddyService:
                 if (job.run_dir / "repair-packet.json").exists()
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
-            "edit_plan_schema": "edit-plan-v3.3",
+            "edit_plan_schema": "edit-plan-v3.4",
             "accepted_edit_plan_schemas": [
                 "edit-plan-v3",
                 "edit-plan-v3.1",
                 "edit-plan-v3.2",
                 "edit-plan-v3.3",
+                "edit-plan-v3.4",
             ],
             "frame_contract": {
-                "schema_version": "eddy-project-frame-v1",
+                "schema_version": "eddy-project-frame-v2",
                 "path": str(frame_path),
                 "ref": "frame.md",
                 "sha256": frame_sha256,
             },
+            "design_contracts": {
+                "design": {
+                    "schema_version": "eddy-design-contract-v1",
+                    "path": str(design_path),
+                    "ref": "design.md",
+                    "sha256": design_sha256,
+                    "revision": bundle["design_contracts"]["design"]["revision"],
+                },
+                "long_frame": {
+                    "schema_version": "eddy-project-frame-v2",
+                    "path": str(frame_path),
+                    "ref": "frame.md",
+                    "sha256": frame_sha256,
+                    "revision": bundle["design_contracts"]["long_frame"]["revision"],
+                },
+                "short_frame": {
+                    "schema_version": "eddy-project-frame-v2",
+                    "path": str(short_frame_path),
+                    "ref": "shorts/frame.md",
+                    "sha256": short_frame_sha256,
+                    "revision": bundle["design_contracts"]["short_frame"]["revision"],
+                },
+            },
+            "contract_bundle": {
+                "schema_version": "eddy-contract-bundle-ref-v1",
+                "path": str(bundle_path),
+                "ref": "contracts/contract-bundle.json",
+                "sha256": bundle_sha256,
+            },
             "quality_profile": json.loads(quality_profile_path.read_text()),
+            "audio_policy": bundle["audio_policy"],
+            "caption_policy": json.loads(quality_profile_path.read_text())["captions"],
+            "grade_policy": json.loads(quality_profile_path.read_text()).get("grade", {}),
+            "completion_policy": json.loads(quality_profile_path.read_text()).get("review", {}),
             "requirements": {
                 "primary_hooks": 1,
                 "alternate_hooks": 2,
@@ -232,10 +322,52 @@ class EddyService:
     def host_submit(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         job = self.manager.submit_plan(job_id, payload)
         result = self._job_payload(job)
-        if payload.get("schema_version") in {"edit-plan-v3.2", "edit-plan-v3.3"}:
+        if payload.get("schema_version") in {
+            "edit-plan-v3.2",
+            "edit-plan-v3.3",
+            "edit-plan-v3.4",
+        }:
             opening_selection = self.opening_candidates(job_id)
             result = {**self._job_payload(self.manager.load(job_id)), "opening_selection": opening_selection}
         return result
+
+    def revise_design_contracts(
+        self,
+        job_id: str,
+        *,
+        reason: str,
+        design_markdown: str | None = None,
+        long_frame_markdown: str | None = None,
+        short_frame_markdown: str | None = None,
+    ) -> dict[str, Any]:
+        job = self.manager.load(job_id)
+        if job.state not in {
+            JobState.AWAITING_HOST_PLAN,
+            JobState.AWAITING_HOST_REPAIR,
+            JobState.COMPLETED,
+        }:
+            raise RuntimeError(f"design_contract_revision_unavailable:{job.state}")
+        if job.state is JobState.COMPLETED:
+            job = self.manager.request_owner_repair(
+                job_id,
+                reason=f"systemic_design_contract_repair:{reason}",
+            )
+        result = revise_contract_bundle(
+            job.run_dir,
+            reason=reason,
+            design_markdown=design_markdown,
+            long_frame_markdown=long_frame_markdown,
+            short_frame_markdown=short_frame_markdown,
+        )
+        (job.run_dir / "edit-plan.json").unlink(missing_ok=True)
+        self.manager.receipt(
+            job.id,
+            "design_contract_revised",
+            reason=reason.strip(),
+            contract_bundle_sha256=result["sha256"],
+            dependent_renders_invalidated=True,
+        )
+        return {**result, "job": self._job_payload(self.manager.load(job.id))}
 
     def opening_candidates(self, job_id: str) -> dict[str, Any]:
         job = self.manager.load(job_id)

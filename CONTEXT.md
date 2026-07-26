@@ -76,10 +76,36 @@ A compact animated panel that borrows the window chrome, light/dark treatment, d
 the visible desktop environment while leaving the source proof legible around it.
 _Avoid_: Full-screen title card, opaque proof replacement, giant text over UI
 
-**Project Frame Contract**:
-A run-local `frame.md` whose SHA-256 is bound into `edit-plan-v3.2` and newer; it records the visual thesis,
-evidence order, layout grammar, and transition restraint before rendering.
+**Owner Editorial Profile**:
+A versioned creator-specific editing and taste policy selected at run start. Explicit run selection
+wins; owner-channel configuration may select a default; generic creators retain the generic profile.
+_Avoid_: Private feedback dump, global taste guess
+
+**Design Contract**:
+A run-local `design.md` whose normative YAML records project brand truth, video-scale tokens,
+forbidden moves, and maintenance rules.
+_Avoid_: Layout storyboard, hotlink to another checkout
+
+**Frame Contract**:
+A run-local landscape `frame.md` or portrait `shorts/frame.md` whose SHA-256 is bound into
+`edit-plan-v3.4`; it records safe zones, layout grammar, caption bands, proof/UI collision
+boundaries, and the static-hero-frame-before-animation rule.
 _Avoid_: Unversioned style prompt, global brand guess
+
+**Viewer-Leverage Window**:
+The hard-gated 0-3 second and 0-30 second surfaces repaired before body polish without weakening
+body quality.
+_Avoid_: Literal rubric weighting, excuse to neglect the body
+
+**Contract Bundle**:
+The run-local, content-addressed binding of profile, design and frame contracts, HyperFrames
+doctrine, correction evals, rubric, source lock, and audio provenance policy.
+_Avoid_: Prompt copy, mutable external reference
+
+**Owner Taste Lock**:
+The state after deterministic 100/100 evidence where the candidate still awaits Lennox's taste
+decision. No-review authority remains locked until five distinct owner-approved real-footage runs.
+_Avoid_: Published, audience validated, autonomous approval
 
 **Semantic Visual Choreography**:
 A speech-anchored scene timeline where every meaningful change declares its job, evidence authority,
