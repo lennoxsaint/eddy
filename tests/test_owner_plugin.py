@@ -44,3 +44,43 @@ def test_owner_plugin_status_detects_cache_and_marketplace_drift(
     assert green["ok"] is True
     assert stale["ok"] is False
     assert stale["cache_ok"] is False
+
+
+def test_app_server_verdict_uses_plugin_read_when_global_indexes_are_delayed() -> None:
+    responses = {
+        3: {
+            "result": {
+                "plugin": {
+                    "summary": {
+                        "id": "eddy@personal",
+                        "localVersion": "3.0.0",
+                        "installed": True,
+                        "enabled": True,
+                        "interface": {
+                            "displayName": "Eddy",
+                            "brandColor": "#F8BE34",
+                            "composerIcon": "/Users/example/plugins/eddy/assets/eddy-eagle-icon.png",
+                        },
+                    },
+                    "skills": [
+                        {
+                            "name": "eddy:eddy",
+                            "path": (
+                                "/Users/example/.claude/skills/eddy/"
+                                "plugins/eddy/skills/eddy/SKILL.md"
+                            ),
+                            "enabled": True,
+                        }
+                    ],
+                }
+            }
+        }
+    }
+
+    verdict = owner_plugin._app_server_verdict(responses)
+
+    assert verdict["ok"] is True
+    assert verdict["plugin_list"] is True
+    assert verdict["plugin_list_response"] is False
+    assert verdict["plugin_read"] is True
+    assert verdict["skills_list"] is True

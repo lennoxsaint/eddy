@@ -22,7 +22,7 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     source.write_bytes(b"raw")
     service = EddyService(tmp_path / "runs", auto_prepare=False)
 
-    started = service.edit_start(str(source), format="youtube")
+    started = service.edit_start(str(source), format="youtube", profile_id="creator_good_v1")
     run_dir = Path(started["run_dir"])
     (run_dir / "editorial-ledger.json").write_text(
         json.dumps(

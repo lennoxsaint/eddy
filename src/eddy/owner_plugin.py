@@ -135,24 +135,45 @@ def _app_server_probe(canonical_root: Path) -> dict[str, Any]:
             process.wait(timeout=3)
         except subprocess.TimeoutExpired:
             process.kill()
+    return _app_server_verdict(responses)
+
+
+def _app_server_verdict(responses: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    """Accept current app-server proof without depending on the huge global skill index."""
+
     plugin = responses.get(3, {}).get("result", {}).get("plugin", {})
     summary = plugin.get("summary", {}) if isinstance(plugin, dict) else {}
     plugin_list = responses.get(2, {}).get("result", {}).get("marketplaces", [])
-    listed = any(
+    listed_by_response = any(
         item.get("id") == "eddy@personal" and item.get("localVersion") == PLUGIN_VERSION
         for marketplace in plugin_list
         for item in marketplace.get("plugins", [])
         if isinstance(item, dict)
     )
+    listed = listed_by_response or (
+        summary.get("id") == "eddy@personal"
+        and summary.get("localVersion") == PLUGIN_VERSION
+        and summary.get("installed") is True
+        and summary.get("enabled") is True
+    )
     skill_rows = responses.get(4, {}).get("result", {}).get("data", [])
-    skills = [
+    indexed_skills = [
         skill
         for row in skill_rows
         for skill in row.get("skills", [])
         if isinstance(skill, dict) and skill.get("name") in {"eddy", "eddy:eddy"}
     ]
+    plugin_skills = plugin.get("skills", []) if isinstance(plugin, dict) else []
+    skills = [
+        skill
+        for skill in [*plugin_skills, *indexed_skills]
+        if isinstance(skill, dict) and skill.get("name") in {"eddy", "eddy:eddy"}
+    ]
     skill_green = any(
-        str(skill.get("path", "")).endswith("/eddy/3.0.0/skills/eddy/SKILL.md")
+        (
+            str(skill.get("path", "")).endswith("/eddy/3.0.0/skills/eddy/SKILL.md")
+            or str(skill.get("path", "")).endswith("/plugins/eddy/skills/eddy/SKILL.md")
+        )
         and skill.get("enabled") is True
         for skill in skills
     )
@@ -169,6 +190,7 @@ def _app_server_probe(canonical_root: Path) -> dict[str, Any]:
     return {
         "ok": listed and read_green and skill_green,
         "plugin_list": listed,
+        "plugin_list_response": listed_by_response,
         "plugin_read": read_green,
         "skills_list": skill_green,
         "local_version": summary.get("localVersion"),
