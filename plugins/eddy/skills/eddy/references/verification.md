@@ -27,6 +27,15 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
   output) and pass its words as `--final-words`; flags adjacent duplicate 4-gram phrases (a leftover
   retake said twice). If it fires, review each flag — real retake → re-cut; genuine repetition →
   override. This is the machine half of the retake sweep; do it for **Shorts too**.
+- **Content-addressed evidence** — decoded audio, timing maps, transcripts, metrics, captions,
+  renders, and review inputs are keyed by input bytes plus parameters. A same-name rebuild with
+  changed bytes invalidates every dependent result.
+- **Sample sequence parity** — validate splice and retime output by searching the expected PCM/sample
+  sequence, not by trusting a guessed timestamp offset. Multiple, missing, or out-of-budget matches
+  fail.
+- **Shot entry and word edges** — speech begins within two frames of a new shot unless a protected
+  exception names a deliberate pause. Delivered retranscription must preserve leading phonemes,
+  digits, terminal consonants, and word endings within tolerance.
 - **Delivered editorial truth** (`delivered_editorial_truth`) — run the same repeat, reset-loop, and
   false-start detector over every delivered-media transcript. Any unresolved survivor blocks.
 - **Evidence-bearing Short** — source-mapped screen proof covers at least 25% of a dual-source Short
@@ -40,7 +49,9 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
   the frame (no black bars) with slight rounded corners; Shorts stack geometry correct.
 - **V3.2+ choreography contract** — frame hash matches; every source ref exists under the source
   snapshot or run; opening/body/Short cadence, evidence authority, layout diversity, and transition
-  limits validate before render. HyperFrames lint, validate, and inspect receipts must be green.
+  limits validate before render. `contracts/design-adherence.json` must hash-match all three
+  contracts. HyperFrames lint, validate, strict inspect, snapshots, contrast, motion coverage, and
+  animation-map receipts must be green.
 - **V3.3 body-structure contract** — the source contract ref/hash is present; route clarity is at or
   before second 30; 3-5 section IDs match Sage order; every shared-body scene maps exactly once;
   every section has a real proof scene; and every non-final boundary has a reset scene, transition
@@ -48,12 +59,18 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Opening selection** — ranking and selected opening are receipted. A top-two gap of five points
   or less, or uncertain leading judgment, must pause before finalization.
 - **Caption sync** — cue timings align to word timings; no cue overlaps the next by >1 frame.
+- **Progressive caption visibility** — Long designed captions are absent unless the brief opts in.
+  In Shorts, only prior plus active words are visible, future words are absent, and multi-speaker
+  label/color pairs remain stable.
 - **Caption terminal punctuation** — the generated ASS token proof preserves source `.`, `?`, and
   `!` sentence endings while continuing to suppress stray decorative punctuation.
 - **Loudness** — final mix hits the loudness target; no clipping.
-- **Contract binding** — host packet, v3.4 plan, receipts, and final evidence expose matching
+- **Motion coverage** — every intended motion interval is active through its last frame; no frozen
+  tail, one-frame flash, accidental still ending, annotation miss, crop discontinuity, or proof/UI
+  collision remains.
+- **Contract binding** — host packet, v3.5 plan, receipts, and final evidence expose matching
   profile, design, landscape frame, portrait frame, HyperFrames doctrine, correction-eval, and
-  rubric hashes.
+  rubric hashes, plus Project Fact Brief and verifier contract hashes.
 - **100-point evidence** — exactly 100 one-point checks pass. Every point has a file, frame,
   timestamp, hash, playback, or measurement reference. Audience performance remains `NOT_RUN`;
   final authority remains `owner_taste_lock`.
@@ -98,10 +115,16 @@ Autonomy means never stalling on a non-essential layer. On a stage failure:
 - **`embedded-captions` unavailable** — fall back to the V1 caption style in `captions.py` (same
   constants); never ship without karaoke.
 - **Render fails at full-res** — re-run once at proxy to isolate; fix the offending stage, then
-  full-res again (counts against the ≤3 self-heal budget).
+  full-res again. Three complete passes are the minimum, not a retry ceiling.
 
-## Definition of shippable
+## Independent review and promotion
 
-All deterministic gates green, all model rubrics addressed, and `spot-check.md` written. Then — and
-only then — promote the full-resolution artifacts into `final/`. Residual mandatory failures produce
-a Blocked Attempt instead.
+At `awaiting_independent_review`, a fresh context with `edit_authority: false` reviews repaired
+intervals and their adjacent joins, then fully watches and listens to all three Longs and every
+Short. Submit `review-passes.json`, `production-score.json`, `professional-gates.json`,
+`verifier-review.json`, and `open-items.json` together. Any stale hash, missing output, incomplete
+playback, surviving defect, or objective open item reopens repair.
+
+All deterministic gates green, all rubrics addressed, and `spot-check.md` written allow promotion
+only to `proof_gated_candidate_awaiting_owner_taste`. Owner approval is a separate explicit
+`owner-verdict-v2`. Residual mandatory failures produce a Blocked Attempt instead.

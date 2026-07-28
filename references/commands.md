@@ -17,6 +17,8 @@ python3 scripts/transcribe.py --in <camera_or_mixed>.mp4 --out transcript.json [
 Output: `{language, duration, words:[{word,start,end,score}], segments:[...]}`.
 The V3 runtime stores quality transcripts at `~/.eddy/cache/transcripts/<camera-sha256>.json` and
 receipts `transcript_cache_hit` or `transcript_cache_miss_filled` in the canonical run.
+Every derived cache must include the source bytes and relevant parameters; a filename is never a
+valid cache key.
 
 ## 2. Splice (execute the cut list + tighten gaps)
 
@@ -61,7 +63,7 @@ python3 scripts/composite_render.py th --camera cam.mp4 --out long.mp4 --w 1920 
 python3 scripts/composite_render.py short --face cam.mp4 --screen screen.mp4 --out short.mp4 [--proxy]
 python3 scripts/composite_render.py short --face cam.mp4 --out short.mp4 [--proxy]
 ```
-`--proxy` = fast half-res draft (use during the ≤3 self-heal loop; full-res only at the end).
+`--proxy` = fast half-res draft (use during repair; full-res only at the end).
 Karaoke is NOT burned here — add it with `embedded-captions` `anchor`.
 
 ## 5. Verify (deterministic gates)
@@ -86,26 +88,31 @@ python3 scripts/karaoke_ass.py --transcript short.words.json --out short.ass \
   --play-w 1080 --play-h 1920 --y 1155 --font-size 68 --max-words 4 --uppercase \
   --proof-out short-caption-punctuation.json --burn --in short.mp4 --video-out short_cap.mp4
 ```
-Self-contained per-word karaoke (cyan current word / white spoken / dim upcoming, `layout-constants.md`
-style). `--transcript` = word timings of the **edited** short (re-transcribe the composited short first,
+Self-contained per-word karaoke (cyan active word / white prior words / future words absent,
+`layout-constants.md` style). `--transcript` = word timings of the **edited** short (re-transcribe the composited short first,
 because splicing shifts word times). Position `--y` in the Shorts caption strip (1080–1230 → center 1155).
 The renderer preserves terminal `.`, `?`, and `!`, normalizes a trailing ellipsis to one period, and
 continues to remove stray commas/quotes. `--proof-out` is the blocking generated-token receipt.
 
-## Owner feedback and caption-only repair
+## Independent review, owner verdict, and targeted repair
 
 ```
+eddy submit-review <job-id> verifier-submission.json
 eddy repair-captions <job-id>
 eddy repair-privacy <job-id> privacy-repair.json
-eddy record-feedback <job-id> owner-feedback.json
+eddy record-feedback <job-id> owner-verdict.json
 eddy opening-candidates <job-id>
 eddy select-opening <job-id> <opening-id> --reason "<evidence>"
 ```
 
-For a completed candidate that needs a real edit repair, submit typed owner feedback with
-`verdict: changes_requested`. Eddy receipts the reason, moves the completed candidate to
-`quarantine/attempt-<n>/`, returns to `awaiting_host_repair`, and preserves the three-attempt ceiling.
-An owner rejection after attempt 3 transitions the job to `blocked`.
+`verifier-submission.json` uses `eddy-review-submission-v1` and contains the review passes,
+production score, professional gates, full verifier review, and typed open items. It can promote
+only to the owner-taste gate.
+
+For a proof-gated candidate that needs a real edit repair, submit `owner-verdict-v2` with
+`verdict: changes_requested`. Eddy receipts the reason, moves the candidate to
+`quarantine/attempt-<n>/`, and returns to `awaiting_host_repair`. Repair remains unbounded while
+strategy changes; only an exact external or technical blocker ends the loop.
 
 `repair-captions` is valid only for a completed run. It preserves the three long hashes, remuxes the
 already-green Studio Sound audio streams byte-for-byte, retranscribes the repaired Shorts, reruns

@@ -452,6 +452,16 @@ class PipelineRunner:
             (attempt / "spot-check.md").write_text(
                 "# Spot checks\n\nNo uncertain cuts were recorded by the host plan.\n"
             )
+            if plan.schema_version == "edit-plan-v3.5":
+                self.manager.transition(job_id, JobState.AWAITING_INDEPENDENT_REVIEW)
+                self.manager.receipt(
+                    job_id,
+                    "independent_review_requested",
+                    attempt=attempt.name,
+                    review_schema="eddy-review-submission-v1",
+                    verifier_authority="independent_no_edit_context",
+                )
+                return
             self.manager.transition(job_id, JobState.VERIFYING)
             self.manager.record_verification(
                 job_id,

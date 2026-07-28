@@ -269,3 +269,20 @@ distinct reviewed source variant; extra unreviewed delivered variants still bloc
   uncertain rankings pause in `awaiting_opening_selection` for a receipted choice.
 - The opening must move on frame one, show its money shot by 3s, real proof by 10s, stakes by 30s,
   and contain 8-12 meaningful changes across at least three layout states.
+
+## 2026-07-28 - VSL corrections become versioned proof gates
+
+- `lennox-professional-youtube-v2`, `eddy-host-packet-v3.2`, `edit-plan-v3.5`, and
+  `eddy-contract-bundle-v2` make the recurring VSL corrections the owner-channel default.
+- Project-specific truth lives in a hash-bound Project Fact Brief; owner taste lives in the
+  versioned profile; source safety and measurable media integrity live in Eddy core.
+- Waveform and energy evidence outrank transcript timing when they conflict. Sample-sequence parity,
+  word edges, shot-entry latency, motion-tail coverage, Studio Sound lineage, progressive captions,
+  factual reconstruction provenance, and independent full playback are objective gates.
+- Three review/repair passes are now a minimum, not the historical ceiling described in the July 13
+  decision. The host keeps changing strategy until objective green or an exact external/technical
+  blocker.
+- Passing objective gates moves the run only to
+  `proof_gated_candidate_awaiting_owner_taste`. `owner-verdict-v2` alone approves or reopens it.
+- Corrections promote through narrow evals. Literal project facts cannot enter an owner profile or
+  generic doctrine.

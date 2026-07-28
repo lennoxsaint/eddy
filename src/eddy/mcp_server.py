@@ -36,8 +36,14 @@ def build_server() -> Any:
         source: str,
         format: str = "youtube",
         profile_id: str | None = None,
+        project_brief: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return service.edit_start(source, format=format, profile_id=profile_id)
+        return service.edit_start(
+            source,
+            format=format,
+            profile_id=profile_id,
+            project_brief=project_brief,
+        )
 
     @server.tool(name="eddy_host_packet")
     def host_packet(job_id: str) -> dict[str, Any]:
@@ -58,6 +64,10 @@ def build_server() -> Any:
     @server.tool(name="eddy_finalize")
     def finalize(job_id: str) -> dict[str, Any]:
         return service.finalize(job_id)
+
+    @server.tool(name="eddy_submit_review")
+    def submit_review(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return service.submit_review(job_id, payload)
 
     @server.tool(name="eddy_job_status")
     def job_status(job_id: str) -> dict[str, Any]:

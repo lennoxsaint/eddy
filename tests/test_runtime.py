@@ -418,6 +418,67 @@ def valid_plan_v34() -> dict:
     return payload
 
 
+def valid_plan_v35() -> dict:
+    payload = valid_plan_v34()
+    payload["schema_version"] = "edit-plan-v3.5"
+    payload["frame_contract"]["schema_version"] = "eddy-project-frame-v3"
+    payload["contract_bundle"]["schema_version"] = "eddy-contract-bundle-ref-v2"
+    payload["audio_plan"].update(
+        {
+            "schema_version": "eddy-audio-plan-v2",
+            "studio_sound_required": True,
+            "studio_sound_lineage_policy": "verified_descript_only",
+            "shorts_music_policy": "purposeful_variation",
+        }
+    )
+    payload["caption_policy"] = {
+        "schema_version": "eddy-caption-policy-v2",
+        "longs": {"default": "disabled", "designed_captions": False},
+        "shorts": {
+            "prior_words": "visible",
+            "active_word": "highlighted",
+            "future_words": "invisible",
+            "source_caption_collision": "suppress_eddy_captions",
+            "speaker_attribution": "color_plus_label",
+            "speaker_colors": "design_contract_accessible_palette",
+            "source_caption_intervals": {"short-0": [[0.0, 1.0]]},
+        },
+    }
+    payload["production_review"].update(
+        {
+            "schema_version": "eddy-production-review-v2",
+            "verifier_authority": "independent_no_edit_context",
+            "verifier_edit_authority": False,
+            "repair_review_policy": "repaired_intervals_and_joins_plus_full_final",
+            "promotion_state": "proof_gated_candidate_awaiting_owner_taste",
+            "open_items_policy": "objective_closed_subjective_optional",
+        }
+    )
+    payload["project_fact_brief"] = {
+        "schema_version": "eddy-project-fact-brief-ref-v1",
+        "ref": "project-fact-brief.json",
+        "sha256": "1" * 64,
+    }
+    payload["cut_integrity_plan"] = {
+        "schema_version": "eddy-cut-integrity-plan-v1",
+        "timing_authority": "waveform_energy_envelope_when_transcript_conflicts",
+        "sample_exact_splices": True,
+        "sequence_search_parity": True,
+        "word_edge_protection": True,
+        "delivered_retranscription": True,
+        "shot_entry_latency_max_frames": 2,
+        "protected_exception_ids": [],
+    }
+    payload["proof_plan"] = {
+        "schema_version": "eddy-proof-plan-v1",
+        "real_capture_preferred": True,
+        "reconstruction_receipt_required": True,
+        "claims": [],
+        "annotation_targets": [],
+    }
+    return payload
+
+
 def plan_for_job(job) -> dict:
     payload = valid_plan()
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
@@ -947,6 +1008,24 @@ def test_v34_requires_all_bound_production_contracts() -> None:
     missing = valid_plan_v34()
     del missing["audio_plan"]
     with pytest.raises(PlanValidationError, match="audio_plan_schema_invalid"):
+        EditPlanV3.from_dict(missing)
+
+
+def test_v35_requires_independent_proof_and_cut_contracts() -> None:
+    plan = EditPlanV3.from_dict(valid_plan_v35())
+
+    assert plan.schema_version == "edit-plan-v3.5"
+    assert plan.project_fact_brief is not None
+    assert plan.cut_integrity_plan is not None
+    assert plan.proof_plan is not None
+    assert plan.audio_plan["schema_version"] == "eddy-audio-plan-v2"
+    assert plan.production_review["promotion_state"] == (
+        "proof_gated_candidate_awaiting_owner_taste"
+    )
+
+    missing = valid_plan_v35()
+    del missing["cut_integrity_plan"]
+    with pytest.raises(PlanValidationError, match="cut_integrity_plan_schema_invalid"):
         EditPlanV3.from_dict(missing)
 
 

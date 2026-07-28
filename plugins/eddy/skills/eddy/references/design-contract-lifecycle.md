@@ -19,14 +19,17 @@ their hashes live in `hyperframes-doctrine-v0.7.3.json`; exact copies are bundle
 
 At `eddy_edit_start`, Eddy:
 
-1. Detects a supplied `design.md`, `DESIGN.md`, or narrow brand-token JSON without changing it.
+1. Validates a supplied `project-fact-brief.json` or derives a restrictive brief, then detects a
+   supplied `design.md`, `DESIGN.md`, or narrow brand-token JSON without changing it.
 2. Creates run-local `design.md`, `frame.md`, and `shorts/frame.md`.
-3. Snapshots the selected profile, 100-point rubric, correction evals, and four HyperFrames
-   references into `contracts/`.
+   It immediately writes `contracts/design-adherence.json`; a missing normative token blocks
+   planning before animation.
+3. Snapshots the selected profile, Project Fact Brief, 100-point rubric, correction evals,
+   independent-verifier contract, and four HyperFrames references into `contracts/`.
 4. Writes `contracts/contract-bundle.json` with provenance, revisions, and SHA-256 hashes.
-5. Returns matching refs and hashes through `eddy-host-packet-v3.1`.
+5. Returns matching refs and hashes through `eddy-host-packet-v3.2`.
 
-The host enriches the run-local contracts before submitting v3.4 when the detected evidence is not
+The host enriches the run-local contracts before submitting v3.5 when the detected evidence is not
 enough. Another checkout is never hotlinked at render time.
 
 ## Static-first composition

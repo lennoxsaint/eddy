@@ -24,24 +24,26 @@ eddy sync-doctor
 ## Workflow
 
 ```text
-eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.3
+eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.5
 -> eddy_host_submit -> auto-selected | awaiting_opening_selection -> eddy_finalize
--> completed | awaiting_host_repair | blocked
+-> awaiting_independent_review -> eddy_submit_review
+-> proof_gated_candidate_awaiting_owner_taste | awaiting_host_repair | blocked
 ```
 
 The CLI provides the same recovery path when MCP is unavailable:
 
 ```bash
 eddy options <source>
-eddy edit <source>
+eddy edit <source> [--profile-id <id>] [--project-brief project-fact-brief.json]
 eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
 eddy opening-candidates <job-id>
 eddy select-opening <job-id> <opening-id> --reason "<evidence>"
 eddy finalize <job-id>
+eddy submit-review <job-id> verifier-submission.json
 eddy repair-captions <job-id>
 eddy repair-privacy <job-id> privacy-repair.json
-eddy record-feedback <job-id> owner-feedback.json
+eddy record-feedback <job-id> owner-verdict.json
 ```
 
 Explicit owner feedback is stored beside the run and classified before it becomes product doctrine.
@@ -52,15 +54,18 @@ The host model owns editorial taste. Eddy owns source locks, deterministic media
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full
 product contract.
 
-Current `edit-plan-v3.3` projects retain v3.2's opening choreography and add a hash-bound,
-Sage-owned body spine. A route understood by second 30 resolves through 3-5 ordered sections; Eddy
+Current `edit-plan-v3.5` projects retain v3.2's opening choreography and v3.3's hash-bound,
+Sage-owned body spine, then bind the Lennox v2 profile, Project Fact Brief, design contracts,
+sample-exact cut policy, Studio Sound lineage, independent verifier, and correction evals. A route
+understood by second 30 resolves through 3-5 ordered sections; Eddy
 maps every body scene to those sections and cannot silently reorder them. A hash-bound `frame.md`
 still drives three opening compositions, one reused shared-body composition, and portrait Short
 timelines. HyperFrames controls full-frame proof, speaker geometry, illustrations, and semantically
 motivated transitions instead of merely adding small overlays.
 
 Preflight writes an Editorial Review Ledger. Final verification retranscribes every emitted video;
-source-plan timing never substitutes for delivered-media proof.
+waveform evidence controls when transcript timing conflicts, and source-plan timing never
+substitutes for delivered-media proof. Passing objective evidence stops at the owner taste lock.
 
 If the source folder contains top-level media, Eddy locks only those files. Nested prior run outputs
 are excluded, preventing an old `eddy-runs/` folder from being mistaken for fresh camera or screen

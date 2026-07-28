@@ -1,4 +1,4 @@
-"""Versioned quality profiles and v3.4 production-contract validation."""
+"""Versioned quality profiles and production-contract validation."""
 
 from __future__ import annotations
 
@@ -9,15 +9,17 @@ from typing import Any
 
 
 GENERIC_PROFILE_ID = "creator_good_v1"
-LENNOX_PROFILE_ID = "lennox-professional-youtube-v1"
+LENNOX_PROFILE_ID = "lennox-professional-youtube-v2"
+LENNOX_PROFILE_V1_ID = "lennox-professional-youtube-v1"
 PROFILE_FILES = {
     GENERIC_PROFILE_ID: "references/creator-good-v1.json",
-    LENNOX_PROFILE_ID: "references/owner-profiles/lennox-professional-youtube-v1.json",
+    LENNOX_PROFILE_V1_ID: "references/owner-profiles/lennox-professional-youtube-v1.json",
+    LENNOX_PROFILE_ID: "references/owner-profiles/lennox-professional-youtube-v2.json",
 }
 
 
 class QualityContractError(ValueError):
-    """A quality profile or v3.4 production contract is invalid."""
+    """A quality profile or versioned production contract is invalid."""
 
 
 def resolve_quality_profile(
@@ -51,6 +53,7 @@ def resolve_quality_profile(
     if profile.get("schema_version") not in {
         "eddy-quality-profile-v1",
         "eddy-quality-profile-v2",
+        "eddy-quality-profile-v3",
     }:
         raise QualityContractError(f"quality_profile_schema_invalid:{profile_id}")
     return profile, path
@@ -75,7 +78,10 @@ def validate_contract_ref(value: object, *, schema: str, label: str) -> dict[str
 
 
 def validate_audio_plan(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("schema_version") != "eddy-audio-plan-v1":
+    if not isinstance(value, dict) or value.get("schema_version") not in {
+        "eddy-audio-plan-v1",
+        "eddy-audio-plan-v2",
+    }:
         raise QualityContractError("audio_plan_schema_invalid")
     music = value.get("music")
     sfx = value.get("sfx")
@@ -100,6 +106,13 @@ def validate_audio_plan(value: object) -> dict[str, Any]:
             raise QualityContractError("audio_plan_cue_ref_invalid")
     if value.get("paid_retrieval_allowed") is not False:
         raise QualityContractError("audio_plan_paid_retrieval_must_be_false")
+    if value["schema_version"] == "eddy-audio-plan-v2":
+        if value.get("studio_sound_required") is not True:
+            raise QualityContractError("audio_plan_studio_sound_required")
+        if value.get("studio_sound_lineage_policy") != "verified_descript_only":
+            raise QualityContractError("audio_plan_studio_sound_lineage_invalid")
+        if value.get("shorts_music_policy") != "purposeful_variation":
+            raise QualityContractError("audio_plan_shorts_music_policy_invalid")
     return dict(value)
 
 
@@ -116,8 +129,34 @@ def validate_grade_plan(value: object) -> dict[str, Any]:
 
 
 def validate_caption_policy(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("schema_version") != "eddy-caption-policy-v1":
+    if not isinstance(value, dict) or value.get("schema_version") not in {
+        "eddy-caption-policy-v1",
+        "eddy-caption-policy-v2",
+    }:
         raise QualityContractError("caption_policy_schema_invalid")
+    if value["schema_version"] == "eddy-caption-policy-v2":
+        longs = value.get("longs")
+        shorts = value.get("shorts")
+        if (
+            not isinstance(longs, dict)
+            or not isinstance(longs.get("designed_captions"), bool)
+            or longs.get("default") != "disabled"
+        ):
+            raise QualityContractError("caption_policy_longs_invalid")
+        required = {
+            "prior_words": "visible",
+            "active_word": "highlighted",
+            "future_words": "invisible",
+            "source_caption_collision": "suppress_eddy_captions",
+            "speaker_attribution": "color_plus_label",
+            "speaker_colors": "design_contract_accessible_palette",
+        }
+        if not isinstance(shorts, dict) or any(
+            shorts.get(key) != expected for key, expected in required.items()
+        ):
+            raise QualityContractError("caption_policy_shorts_invalid")
+        _validate_source_caption_intervals(shorts.get("source_caption_intervals", {}))
+        return dict(value)
     required = {
         "prior_words": "visible",
         "active_word": "highlighted",
@@ -126,7 +165,11 @@ def validate_caption_policy(value: object) -> dict[str, Any]:
     }
     if any(value.get(key) != expected for key, expected in required.items()):
         raise QualityContractError("caption_policy_progressive_contract_invalid")
-    intervals = value.get("source_caption_intervals", {})
+    _validate_source_caption_intervals(value.get("source_caption_intervals", {}))
+    return dict(value)
+
+
+def _validate_source_caption_intervals(intervals: object) -> None:
     if not isinstance(intervals, dict):
         raise QualityContractError("caption_policy_source_intervals_invalid")
     for short_id, ranges in intervals.items():
@@ -137,17 +180,17 @@ def validate_caption_policy(value: object) -> dict[str, Any]:
                 not isinstance(row, list)
                 or len(row) != 2
                 or not all(isinstance(item, (int, float)) for item in row)
-                or float(row[0]) < 0
-                or float(row[1]) <= float(row[0])
-            ):
+            or float(row[0]) < 0
+            or float(row[1]) <= float(row[0])
+        ):
                 raise QualityContractError("caption_policy_source_interval_invalid")
-    return dict(value)
 
 
 def validate_production_review(value: object) -> dict[str, Any]:
     if (
         not isinstance(value, dict)
-        or value.get("schema_version") != "eddy-production-review-v1"
+        or value.get("schema_version")
+        not in {"eddy-production-review-v1", "eddy-production-review-v2"}
     ):
         raise QualityContractError("production_review_schema_invalid")
     if value.get("minimum_complete_passes") != 3:
@@ -163,6 +206,81 @@ def validate_production_review(value: object) -> dict[str, Any]:
     strategy_id = value.get("strategy_id")
     if not isinstance(strategy_id, str) or not strategy_id.strip():
         raise QualityContractError("production_review_strategy_id_required")
+    if value["schema_version"] == "eddy-production-review-v2":
+        if value.get("verifier_authority") != "independent_no_edit_context":
+            raise QualityContractError("production_review_verifier_authority_invalid")
+        if value.get("verifier_edit_authority") is not False:
+            raise QualityContractError("production_review_verifier_must_not_edit")
+        if (
+            value.get("repair_review_policy")
+            != "repaired_intervals_and_joins_plus_full_final"
+        ):
+            raise QualityContractError("production_review_rewatch_policy_invalid")
+        if value.get("promotion_state") != (
+            "proof_gated_candidate_awaiting_owner_taste"
+        ):
+            raise QualityContractError("production_review_promotion_state_invalid")
+        if value.get("open_items_policy") != "objective_closed_subjective_optional":
+            raise QualityContractError("production_review_open_items_policy_invalid")
+    return dict(value)
+
+
+def validate_cut_integrity_plan(value: object) -> dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or value.get("schema_version") != "eddy-cut-integrity-plan-v1"
+    ):
+        raise QualityContractError("cut_integrity_plan_schema_invalid")
+    required = {
+        "timing_authority": "waveform_energy_envelope_when_transcript_conflicts",
+        "sample_exact_splices": True,
+        "sequence_search_parity": True,
+        "word_edge_protection": True,
+        "delivered_retranscription": True,
+    }
+    if any(value.get(key) != expected for key, expected in required.items()):
+        raise QualityContractError("cut_integrity_plan_contract_invalid")
+    latency = value.get("shot_entry_latency_max_frames")
+    if not isinstance(latency, int) or isinstance(latency, bool) or not 0 <= latency <= 2:
+        raise QualityContractError("cut_integrity_shot_latency_invalid")
+    exceptions = value.get("protected_exception_ids")
+    if not isinstance(exceptions, list) or not all(
+        isinstance(item, str) and item.strip() for item in exceptions
+    ):
+        raise QualityContractError("cut_integrity_exceptions_invalid")
+    return dict(value)
+
+
+def validate_proof_plan(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("schema_version") != "eddy-proof-plan-v1":
+        raise QualityContractError("proof_plan_schema_invalid")
+    if value.get("real_capture_preferred") is not True:
+        raise QualityContractError("proof_plan_real_capture_preference_required")
+    if value.get("reconstruction_receipt_required") is not True:
+        raise QualityContractError("proof_plan_reconstruction_receipt_required")
+    claims = value.get("claims")
+    if not isinstance(claims, list):
+        raise QualityContractError("proof_plan_claims_invalid")
+    for row in claims:
+        if not isinstance(row, dict):
+            raise QualityContractError("proof_plan_claim_invalid")
+        if row.get("evidence_kind") not in {"capture", "reconstructed"}:
+            raise QualityContractError("proof_plan_evidence_kind_invalid")
+        if not isinstance(row.get("claim_id"), str) or not row["claim_id"].strip():
+            raise QualityContractError("proof_plan_claim_id_required")
+        for key in ("source_refs", "factual_bindings"):
+            values = row.get(key)
+            if not isinstance(values, list) or not all(
+                isinstance(item, str) and item.strip() for item in values
+            ):
+                raise QualityContractError(f"proof_plan_{key}_invalid")
+        if row["evidence_kind"] == "reconstructed" and (
+            not row["source_refs"] or not row["factual_bindings"]
+        ):
+            raise QualityContractError("proof_plan_reconstruction_unbound")
+    annotations = value.get("annotation_targets")
+    if not isinstance(annotations, list):
+        raise QualityContractError("proof_plan_annotation_targets_invalid")
     return dict(value)
 
 

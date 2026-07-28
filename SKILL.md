@@ -29,7 +29,7 @@ For a normal "edit this" request, Eddy produces videos only:
 Titles, descriptions, chapters, thumbnails, uploads, publishing, sending, and scheduling are outside
 v3.0. Never mutate, move, delete, upload, or publish source media.
 
-For the owner channel, resolve `lennox-professional-youtube-v1` automatically unless the run
+For the owner channel, resolve `lennox-professional-youtube-v2` automatically unless the run
 explicitly selects another profile. Generic creators continue to use `creator_good_v1`. Normal Eddy
 runs are single-editor workflows and never launch a bake-off. Only an explicit bake-off request may
 hand Eddy's frozen contract bundle to the standalone `video-edit-bakeoff` skill.
@@ -38,11 +38,13 @@ Treat 0-3 seconds and 0-30 seconds as hard-gated Viewer-Leverage Windows and the
 priority, without weakening the body. Frame one moves, the strongest honest money shot lands by 3s,
 real proof lands by 10s, and stakes plus route are legible by 30s.
 
-Use `edit-plan-v3.4` for current work. It retains the v3.3 Sage-owned body structure and binds
+Use `edit-plan-v3.5` for current work. It retains the v3.3 Sage-owned body structure and binds
 `contracts/contract-bundle.json`, `design.md`, landscape `frame.md`, portrait `shorts/frame.md`,
-the selected quality profile, HyperFrames v0.7.3 doctrine, audio plan, grade plan, progressive
-caption policy, correction evals, and 100-point rubric. Legacy plans through v3.3 remain readable
-but cannot claim Lennox-profile completion.
+the selected quality profile, verified Project Fact Brief, HyperFrames v0.7.3 doctrine, Studio Sound
+lineage, audio plan, grade plan, caption policy, correction evals, independent-verifier contract,
+and 100-point rubric. Host packets use `eddy-host-packet-v3.2`; bundles use
+`eddy-contract-bundle-v2`. Legacy plans through v3.4 remain readable but cannot claim the v2
+Lennox-profile proof state.
 
 HyperFrames owns full-frame composition. Use talking head as the human anchor, real screen
 recording for product action and proof, and authored mental models when a concept, relationship, or
@@ -64,15 +66,17 @@ clipping word onsets or compressing protected pauses.
 
 ## Proof states
 
-A **Proof-Gated Edit** has every mandatory deterministic and configured quality gate green. Only this
-state may populate `final/` or be described as complete.
+A **Proof-Gated Candidate Awaiting Owner Taste** has every mandatory objective gate green, all final
+outputs fully watched and heard by an independent no-edit verifier, and zero objective open items.
+Only this state may populate `final/`. It is not owner approval and must be reported exactly as
+`proof_gated_candidate_awaiting_owner_taste`.
 
 A **Blocked Attempt** is a playable inspection artifact with exact blockers and receipts. Complete
 at least three full watch/critique/repair passes, then keep changing repair strategy until every
 evidenced point is green or an exact external or technical blocker remains. Keep every red attempt
 under `quarantine/attempt-<n>/`; never promote it into `final/` or call it ship-ready.
 
-A completed proof-gated edit may be reopened only by typed owner feedback with
+A proof-gated candidate may be reopened only by `owner-verdict-v2` with
 `verdict: changes_requested`; Eddy moves that exact candidate to its numbered quarantine attempt
 before accepting the repaired host plan.
 
@@ -87,25 +91,33 @@ outputs proof-gated candidates.
 2. Call `eddy_edit_options(source=<path>, format="youtube")`. If there is one runnable path, start it
    without asking. If a material route choice remains, show only runnable options with privacy, cost,
    and quality tradeoffs.
-3. Call `eddy_edit_start(...)`, optionally with explicit `profile_id`, then poll until
-   `awaiting_host_plan`. Eddy creates and hashes the design contracts before host planning.
+3. Call `eddy_edit_start(...)`, optionally with explicit `profile_id` and `project_brief`, then poll
+   until `awaiting_host_plan`. Eddy validates or derives a restrictive Project Fact Brief and creates
+   and hashes the design contracts before host planning. Missing essential facts block with an exact
+   pickup; never guess or render a placeholder.
 4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
    Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
    screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
-5. Author the v3.4 body contract, audio plan, grade plan, caption policy, production review, and
-   choreography against the packet's frozen bundle, then call
+5. Author the v3.5 body contract, cut-integrity plan, factual proof plan, audio plan, grade plan,
+   caption policy, production review, and choreography against the packet's frozen bundle, then call
    `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
    bypassing them. Eddy auto-selects a clear, certain opening leader; when the top two are within
    five points or uncertain, inspect `eddy_opening_candidates` and call `eddy_select_opening` with
    the reason. The selected opening becomes `long-primary.mp4`; the other two remain complete
    Alternate Longs and still reuse the same body.
-6. Call `eddy_finalize(job_id=...)`, poll with `eddy_job_status`, and return only final paths or exact
-   blockers. Use `eddy_cancel_job` when the user cancels.
-7. When the owner reviews an Eddy output, record the explicit verdict and evidence with
-   `eddy_record_feedback`. Repair the current run first. Promote a lesson into code, a quality
-   profile, an eval, or doctrine only when it generalizes, and require a regression test before the
-   guarded ship command refreshes projections, GitHub `main`, and the installed owner plugin.
-8. If critique reveals a systemic project design defect, call `eddy_revise_design_contracts` (or
+6. Call `eddy_finalize(job_id=...)` and keep the same active host task moving through proxy review,
+   diagnosis, repair, and rerender. Do not wait for Lennox to say “continue.” On a repeated defect,
+   change strategy; on a real external or technical stop, report its exact blocker.
+7. At `awaiting_independent_review`, create a fresh no-edit verifier context. It reviews repaired
+   intervals and adjacent joins, then fully watches and listens to all three final Longs and every
+   final Short. Submit the five hash-bound review artifacts with `eddy_submit_review`. A failed gate
+   reopens repair; a green submission stops at the owner-taste state.
+8. When the owner reviews an Eddy output, record `owner-verdict-v2` and its evidence with
+   `eddy_record_feedback`. A rejection reopens the same run. Each generalized correction names a
+   regression eval and promotion class; literal project facts stay project-specific. A passed eval
+   may promote into the owner profile, while generic doctrine also requires cross-project recurrence
+   or explicit owner designation.
+9. If critique reveals a systemic project design defect, call `eddy_revise_design_contracts` (or
    `eddy revise-design`) with the new contract text and reason. This increments revisions,
    invalidates dependent renders, and requires adherence checks again. At owner approval, propose
    reusable corrections for profile promotion; never globalize them automatically.
@@ -115,16 +127,17 @@ make the user restart the edit:
 
 ```bash
 eddy options <source>
-eddy edit <source> [--profile-id <id>]
+eddy edit <source> [--profile-id <id>] [--project-brief project-fact-brief.json]
 eddy packet <job-id>
 eddy submit <job-id> edit-plan.json
 eddy opening-candidates <job-id>
 eddy select-opening <job-id> <opening-id> --reason "<evidence>"
 eddy finalize <job-id>
 eddy status <job-id>
+eddy submit-review <job-id> verifier-submission.json
 eddy repair-captions <job-id>
 eddy repair-privacy <job-id> privacy-repair.json
-eddy record-feedback <job-id> owner-feedback.json
+eddy record-feedback <job-id> owner-verdict.json
 eddy revise-design <job-id> design-contract-revision.json
 ```
 
@@ -133,23 +146,28 @@ eddy revise-design <job-id> design-contract-revision.json
 1. Ingest read-only sources, record before hashes, and detect dual-source versus talking-head mode.
    When top-level media exists, it is the exclusive source set; nested `runs/`, `eddy-runs/`,
    `work/`, `final/`, cache, and quarantine artifacts are never re-ingested as raw footage.
-2. Transcribe to word-level timings and measure every audio silence above 0.8 seconds. Reuse only a
-   transcript cache keyed by the immutable camera SHA-256 and receipt every cache hit or miss.
+2. Transcribe to word-level timings and measure every audio silence above 0.8 seconds. Content-hash
+   every decoded audio stream, transcript, timing map, metric, caption artifact, render, and review
+   input. The filename is never a cache key; changed bytes invalidate every dependent artifact.
 3. Build the Editorial Review Ledger. Review every chunk; resolve every repeat, reset loop, false
    start, unfinished clause, separated retake, and long gap. Keep the last complete clean take by
    default. Intentional repetition requires a recorded reason.
 4. Hunt and rank three distinct proof-carrying hook angles.
 5. Build one shared body edit. Keep the final clean take by default and preserve all protected beats.
 6. Compile all body drops, non-selected retake variants, hook removals, and Short removals into
-   explicit splices. Tighten gaps above 0.2s to 0.1s, preserve word-onset pre-roll, cap unprotected
-   delivered gaps at 0.28s, and cap protected silence at 0.8s. Reuse one shared body receipt.
+   explicit sample-exact splices. When transcript timestamps conflict with waveform or energy
+   evidence, audio evidence controls the cut. Preserve leading phonemes, terminal consonants, and
+   word endings; use sequence-search parity instead of guessed offsets. Tighten gaps above 0.2s to
+   0.1s, cap unprotected delivered gaps at 0.28s, and protect declared deliberate pauses. A new shot
+   must meet speech within two frames unless the plan names a protected exception.
 7. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
 8. Compile the hash-bound frame and semantic scenes into one paused, seek-safe HyperFrames timeline.
    Render three independent openings, one body composition reused byte-for-byte, and portrait
-   compositions for Shorts. Layout changes follow the spoken argument; camera geometry and real
-   proof are part of the composition. Use hard cuts by default, continuation crossfades only for
-   continuity, semantic pushes or scale matches when meaning motivates them, and no more than two
-   brand-act wipes per Long or one per Short.
+   compositions for Shorts. Motion must cover its full intended segment: frozen tails, one-frame
+   flashes, accidental still endings, and broken boundaries fail. Layout changes follow the spoken
+   argument; camera geometry and real proof are part of the composition. Use hard cuts by default,
+   continuation crossfades only for continuity, semantic pushes or scale matches when meaning
+   motivates them, and no more than two brand-act wipes per Long or one per Short.
 9. Apply every declared hook-scoped privacy mask to the deterministic Long render. Validate its
    delivered-relative range and 1920x1080 rectangle, render it before audio work, and block the
    attempt if the redacted artifact is missing. Never alter the immutable raw source.
@@ -165,18 +183,22 @@ eddy revise-design <job-id> design-contract-revision.json
    prior green Studio Sound result only when the exact pre-audio MP4 hash,
    cached output hash, private provenance, and effect-survival receipt validate. Re-transcribe and QA
    cache hits normally. Never silently substitute local processing.
-11. Render quality-gated Shorts from source-locked camera/screen inputs with progressive captions:
+11. Longs have no designed captions unless the Project Fact Brief opts in. Render quality-gated
+    Shorts from source-locked camera/screen inputs with progressive captions:
     prior words stay visible, the active word is highlighted, and future words stay invisible.
-    Suppress Eddy captions wherever the source screen already carries readable captions. Project
-    every word through the exact splice receipt and verify against a fresh delivered transcript.
+    Multi-speaker Shorts use stable accessible colors plus concise labels. Suppress Eddy captions
+    wherever the source screen already carries readable captions. Project every word through the
+    exact splice receipt, snap caption onsets after every splice/retime, and verify against a fresh
+    delivered transcript.
 12. Iterate with proxies; render full resolution only after the final plan is green.
 13. Mix documented license-safe upbeat lo-fi music and restrained state-change SFX. Record source,
     licence, cue, purpose, and mix level. Missing suitable audio blocks; never retrieve paid audio
     silently. Grade camera footage for natural skin, exposure, white balance, and shot consistency
     while preserving screen-recording color fidelity.
-14. Re-transcribe every emitted long and Short. Complete at least three full watch/critique/repair
-    passes, change strategy after any failed attempt, and continue until the mechanically recomputed
-    rubric is 100/100 or an exact blocker remains.
+14. Re-transcribe every emitted Long and Short. Complete at least three full watch/critique/repair
+    passes, then perform the independent full ear/eye review. Change strategy after any failed
+    attempt and continue until the mechanically recomputed rubric is 100/100 or an exact blocker
+    remains. A model statement is never proof.
 
 ## Hard gates
 
@@ -191,12 +213,20 @@ eddy revise-design <job-id> design-contract-revision.json
   unresolved repetition survives the delivered transcript. A deliberate callback is exempt only
   when its delivered variants match the exact source-ledger candidate reviewed as intentional.
 - Word onsets are audible; gap, silence, loudness, clipping, and A/V drift gates pass.
+- Sample-exact splice parity, waveform cut authority, shot-entry latency, terminal word edges, and
+  delivered-stem caption onsets pass after every repair.
 - Descript duration parity and Effect-Survival Gate pass on the delivered audio.
 - Screen/camera geometry, transcript-synchronous caption timing, proof assets, rendered contextual
   motion placement, Shorts source/style locks, 25% source-mapped screen proof, and motion activity at
   10 fps pass.
 - Burned Shorts preserve sentence-ending periods, question marks, and exclamation marks. Stray
   decorative punctuation stays suppressed, and a generated-token proof blocks missing endings.
+- Motion covers each planned segment through its final frame. Frozen tails, flashes, accidental
+  stills, incorrect arrows, obstructed proof, and out-of-safe-zone elements are objective failures.
+- Every factual product/site view is either a pixel-faithful real capture or an evidence-bound
+  reconstruction whose internal receipt says `evidence_kind: reconstructed`.
+- `verifier-review.json` covers a full watch and listen of three Longs and 3-5 Shorts;
+  `open-items.json` has no objective entries; optional subjective alternatives are labeled.
 - A completed Short privacy repair may change pixels only: it preserves every Long hash and the
   proven Studio Sound audio stream byte-for-byte, proves each solid mask at its midpoint, and updates
   the artifact manifest before promotion.
@@ -216,6 +246,9 @@ and must not print credentials.
 
 ## Outputs
 
-Successful runs write `final/long-primary.mp4`, two `final/long-alternate-<angle>.mp4` files,
-`final/shorts/`, `final/transcript.md`, `final/qa.json`, `edit-plan.json`, `spot-check.md`, and
-`receipts.jsonl`. Blocked runs return the exact blocker, quarantine path, and smallest repair action.
+Successful objective runs write `final/long-primary.mp4`, two
+`final/long-alternate-<angle>.mp4` files, `final/shorts/`, `final/transcript.md`, `final/qa.json`,
+`edit-plan.json`, `project-fact-brief.json`, `verifier-review.json`, `open-items.json`,
+`contracts/contract-bundle.json`, `spot-check.md`, and `receipts.jsonl`. Their state remains
+`proof_gated_candidate_awaiting_owner_taste` until an explicit owner verdict. Blocked runs return
+the exact blocker, quarantine path, and smallest repair action.

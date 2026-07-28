@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     edit.add_argument("source")
     edit.add_argument("--format", default="youtube")
     edit.add_argument("--profile-id", default=None)
+    edit.add_argument("--project-brief", default=None)
     options = sub.add_parser("options")
     options.add_argument("source")
     options.add_argument("--format", default="youtube")
@@ -37,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     submit.add_argument("plan", help="EditPlanV3 JSON path, or - for stdin")
     finalize = sub.add_parser("finalize")
     finalize.add_argument("job_id")
+    submit_review = sub.add_parser("submit-review")
+    submit_review.add_argument("job_id")
+    submit_review.add_argument("review", help="eddy-review-submission-v1 JSON path, or -")
     opening_candidates = sub.add_parser("opening-candidates")
     opening_candidates.add_argument("job_id")
     select_opening = sub.add_parser("select-opening")
@@ -69,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             args.source,
             format=args.format,
             profile_id=args.profile_id,
+            project_brief=args.project_brief,
         ),
         "options": lambda: service.edit_options(
             args.source,
@@ -78,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
         "packet": lambda: service.host_packet(args.job_id),
         "submit": lambda: service.host_submit(args.job_id, _read_plan(args.plan)),
         "finalize": lambda: service.finalize(args.job_id),
+        "submit-review": lambda: service.submit_review(
+            args.job_id,
+            _read_plan(args.review),
+        ),
         "opening-candidates": lambda: service.opening_candidates(args.job_id),
         "select-opening": lambda: service.select_opening(
             args.job_id, args.opening_id, reason=args.reason

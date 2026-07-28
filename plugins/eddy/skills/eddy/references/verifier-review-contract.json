@@ -1,0 +1,25 @@
+{
+  "schema_version": "verifier-review-contract-v1",
+  "review_schema": "verifier-review-v1",
+  "authority": "independent_no_edit_context",
+  "edit_authority": false,
+  "repair_review": "repaired_intervals_and_joins_plus_full_final",
+  "promotion_recommendation": "objective_green",
+  "required_output_proof": [
+    "sha256",
+    "duration_seconds",
+    "watched_seconds",
+    "listened_seconds",
+    "full_watch",
+    "full_listen",
+    "defects"
+  ],
+  "output_contract": {
+    "longs": 3,
+    "shorts_min": 3,
+    "shorts_max": 5
+  },
+  "open_items_policy": "objective_closed_subjective_optional",
+  "audience_performance": "NOT_RUN",
+  "final_state": "proof_gated_candidate_awaiting_owner_taste"
+}

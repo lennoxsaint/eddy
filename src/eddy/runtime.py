@@ -13,8 +13,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from .plan import EditPlanV3, PlanValidationError
 from .editorial import validate_editorial_review
+from .plan import EditPlanV3, PlanValidationError
+from .professional_proof import (
+    REQUIRED_PROFESSIONAL_GATES,
+    validate_open_items,
+    validate_professional_gate_receipt,
+    validate_verifier_review,
+)
 
 
 class JobState(StrEnum):
@@ -27,13 +33,22 @@ class JobState(StrEnum):
     RENDERING_PROXY = "rendering_proxy"
     ENHANCING_AUDIO = "enhancing_audio"
     RENDERING_FINAL = "rendering_final"
+    AWAITING_INDEPENDENT_REVIEW = "awaiting_independent_review"
     VERIFYING = "verifying"
+    PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE = (
+        "proof_gated_candidate_awaiting_owner_taste"
+    )
     COMPLETED = "completed"
     BLOCKED = "blocked"
     CANCELLED = "cancelled"
 
 
-TERMINAL_STATES = {JobState.COMPLETED, JobState.BLOCKED, JobState.CANCELLED}
+TERMINAL_STATES = {
+    JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE,
+    JobState.COMPLETED,
+    JobState.BLOCKED,
+    JobState.CANCELLED,
+}
 REQUIRED_FINAL_GATES = {
     "three_long_variants",
     "shared_body",
@@ -63,6 +78,14 @@ REQUIRED_FINAL_GATES = {
     *(f"privacy_masks_hook_{rank}" for rank in range(1, 4)),
     *(f"descript_effect_survival_hook_{rank}" for rank in range(1, 4)),
     *(f"deterministic_qa_hook_{rank}" for rank in range(1, 4)),
+}
+V35_REQUIRED_FINAL_GATES = REQUIRED_FINAL_GATES | {
+    "independent_verifier",
+    "objective_open_items_closed",
+    "project_fact_brief_bound",
+    "verifier_contract_bound",
+    "design_adherence_bound",
+    *REQUIRED_PROFESSIONAL_GATES,
 }
 
 
@@ -164,6 +187,37 @@ class JobManager:
                 _assert_inside(job.run_dir, contract_path)
                 if not contract_path.is_file() or _sha256(contract_path) != contract["sha256"]:
                     raise PlanValidationError("design_contract_hash_mismatch")
+            if plan.schema_version == "edit-plan-v3.5":
+                if bundle.get("schema_version") != "eddy-contract-bundle-v2":
+                    raise PlanValidationError("contract_bundle_v2_required")
+                if (
+                    plan.project_fact_brief is None
+                    or bundle.get("project_fact_brief", {}).get("sha256")
+                    != plan.project_fact_brief.get("sha256")
+                ):
+                    raise PlanValidationError("project_fact_brief_bundle_mismatch")
+        if plan.project_fact_brief is not None:
+            brief_path = (job.run_dir / str(plan.project_fact_brief["ref"])).resolve()
+            _assert_inside(job.run_dir, brief_path)
+            if (
+                not brief_path.is_file()
+                or _sha256(brief_path) != plan.project_fact_brief["sha256"]
+            ):
+                raise PlanValidationError("project_fact_brief_hash_mismatch")
+            brief = json.loads(brief_path.read_text())
+            long_captions = bool(
+                ((plan.caption_policy or {}).get("longs") or {}).get("designed_captions")
+            )
+            if long_captions != bool((brief.get("output") or {}).get("long_captions")):
+                raise PlanValidationError("long_caption_project_brief_mismatch")
+            fact_ids = {
+                str(row.get("id"))
+                for row in brief.get("facts", [])
+                if isinstance(row, dict)
+            }
+            for claim in (plan.proof_plan or {}).get("claims", []):
+                if not set(claim["factual_bindings"]).issubset(fact_ids):
+                    raise PlanValidationError("proof_plan_fact_binding_missing")
         if plan.audio_plan is not None:
             for cue in [*plan.audio_plan["music"], *plan.audio_plan["sfx"]]:
                 cue_path = (job.run_dir / str(cue["ref"])).resolve()
@@ -233,7 +287,10 @@ class JobManager:
 
     def request_owner_repair(self, job_id: str, *, reason: str) -> Job:
         job = self.load(job_id)
-        if job.state is not JobState.COMPLETED:
+        if job.state not in {
+            JobState.COMPLETED,
+            JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE,
+        }:
             raise RuntimeError(f"owner_repair_requires_completed_job:{job.state}")
         if not reason.strip():
             raise ValueError("owner_repair_reason_required")
@@ -282,6 +339,23 @@ class JobManager:
             remaining_attempts=None,
         )
         return updated
+
+    def record_owner_approval(self, job_id: str) -> Job:
+        """Move an owner-locked candidate to completed after an explicit verdict."""
+
+        job = self.load(job_id)
+        if job.state is not JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE:
+            raise RuntimeError(f"owner_approval_requires_candidate:{job.state}")
+        completed = Job(
+            job.id,
+            job.source,
+            job.snapshot,
+            job.run_dir,
+            JobState.COMPLETED,
+        )
+        self._save(completed)
+        _receipt(completed, "owner_taste_approved")
+        return completed
 
     def receipt(self, job_id: str, event: str, **details: Any) -> None:
         """Append a public, secret-safe run event from deterministic pipeline stages."""
@@ -337,7 +411,8 @@ class JobManager:
         verified_gates = {**gates, "source_lock": source_green and gates.get("source_lock", True)}
         plan_path = job.run_dir / "edit-plan.json"
         plan_payload = json.loads(plan_path.read_text()) if plan_path.is_file() else {}
-        if plan_payload.get("schema_version") == "edit-plan-v3.4":
+        schema_version = plan_payload.get("schema_version")
+        if schema_version in {"edit-plan-v3.4", "edit-plan-v3.5"}:
             evidence_gates, evidence_blockers = _production_evidence(job.run_dir, attempt)
             verified_gates.update(evidence_gates)
             binding_gates, binding_blockers = _contract_binding_evidence(
@@ -345,7 +420,26 @@ class JobManager:
                 plan_payload,
             )
             verified_gates.update(binding_gates)
-            if evidence_gates.get("production_rubric_100"):
+            if schema_version == "edit-plan-v3.5":
+                professional_gates, professional_blockers = _professional_v35_evidence(
+                    attempt
+                )
+                verified_gates.update(professional_gates)
+                blockers = [*blockers, *professional_blockers]
+                verified_gates.update(
+                    {
+                        "audio_plan_provenance": professional_gates.get(
+                            "studio_sound_lineage", False
+                        ),
+                        "music_and_sfx_mix": professional_gates.get("audio_mix", False)
+                        and professional_gates.get("shorts_music_variation", False),
+                        "camera_grade": professional_gates.get("camera_grade", False),
+                        "screen_color_fidelity": professional_gates.get(
+                            "screen_color_fidelity", False
+                        ),
+                    }
+                )
+            elif evidence_gates.get("production_rubric_100"):
                 verified_gates.update(
                     {
                         "audio_plan_provenance": True,
@@ -360,7 +454,7 @@ class JobManager:
             bundle_path = job.run_dir / "contracts" / "contract-bundle.json"
             if bundle_path.is_file():
                 profile_id = json.loads(bundle_path.read_text()).get("profile", {}).get("id")
-                if profile_id == "lennox-professional-youtube-v1":
+                if profile_id == "lennox-professional-youtube-v2":
                     blockers = [
                         *blockers,
                         "legacy_plan_cannot_claim_lennox_profile_completion",
@@ -372,7 +466,12 @@ class JobManager:
                         "rubric_evidence_complete",
                     ):
                         verified_gates[gate] = False
-        missing_gates = sorted(REQUIRED_FINAL_GATES - set(verified_gates))
+        required_gates = (
+            V35_REQUIRED_FINAL_GATES
+            if schema_version == "edit-plan-v3.5"
+            else REQUIRED_FINAL_GATES
+        )
+        missing_gates = sorted(required_gates - set(verified_gates))
         verified_blockers = list(
             dict.fromkeys(
                 blockers
@@ -399,8 +498,19 @@ class JobManager:
             if final.exists():
                 raise RuntimeError("final_already_exists")
             shutil.move(str(attempt), str(final))
-            updated = Job(job.id, job.source, job.snapshot, job.run_dir, JobState.COMPLETED)
-            _receipt(updated, "proof_gated_edit_completed", **contract_bindings)
+            final_state = (
+                JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE
+                if schema_version == "edit-plan-v3.5"
+                else JobState.COMPLETED
+            )
+            updated = Job(job.id, job.source, job.snapshot, job.run_dir, final_state)
+            _receipt(
+                updated,
+                "proof_gated_candidate_ready"
+                if schema_version == "edit-plan-v3.5"
+                else "proof_gated_edit_completed",
+                **contract_bindings,
+            )
         else:
             quarantine = job.run_dir / "quarantine" / attempt.name
             quarantine.parent.mkdir(parents=True, exist_ok=True)
@@ -501,7 +611,7 @@ def _production_evidence(
     run_dir: Path,
     attempt: Path,
 ) -> tuple[dict[str, bool], list[str]]:
-    """Mechanically recompute v3.4 completion gates from bounded evidence files."""
+    """Mechanically recompute shared production gates from bounded evidence files."""
 
     gates = {
         "minimum_three_complete_review_passes": False,
@@ -600,6 +710,96 @@ def _production_evidence(
     return gates, blockers
 
 
+def _professional_v35_evidence(
+    attempt: Path,
+) -> tuple[dict[str, bool], list[str]]:
+    """Recompute v3.5 gates from independent, hash-bound review artifacts."""
+
+    gates = {
+        **{gate: False for gate in REQUIRED_PROFESSIONAL_GATES},
+        "independent_verifier": False,
+        "objective_open_items_closed": False,
+    }
+    blockers: list[str] = []
+    paths = {
+        "professional_gates": attempt / "professional-gates.json",
+        "verifier_review": attempt / "verifier-review.json",
+        "open_items": attempt / "open-items.json",
+    }
+    payloads: dict[str, dict[str, Any]] = {}
+    for label, path in paths.items():
+        if not path.is_file():
+            blockers.append(f"{label}_missing")
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            blockers.append(f"{label}_invalid")
+            continue
+        if not isinstance(payload, dict):
+            blockers.append(f"{label}_invalid")
+            continue
+        payloads[label] = payload
+    professional = payloads.get("professional_gates")
+    if professional is not None:
+        try:
+            gates.update(validate_professional_gate_receipt(attempt, professional))
+        except ValueError as exc:
+            blockers.append(str(exc))
+    verifier = payloads.get("verifier_review")
+    if verifier is not None:
+        try:
+            validate_verifier_review(attempt, verifier)
+            gates["independent_verifier"] = True
+        except ValueError as exc:
+            blockers.append(str(exc))
+    open_items = payloads.get("open_items")
+    if open_items is not None:
+        try:
+            validate_open_items(open_items)
+            gates["objective_open_items_closed"] = True
+        except ValueError as exc:
+            blockers.append(str(exc))
+
+    review_path = attempt / "review-passes.json"
+    if review_path.is_file():
+        try:
+            review = json.loads(review_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            review = {}
+        for index, row in enumerate(review.get("passes", []), start=1):
+            evidence = row.get("watch_evidence") if isinstance(row, dict) else None
+            if not isinstance(evidence, dict):
+                blockers.append(f"review_pass_evidence_not_hash_bound:{index}")
+                gates["independent_verifier"] = False
+                continue
+            try:
+                _validate_review_evidence(attempt, evidence)
+            except ValueError as exc:
+                blockers.append(f"{exc}:{index}")
+                gates["independent_verifier"] = False
+    score_path = attempt / "production-score.json"
+    if score_path.is_file():
+        try:
+            score = json.loads(score_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            score = {}
+        for row in score.get("checks", []):
+            if not isinstance(row, dict):
+                continue
+            for evidence in row.get("evidence", []):
+                if not isinstance(evidence, dict):
+                    blockers.append("rubric_evidence_not_hash_bound")
+                    gates["rubric_evidence_complete"] = False
+                    continue
+                try:
+                    _validate_review_evidence(attempt, evidence)
+                except ValueError as exc:
+                    blockers.append(str(exc))
+                    gates["rubric_evidence_complete"] = False
+    return gates, list(dict.fromkeys(blockers))
+
+
 def _contract_receipt_fields(job: Job) -> dict[str, Any]:
     bundle_path = job.run_dir / "contracts" / "contract-bundle.json"
     if not bundle_path.is_file():
@@ -607,13 +807,27 @@ def _contract_receipt_fields(job: Job) -> dict[str, Any]:
     bundle = json.loads(bundle_path.read_text())
     design = bundle.get("design_contracts", {})
     profile = bundle.get("profile", {})
+    quality = bundle.get("quality_evidence", {})
     return {
         "contract_bundle_sha256": _sha256(bundle_path),
         "quality_profile_id": profile.get("id"),
         "quality_profile_sha256": profile.get("sha256"),
+        "project_fact_brief_sha256": (
+            bundle.get("project_fact_brief") or {}
+        ).get("sha256"),
         "design_sha256": (design.get("design") or {}).get("sha256"),
         "long_frame_sha256": (design.get("long_frame") or {}).get("sha256"),
         "short_frame_sha256": (design.get("short_frame") or {}).get("sha256"),
+        "rubric_sha256": (quality.get("rubric") or {}).get("sha256"),
+        "correction_evals_sha256": (
+            quality.get("correction_evals") or {}
+        ).get("sha256"),
+        "verifier_contract_sha256": (
+            quality.get("verifier_contract") or {}
+        ).get("sha256"),
+        "design_adherence_sha256": (
+            quality.get("design_adherence") or {}
+        ).get("sha256"),
     }
 
 
@@ -643,7 +857,11 @@ def _contract_binding_evidence(
         and bool(profile["id"])
         and profile_payload.get("id") == profile["id"]
         and profile_payload.get("schema_version")
-        in {"eddy-quality-profile-v1", "eddy-quality-profile-v2"}
+        in {
+            "eddy-quality-profile-v1",
+            "eddy-quality-profile-v2",
+            "eddy-quality-profile-v3",
+        }
         and _sha256(profile_path) == profile.get("sha256")
     )
     design_rows = bundle.get("design_contracts", {})
@@ -676,10 +894,61 @@ def _contract_binding_evidence(
             if isinstance(row, dict)
         )
     )
+    if bundle.get("schema_version") == "eddy-contract-bundle-v2":
+        fact = bundle.get("project_fact_brief", {})
+        fact_path = run_dir / str(fact.get("ref", "missing"))
+        gates["project_fact_brief_bound"] = (
+            fact.get("schema_version") == "eddy-project-fact-brief-ref-v1"
+            and fact_path.is_file()
+            and _sha256(fact_path) == fact.get("sha256")
+        )
+        verifier = (bundle.get("quality_evidence") or {}).get(
+            "verifier_contract",
+            {},
+        )
+        verifier_path = run_dir / str(verifier.get("ref", "missing"))
+        gates["verifier_contract_bound"] = (
+            verifier_path.is_file()
+            and _sha256(verifier_path) == verifier.get("sha256")
+        )
+        adherence = (bundle.get("quality_evidence") or {}).get(
+            "design_adherence",
+            {},
+        )
+        adherence_path = run_dir / str(adherence.get("ref", "missing"))
+        try:
+            adherence_payload = json.loads(adherence_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            adherence_payload = {}
+        gates["design_adherence_bound"] = (
+            adherence_path.is_file()
+            and _sha256(adherence_path) == adherence.get("sha256")
+            and adherence_payload.get("schema_version") == "eddy-design-adherence-v1"
+            and adherence_payload.get("pass") is True
+            and all(
+                (adherence_payload.get("files") or {}).get(label, {}).get("sha256")
+                == row.get("sha256")
+                for label, row in design_rows.items()
+            )
+        )
     for gate, passed in gates.items():
         if not passed:
             blockers.append(f"{gate}_invalid")
     return gates, blockers
+
+
+def _validate_review_evidence(attempt: Path, value: dict[str, Any]) -> None:
+    ref = value.get("ref")
+    if not isinstance(ref, str) or not ref.strip():
+        raise ValueError("review_pass_evidence_ref_invalid")
+    path_ref = Path(ref.split("#", 1)[0])
+    if path_ref.is_absolute() or ".." in path_ref.parts:
+        raise ValueError("review_pass_evidence_ref_invalid")
+    path = attempt / path_ref
+    if not path.is_file():
+        raise ValueError("review_pass_evidence_missing")
+    if value.get("sha256") != _sha256(path):
+        raise ValueError("review_pass_evidence_hash_mismatch")
 
 
 def _evidence_ref_exists(run_dir: Path, attempt: Path, raw_ref: str) -> bool:

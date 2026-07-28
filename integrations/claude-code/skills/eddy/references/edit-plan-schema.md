@@ -1,22 +1,31 @@
 # EditPlanV3 schema
 
-## Current: `edit-plan-v3.4`
+## Current: `edit-plan-v3.5`
 
-V3.4 retains the complete v3.3 body structure and adds:
+V3.5 retains v3.4 and binds the Project Fact Brief, Studio Sound policy, cut-integrity
+authority, factual proof routing, independent review, and owner-locked promotion:
 
 ```json
 {
-  "schema_version": "edit-plan-v3.4",
+  "schema_version": "edit-plan-v3.5",
   "contract_bundle": {
-    "schema_version": "eddy-contract-bundle-ref-v1",
+    "schema_version": "eddy-contract-bundle-ref-v2",
     "ref": "contracts/contract-bundle.json",
     "sha256": "<sha256>"
   },
+  "project_fact_brief": {
+    "schema_version": "eddy-project-fact-brief-ref-v1",
+    "ref": "project-fact-brief.json",
+    "sha256": "<sha256>"
+  },
   "audio_plan": {
-    "schema_version": "eddy-audio-plan-v1",
+    "schema_version": "eddy-audio-plan-v2",
     "music": [{"ref": "assets/audio/music.wav", "provenance": "local", "license": "owned", "cue": "0-end", "purpose": "upbeat_lofi_bed", "mix_db": -24}],
     "sfx": [{"ref": "assets/audio/click.wav", "provenance": "bundled", "license": "CC0", "cue": "12.4", "purpose": "state_change", "mix_db": -18}],
-    "paid_retrieval_allowed": false
+    "paid_retrieval_allowed": false,
+    "studio_sound_required": true,
+    "studio_sound_lineage_policy": "verified_descript_only",
+    "shorts_music_policy": "purposeful_variation"
   },
   "grade_plan": {
     "schema_version": "eddy-grade-plan-v1",
@@ -25,27 +34,61 @@ V3.4 retains the complete v3.3 body structure and adds:
     "shot_checks": ["camera-a"]
   },
   "caption_policy": {
-    "schema_version": "eddy-caption-policy-v1",
-    "prior_words": "visible",
-    "active_word": "highlighted",
-    "future_words": "invisible",
-    "source_caption_collision": "suppress_eddy_captions"
+    "schema_version": "eddy-caption-policy-v2",
+    "longs": {"default": "disabled", "designed_captions": false},
+    "shorts": {
+      "prior_words": "visible",
+      "active_word": "highlighted",
+      "future_words": "invisible",
+      "source_caption_collision": "suppress_eddy_captions",
+      "speaker_attribution": "color_plus_label",
+      "speaker_colors": "design_contract_accessible_palette",
+      "source_caption_intervals": {}
+    }
   },
   "production_review": {
-    "schema_version": "eddy-production-review-v1",
+    "schema_version": "eddy-production-review-v2",
     "minimum_complete_passes": 3,
     "target_score": 100,
     "maximum_score": 100,
     "audience_performance": "NOT_RUN",
     "final_authority": "owner_taste_lock",
     "repair_policy": "change_strategy_until_green_or_exact_blocker",
-    "strategy_id": "opening-proof-route-v1"
+    "strategy_id": "opening-proof-route-v1",
+    "verifier_authority": "independent_no_edit_context",
+    "verifier_edit_authority": false,
+    "repair_review_policy": "repaired_intervals_and_joins_plus_full_final",
+    "promotion_state": "proof_gated_candidate_awaiting_owner_taste",
+    "open_items_policy": "objective_closed_subjective_optional"
+  },
+  "cut_integrity_plan": {
+    "schema_version": "eddy-cut-integrity-plan-v1",
+    "timing_authority": "waveform_energy_envelope_when_transcript_conflicts",
+    "sample_exact_splices": true,
+    "sequence_search_parity": true,
+    "word_edge_protection": true,
+    "delivered_retranscription": true,
+    "shot_entry_latency_max_frames": 2,
+    "protected_exception_ids": []
+  },
+  "proof_plan": {
+    "schema_version": "eddy-proof-plan-v1",
+    "real_capture_preferred": true,
+    "reconstruction_receipt_required": true,
+    "claims": [],
+    "annotation_targets": []
   }
 }
 ```
 
-Legacy readers through v3.3 remain accepted. A legacy plan cannot claim the
-`lennox-professional-youtube-v1` completion state.
+Readers through v3.4 remain accepted. A legacy plan cannot claim
+`lennox-professional-youtube-v2` or the new owner-locked proof state.
+
+## Legacy production contract: `edit-plan-v3.4`
+
+V3.4 uses `eddy-contract-bundle-ref-v1`, `eddy-audio-plan-v1`,
+`eddy-caption-policy-v1`, and `eddy-production-review-v1`. It remains reproducible but does not
+inherit v3.5 proof semantics.
 
 `edit-plan.json` is the host-authored editorial contract consumed by `eddy_host_submit`. It selects
 source evidence; it never contains generated speech or packaging.

@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from eddy.design_contracts import create_contract_bundle, revise_contract_bundle
+from eddy.design_contracts import (
+    DesignContractError,
+    create_contract_bundle,
+    revise_contract_bundle,
+)
 from eddy.quality import (
     QualityContractError,
     resolve_quality_profile,
@@ -71,9 +75,14 @@ def test_correction_evals_cover_recovered_professional_failures() -> None:
 
 def test_profile_resolution_prefers_explicit_then_owner_then_generic(tmp_path: Path) -> None:
     owner = tmp_path / "owner-channel.json"
-    owner.write_text(json.dumps({"profile_id": "lennox-professional-youtube-v1"}))
+    owner.write_text(json.dumps({"profile_id": "lennox-professional-youtube-v2"}))
 
     owner_profile, _ = resolve_quality_profile(ROOT, owner_state_path=owner)
+    explicit_legacy, _ = resolve_quality_profile(
+        ROOT,
+        explicit_profile_id="lennox-professional-youtube-v1",
+        owner_state_path=owner,
+    )
     explicit_generic, _ = resolve_quality_profile(
         ROOT,
         explicit_profile_id="creator_good_v1",
@@ -82,7 +91,8 @@ def test_profile_resolution_prefers_explicit_then_owner_then_generic(tmp_path: P
     owner.unlink()
     generic, _ = resolve_quality_profile(ROOT, owner_state_path=owner)
 
-    assert owner_profile["id"] == "lennox-professional-youtube-v1"
+    assert owner_profile["id"] == "lennox-professional-youtube-v2"
+    assert explicit_legacy["id"] == "lennox-professional-youtube-v1"
     assert explicit_generic["id"] == "creator_good_v1"
     assert generic["id"] == "creator_good_v1"
 
@@ -381,10 +391,14 @@ def test_design_revision_increments_hash_and_invalidates_dependent_renders(
     assert evidence_blockers == []
 
     old_design_hash = created["design_contracts"]["design"]["sha256"]
+    revised_design = (run / "design.md").read_text().replace(
+        'accent: "#7C5CFF"',
+        'accent: "#FF6B35"',
+    )
     revised = revise_contract_bundle(
         run,
         reason="The proof labels need a larger mobile-safe scale.",
-        design_markdown="---\nschema_version: eddy-design-contract-v1\nrevision: 2\n---\n",
+        design_markdown=revised_design,
     )
 
     assert revised["design_contracts"]["design"]["revision"] == 2
@@ -392,3 +406,42 @@ def test_design_revision_increments_hash_and_invalidates_dependent_renders(
     assert revised["invalidation"]["dependent_renders_invalidated"] is True
     bundle = json.loads((run / "contracts" / "contract-bundle.json").read_text())
     assert bundle["revision_history"][0]["reason"].startswith("The proof labels")
+    adherence = json.loads((run / "contracts" / "design-adherence.json").read_text())
+    assert adherence["pass"] is True
+
+
+def test_design_revision_rejects_contract_that_drops_normative_rules(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "camera.mp4").write_bytes(b"raw")
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "source-lock.json").write_text(
+        json.dumps({"before": {"camera.mp4": "a" * 64}, "snapshot": {}, "after": None})
+    )
+    profile, profile_path = resolve_quality_profile(
+        ROOT,
+        explicit_profile_id="lennox-professional-youtube-v2",
+        owner_state_path=tmp_path / "missing-owner.json",
+    )
+    create_contract_bundle(
+        run,
+        source=source,
+        canonical_root=ROOT,
+        profile=profile,
+        profile_path=profile_path,
+        source_hashes={"camera.mp4": "a" * 64},
+        hyperframes_root=tmp_path / "missing-hyperframes",
+    )
+
+    with pytest.raises(
+        DesignContractError,
+        match="design_adherence_failed",
+    ):
+        revise_contract_bundle(
+            run,
+            reason="Replace the design with an incomplete card.",
+            design_markdown="# Not a normative design contract\n",
+        )

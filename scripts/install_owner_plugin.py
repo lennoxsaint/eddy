@@ -69,7 +69,7 @@ def install(*, dry_run: bool) -> dict[str, object]:
         OWNER_STATE,
         {
             "schema_version": "eddy-owner-channel-v1",
-            "profile_id": "lennox-professional-youtube-v1",
+            "profile_id": "lennox-professional-youtube-v2",
             "canonical_root": str(ROOT),
             "canonical_commit": commit,
             "python": str(python),

@@ -78,6 +78,7 @@ def validate_frame_contract(value: object) -> dict[str, Any]:
     if value.get("schema_version") not in {
         "eddy-project-frame-v1",
         "eddy-project-frame-v2",
+        "eddy-project-frame-v3",
     }:
         raise ChoreographyValidationError("frame_contract_schema_invalid")
     ref = value.get("ref")

@@ -38,7 +38,7 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     cancelled = service.cancel_job(started["job_id"])
 
     assert status["state"] == "awaiting_host_plan"
-    assert packet["schema_version"] == "eddy-host-packet-v3.1"
+    assert packet["schema_version"] == "eddy-host-packet-v3.2"
     assert packet["source_hashes"]
     assert packet["editorial_ledger"]["chunks"][0]["id"] == "chunk-001"
     assert packet["motion_requirements"]["shorts"]["minimum_animated_beats"] == 2
@@ -47,13 +47,14 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["motion_requirements"]["longs"]["adaptive_cadence"]["hard_max_seconds"] == 12
     assert packet["motion_requirements"]["visual_choreography"]["opening_timelines"] == 3
     assert "speaker_edge_right" in packet["motion_requirements"]["visual_choreography"]["layouts"]
-    assert packet["edit_plan_schema"] == "edit-plan-v3.4"
+    assert packet["edit_plan_schema"] == "edit-plan-v3.5"
     assert packet["accepted_edit_plan_schemas"] == [
         "edit-plan-v3",
         "edit-plan-v3.1",
         "edit-plan-v3.2",
         "edit-plan-v3.3",
         "edit-plan-v3.4",
+        "edit-plan-v3.5",
     ]
     assert packet["requirements"]["body_structure_contract"]["schema_version"] == "eddy-body-structure-v1"
     assert packet["requirements"]["body_structure_contract"]["section_count"] == [3, 5]

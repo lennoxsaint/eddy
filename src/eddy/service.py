@@ -19,7 +19,9 @@ from .design_contracts import create_contract_bundle, revise_contract_bundle
 from .feedback import record_owner_feedback
 from .owner_plugin import owner_plugin_status
 from .privacy_repair import repair_short_privacy
+from .project_brief import materialize_project_fact_brief
 from .quality import resolve_quality_profile
+from .review_submission import write_review_submission
 from .runtime import JobManager, JobState
 from .sync import CANONICAL_SURFACES, canonical_surface_commit, check_projection
 from .support import create_support_bundle
@@ -79,6 +81,7 @@ class EddyService:
         *,
         format: str = "youtube",
         profile_id: str | None = None,
+        project_brief: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.edit_options(source, format=format, profile_id=profile_id)
         profile, profile_path = resolve_quality_profile(
@@ -87,6 +90,11 @@ class EddyService:
         )
         job = self.manager.start(Path(source))
         source_lock = json.loads((job.run_dir / "source-lock.json").read_text())
+        project_fact_brief = materialize_project_fact_brief(
+            job.run_dir,
+            source=job.source,
+            explicit=project_brief,
+        )
         create_contract_bundle(
             job.run_dir,
             source=job.source,
@@ -94,6 +102,7 @@ class EddyService:
             profile=profile,
             profile_path=profile_path,
             source_hashes=source_lock["before"],
+            project_fact_brief=project_fact_brief,
         )
         created_bundle = json.loads(
             (job.run_dir / "contracts" / "contract-bundle.json").read_text()
@@ -109,6 +118,7 @@ class EddyService:
             design_sha256=created_bundle["design_contracts"]["design"]["sha256"],
             long_frame_sha256=created_bundle["design_contracts"]["long_frame"]["sha256"],
             short_frame_sha256=created_bundle["design_contracts"]["short_frame"]["sha256"],
+            project_fact_brief_sha256=created_bundle["project_fact_brief"]["sha256"],
         )
         if self.auto_prepare:
             self._launch_worker("prepare", job.id)
@@ -146,6 +156,7 @@ class EddyService:
             raise RuntimeError("contract_bundle_missing")
         bundle = json.loads(bundle_path.read_text())
         quality_profile_path = job.run_dir / str(bundle["profile"]["ref"])
+        project_fact_path = job.run_dir / str(bundle["project_fact_brief"]["ref"])
         frame_path = job.run_dir / "frame.md"
         short_frame_path = job.run_dir / "shorts" / "frame.md"
         design_path = job.run_dir / "design.md"
@@ -154,7 +165,7 @@ class EddyService:
         design_sha256 = hashlib.sha256(design_path.read_bytes()).hexdigest()
         bundle_sha256 = hashlib.sha256(bundle_path.read_bytes()).hexdigest()
         return {
-            "schema_version": "eddy-host-packet-v3.1",
+            "schema_version": "eddy-host-packet-v3.2",
             "job_id": job.id,
             "state": job.state.value,
             "source_hashes": source_lock["before"],
@@ -231,7 +242,8 @@ class EddyService:
                     "evidence_authority": [
                         "raw_source",
                         "supplied_asset",
-                        "pixel_faithful_demo",
+                        "pixel_faithful_capture",
+                        "fact_bound_reconstruction",
                         "diagram",
                         "metaphor",
                     ],
@@ -254,37 +266,38 @@ class EddyService:
                 if (job.run_dir / "repair-packet.json").exists()
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
-            "edit_plan_schema": "edit-plan-v3.4",
+            "edit_plan_schema": "edit-plan-v3.5",
             "accepted_edit_plan_schemas": [
                 "edit-plan-v3",
                 "edit-plan-v3.1",
                 "edit-plan-v3.2",
                 "edit-plan-v3.3",
                 "edit-plan-v3.4",
+                "edit-plan-v3.5",
             ],
             "frame_contract": {
-                "schema_version": "eddy-project-frame-v2",
+                "schema_version": "eddy-project-frame-v3",
                 "path": str(frame_path),
                 "ref": "frame.md",
                 "sha256": frame_sha256,
             },
             "design_contracts": {
                 "design": {
-                    "schema_version": "eddy-design-contract-v1",
+                    "schema_version": "eddy-design-contract-v2",
                     "path": str(design_path),
                     "ref": "design.md",
                     "sha256": design_sha256,
                     "revision": bundle["design_contracts"]["design"]["revision"],
                 },
                 "long_frame": {
-                    "schema_version": "eddy-project-frame-v2",
+                    "schema_version": "eddy-project-frame-v3",
                     "path": str(frame_path),
                     "ref": "frame.md",
                     "sha256": frame_sha256,
                     "revision": bundle["design_contracts"]["long_frame"]["revision"],
                 },
                 "short_frame": {
-                    "schema_version": "eddy-project-frame-v2",
+                    "schema_version": "eddy-project-frame-v3",
                     "path": str(short_frame_path),
                     "ref": "shorts/frame.md",
                     "sha256": short_frame_sha256,
@@ -292,12 +305,37 @@ class EddyService:
                 },
             },
             "contract_bundle": {
-                "schema_version": "eddy-contract-bundle-ref-v1",
+                "schema_version": "eddy-contract-bundle-ref-v2",
                 "path": str(bundle_path),
                 "ref": "contracts/contract-bundle.json",
                 "sha256": bundle_sha256,
             },
+            "contract_hashes": {
+                "profile": bundle["profile"]["sha256"],
+                "project_fact_brief": bundle["project_fact_brief"]["sha256"],
+                "design": bundle["design_contracts"]["design"]["sha256"],
+                "long_frame": bundle["design_contracts"]["long_frame"]["sha256"],
+                "short_frame": bundle["design_contracts"]["short_frame"]["sha256"],
+                "rubric": bundle["quality_evidence"]["rubric"]["sha256"],
+                "correction_evals": bundle["quality_evidence"]["correction_evals"][
+                    "sha256"
+                ],
+                "verifier_contract": bundle["quality_evidence"]["verifier_contract"][
+                    "sha256"
+                ],
+                "design_adherence": bundle["quality_evidence"]["design_adherence"][
+                    "sha256"
+                ],
+            },
             "quality_profile": json.loads(quality_profile_path.read_text()),
+            "project_fact_brief": json.loads(project_fact_path.read_text()),
+            "project_fact_brief_ref": bundle["project_fact_brief"],
+            "verifier_contract": json.loads(
+                (
+                    job.run_dir
+                    / str(bundle["quality_evidence"]["verifier_contract"]["ref"])
+                ).read_text()
+            ),
             "audio_policy": bundle["audio_policy"],
             "caption_policy": json.loads(quality_profile_path.read_text())["captions"],
             "grade_policy": json.loads(quality_profile_path.read_text()).get("grade", {}),
@@ -326,6 +364,7 @@ class EddyService:
             "edit-plan-v3.2",
             "edit-plan-v3.3",
             "edit-plan-v3.4",
+            "edit-plan-v3.5",
         }:
             opening_selection = self.opening_candidates(job_id)
             result = {**self._job_payload(self.manager.load(job_id)), "opening_selection": opening_selection}
@@ -344,10 +383,14 @@ class EddyService:
         if job.state not in {
             JobState.AWAITING_HOST_PLAN,
             JobState.AWAITING_HOST_REPAIR,
+            JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE,
             JobState.COMPLETED,
         }:
             raise RuntimeError(f"design_contract_revision_unavailable:{job.state}")
-        if job.state is JobState.COMPLETED:
+        if job.state in {
+            JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE,
+            JobState.COMPLETED,
+        }:
             job = self.manager.request_owner_repair(
                 job_id,
                 reason=f"systemic_design_contract_repair:{reason}",
@@ -439,7 +482,12 @@ class EddyService:
         plan_path = self.manager.load(job_id).run_dir / "edit-plan.json"
         if plan_path.exists():
             plan = json.loads(plan_path.read_text())
-            if plan.get("schema_version") in {"edit-plan-v3.2", "edit-plan-v3.3"}:
+            if plan.get("schema_version") in {
+                "edit-plan-v3.2",
+                "edit-plan-v3.3",
+                "edit-plan-v3.4",
+                "edit-plan-v3.5",
+            }:
                 selection = plan_path.parent / "opening-selection.json"
                 if not selection.exists():
                     ranking = self.opening_candidates(job_id)
@@ -453,9 +501,47 @@ class EddyService:
             raise
         return {**self._job_payload(job), "worker": "started"}
 
+    def submit_review(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record independent proof and mechanically promote or reopen the run."""
+
+        job = self.manager.load(job_id)
+        if job.state is not JobState.AWAITING_INDEPENDENT_REVIEW:
+            raise RuntimeError(f"job_not_awaiting_independent_review:{job.state}")
+        attempts = sorted(
+            (job.run_dir / "work").glob("attempt-*"),
+            key=lambda path: int(path.name.rsplit("-", 1)[-1]),
+        )
+        if not attempts:
+            raise RuntimeError("review_attempt_missing")
+        attempt = attempts[-1]
+        written = write_review_submission(attempt, payload)
+        qa_path = attempt / "qa.json"
+        if not qa_path.is_file():
+            raise RuntimeError("review_attempt_qa_missing")
+        qa = json.loads(qa_path.read_text())
+        self.manager.receipt(
+            job_id,
+            "independent_review_submitted",
+            attempt=attempt.name,
+            artifacts=written,
+        )
+        self.manager.transition(job_id, JobState.VERIFYING)
+        result = self.manager.record_verification(
+            job_id,
+            attempt=attempt,
+            gates=dict(qa.get("gates", {})),
+            blockers=list(qa.get("blockers", [])),
+        )
+        return self._job_payload(result)
+
     def cancel_job(self, job_id: str) -> dict[str, Any]:
         job = self.manager.load(job_id)
-        if job.state in {JobState.COMPLETED, JobState.BLOCKED, JobState.CANCELLED}:
+        if job.state in {
+            JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE,
+            JobState.COMPLETED,
+            JobState.BLOCKED,
+            JobState.CANCELLED,
+        }:
             return self._job_payload(job)
         self._terminate_worker(job_id)
         return self._job_payload(self.manager.cancel(job_id))
@@ -479,6 +565,12 @@ class EddyService:
 
     def record_feedback(self, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         job = self.manager.load(job_id)
+        if (
+            job.state is JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE
+            and payload.get("verdict") in {"approved", "approved_after_repair"}
+            and payload.get("schema_version") != "owner-verdict-v2"
+        ):
+            raise ValueError("owner_verdict_v2_required_for_profile_v2_candidate")
         result = record_owner_feedback(job.run_dir, job_id, payload)
         feedback = result["feedback"]
         if feedback["verdict"] == "changes_requested":
@@ -490,6 +582,11 @@ class EddyService:
                 )
             reopened = self.manager.request_owner_repair(job_id, reason=reason)
             result["job"] = self._job_payload(reopened)
+        elif feedback["verdict"] in {"approved", "approved_after_repair"}:
+            current = self.manager.load(job_id)
+            if current.state is JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE:
+                completed = self.manager.record_owner_approval(job_id)
+                result["job"] = self._job_payload(completed)
         return result
 
     def sync_doctor(self) -> dict[str, Any]:
@@ -616,17 +713,22 @@ class EddyService:
             claim.unlink(missing_ok=True)
 
     def _job_payload(self, job: Any) -> dict[str, Any]:
-        if job.state is JobState.COMPLETED:
-            proof_state = "final_qa_passed"
+        owner_approved = _owner_approved(
+            self.canonical_root / "dogfood" / "trust-ledger.json", job.id
+        ) or _run_owner_approved(job.run_dir)
+        if job.state is JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE:
+            proof_state = "proof_gated_candidate_awaiting_owner_taste"
+            owner_approved = False
+        elif job.state is JobState.COMPLETED and owner_approved:
+            proof_state = "owner_taste_approved"
+        elif job.state is JobState.COMPLETED:
+            proof_state = "legacy_final_qa_passed"
         elif job.state is JobState.BLOCKED and (job.run_dir / "quarantine").exists():
             proof_state = "quarantined"
         elif job.state is JobState.BLOCKED:
             proof_state = "blocked_before_candidate"
         else:
             proof_state = "candidate"
-        owner_approved = _owner_approved(
-            self.canonical_root / "dogfood" / "trust-ledger.json", job.id
-        )
         return {
             "job_id": job.id,
             "state": job.state.value,
@@ -661,4 +763,18 @@ def _owner_approved(ledger: Path, job_id: str) -> bool:
         row.get("id") == job_id and row.get("owner_approved") is True
         for row in payload.get("runs", [])
         if isinstance(row, dict)
+    )
+
+
+def _run_owner_approved(run_dir: Path) -> bool:
+    verdict = run_dir / "review" / "owner-verdict.json"
+    if not verdict.is_file():
+        return False
+    try:
+        payload = json.loads(verdict.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+    return (
+        payload.get("schema_version") == "owner-verdict-v2"
+        and payload.get("verdict") in {"approved", "approved_after_repair"}
     )
