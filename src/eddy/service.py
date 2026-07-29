@@ -28,6 +28,44 @@ from .support import create_support_bundle
 from .trust import trust_status
 
 
+def _worker_inspection_command(pid: int, platform_name: str) -> list[str]:
+    if platform_name == "nt":
+        return [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            (
+                "(Get-CimInstance Win32_Process "
+                f'-Filter "ProcessId = {pid}").CommandLine'
+            ),
+        ]
+    return ["ps", "-p", str(pid), "-o", "command="]
+
+
+def _worker_command_line(pid: int) -> str:
+    return subprocess.run(
+        _worker_inspection_command(pid, os.name),
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+
+
+def _terminate_process_tree(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return
+    kill_process_group = getattr(os, "killpg", None)
+    if not callable(kill_process_group):
+        raise OSError("process_group_termination_unavailable")
+    kill_process_group(pid, signal.SIGTERM)
+
+
 class EddyService:
     def __init__(
         self,
@@ -675,16 +713,11 @@ class EddyService:
             try:
                 payload = json.loads(path.read_text())
                 pid = int(payload["pid"])
-                command = subprocess.run(
-                    ["ps", "-p", str(pid), "-o", "command="],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                ).stdout
+                command = _worker_command_line(pid)
                 if "eddy.worker" not in command or job_id not in command:
                     continue
-                os.killpg(pid, signal.SIGTERM)
-            except (FileNotFoundError, json.JSONDecodeError, KeyError, ProcessLookupError, ValueError):
+                _terminate_process_tree(pid)
+            except (json.JSONDecodeError, KeyError, OSError, ValueError):
                 continue
 
     def _recover_stale_finalize_claim(self, job_id: str) -> None:
@@ -696,13 +729,8 @@ class EddyService:
         if marker.exists():
             try:
                 pid = int(json.loads(marker.read_text())["pid"])
-                command = subprocess.run(
-                    ["ps", "-p", str(pid), "-o", "command="],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                ).stdout
-            except (json.JSONDecodeError, KeyError, ValueError, OSError):
+                command = _worker_command_line(pid)
+            except (json.JSONDecodeError, KeyError, OSError, ValueError):
                 command = ""
             if "eddy.worker" in command and job_id in command:
                 return

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from eddy.service import EddyService
+from eddy.service import EddyService, _worker_inspection_command
 from test_runtime import valid_plan_v32, valid_plan_v33
 
 
@@ -15,6 +15,22 @@ def test_edit_options_returns_one_runnable_skill_first_path(tmp_path: Path) -> N
     assert result["requires_choice"] is False
     assert result["selected_option_id"] == "skill_first"
     assert result["options"][0]["privacy"] == "local_media_with_private_descript_audio_egress"
+
+
+def test_worker_inspection_commands_are_platform_specific() -> None:
+    assert _worker_inspection_command(123, "posix") == [
+        "ps",
+        "-p",
+        "123",
+        "-o",
+        "command=",
+    ]
+    assert _worker_inspection_command(123, "nt") == [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        '(Get-CimInstance Win32_Process -Filter "ProcessId = 123").CommandLine',
+    ]
 
 
 def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) -> None:

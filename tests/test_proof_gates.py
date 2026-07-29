@@ -340,7 +340,7 @@ def test_irregular_cut_boundaries_do_not_accumulate_av_drift(tmp_path: Path) -> 
     assert abs(durations["video"] - durations["audio"]) <= 2 / 30
 
 
-def test_large_video_timeline_uses_flat_expression() -> None:
+def test_large_video_timeline_uses_balanced_expression() -> None:
     splice = _load_script("splice")
     segments = [[index * 0.003, index * 0.003 + 0.0015] for index in range(329)]
 
@@ -349,6 +349,8 @@ def test_large_video_timeline_uses_flat_expression() -> None:
     assert selector.count("gte(") == 329
     assert timeline.count("gte(") == 328
     assert "if(" not in timeline
+    assert selector.startswith("(")
+    assert timeline.count("((") > 1
     subprocess.run(
         [
             "ffmpeg",

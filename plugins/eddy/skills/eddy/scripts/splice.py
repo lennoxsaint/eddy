@@ -327,6 +327,19 @@ def localize_segments(
 
 def build_video_timeline(segments: list[list[float]]) -> tuple[str, str]:
     """Return a frame selector and gapless PTS expression that preserve source durations."""
+    def balanced_sum(terms: list[str]) -> str:
+        if not terms:
+            return "0"
+        while len(terms) > 1:
+            paired: list[str] = []
+            for index in range(0, len(terms), 2):
+                if index + 1 < len(terms):
+                    paired.append(f"({terms[index]}+{terms[index + 1]})")
+                else:
+                    paired.append(terms[index])
+            terms = paired
+        return terms[0]
+
     selectors: list[str] = []
     for start, end in segments:
         condition = f"gte(T,{start:.6f})*lt(T,{end:.6f})"
@@ -336,8 +349,8 @@ def build_video_timeline(segments: list[list[float]]) -> tuple[str, str]:
         gap = current[0] - previous[1]
         if gap > 1e-9:
             removed_terms.append(f"{gap:.6f}*gte(T,{current[0]:.6f})")
-    timeline = f"(T-({'+'.join(removed_terms)}))/TB"
-    return "+".join(selectors), timeline
+    timeline = f"(T-({balanced_sum(removed_terms)}))/TB"
+    return balanced_sum(selectors), timeline
 
 
 def render(src: Path, segments: list[list[float]], out: Path, xfade: float,
