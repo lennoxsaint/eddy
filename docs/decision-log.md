@@ -10,10 +10,23 @@
 - Owner feedback is typed as run-specific, deterministic defect, quality preference, or doctrine.
   A future-facing lesson needs a regression before it may enter the canonical skill or runtime.
 - Canonical changes ship through one guarded command that regenerates projections, runs all release
-  gates, stages an explicit allowlist, pushes `eddy-v3/main`, waits for CI, and refreshes the owner
+  gates, stages an explicit allowlist, pushes `eddy/main`, waits for CI, and refreshes the owner
   plugin. Unconditional feedback auto-push remains forbidden.
 - The owner `@eddy` plugin follows the canonical local V3 projection. Public installs remain pinned
-  to immutable stable tags once the five-run trust gate permits a release.
+  to immutable stable tags.
+
+## 2026-07-29 - Owner authorizes V3 public release before the five-run trust unlock
+
+- Lennox explicitly authorized overriding the `0/5` publication gate, preserving the public V1
+  repository as archived `lennoxsaint/eddy-legacy`, moving this repository into the public
+  `lennoxsaint/eddy` identity, and releasing immutable tag `v3.0.0`.
+- This exception authorizes repository publication and stable distribution only. It does not
+  fabricate dogfood evidence, count an unproven ledger row, weaken any runtime gate, or unlock the
+  claim that Eddy is safe to publish without human review.
+- Until five distinct real-footage runs have immutable proof and explicit owner approval, V3 output
+  remains `proof_gated_candidate_awaiting_owner_taste`.
+- The archived legacy tag `lennoxsaint/eddy-legacy@v1.10.5` and each updater's local
+  `source.previous`/`venv.previous` pair are the rollback paths.
 
 This records the first run Lennox approved across all three longs and all three Shorts after the
 only requested correction: restoring terminal punctuation in burned Short captions.

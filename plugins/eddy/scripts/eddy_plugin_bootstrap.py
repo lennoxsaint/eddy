@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-REPO_URL = "https://github.com/lennoxsaint/eddy-v3.git"
+REPO_URL = "https://github.com/lennoxsaint/eddy.git"
 STATE_VERSION = 1
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 

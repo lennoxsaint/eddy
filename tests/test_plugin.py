@@ -24,7 +24,7 @@ def test_plugin_is_named_eddy_and_launches_managed_wrapper() -> None:
     assert manifest["name"] == "eddy"
     assert manifest["interface"]["displayName"] == "Eddy"
     assert manifest["version"] == "3.0.0"
-    assert manifest["repository"].endswith("/eddy-v3")
+    assert manifest["repository"] == "https://github.com/lennoxsaint/eddy"
     assert manifest["interface"]["composerIcon"].endswith("eddy-eagle-icon.png")
     assert manifest["interface"]["logo"].endswith("eddy-eagle-logo.png")
     assert mcp["mcpServers"]["eddy"]["args"] == ["./scripts/eddy_plugin_mcp.py"]

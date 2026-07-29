@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_REMOTE = "https://github.com/lennoxsaint/eddy-v3.git"
+EXPECTED_REMOTE = "https://github.com/lennoxsaint/eddy.git"
 GENERATED_PREFIXES = (
     "plugins/eddy/skills/eddy/",
     "integrations/claude-code/skills/eddy/",
@@ -153,7 +153,7 @@ def _wait_for_ci(commit: str, *, timeout_s: int = 900) -> dict[str, object]:
                 "run",
                 "list",
                 "--repo",
-                "lennoxsaint/eddy-v3",
+                "lennoxsaint/eddy",
                 "--commit",
                 commit,
                 "--limit",

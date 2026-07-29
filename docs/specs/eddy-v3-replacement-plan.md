@@ -1,14 +1,13 @@
 # Eddy V3 replacement plan
 
-Status: approved implementation contract
+Status: owner-authorized release execution (2026-07-29)
 
 ## Repository and distribution
 
 - Eddy V3 is the canonical product and repository.
 - The current public `lennoxsaint/eddy` repository becomes the archived
   `lennoxsaint/eddy-legacy` repository.
-- After the release gates pass, the V3 repository takes the public
-  `lennoxsaint/eddy` name and ships as `v3.0.0`.
+- The V3 repository takes the public `lennoxsaint/eddy` name and ships as `v3.0.0`.
 - Owner installs follow `main`. External and plugin installs resolve stable tags.
 - Codex and Claude surfaces are generated projections of the same canonical skill.
 
@@ -36,5 +35,6 @@ Status: approved implementation contract
 - The runtime is skill-first with a thin asynchronous MCP control plane.
 - The no-review claim remains locked until five distinct green dogfood runs have
   explicit owner approval.
-- Repository rename, public replacement, archive, and `v3.0.0` release happen only
-  after the quality, sync, safety, and dogfood gates are green.
+- Repository rename, public replacement, archive, and `v3.0.0` release follow the quality, sync,
+  safety, public-install, and rollback gates. Lennox explicitly waived the five-run publication
+  timing gate for this release; the no-review claim remains locked until that evidence is real.
