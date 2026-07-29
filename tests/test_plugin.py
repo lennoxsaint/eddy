@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -28,6 +29,12 @@ def test_plugin_is_named_eddy_and_launches_managed_wrapper() -> None:
     assert manifest["interface"]["composerIcon"].endswith("eddy-eagle-icon.png")
     assert manifest["interface"]["logo"].endswith("eddy-eagle-logo.png")
     assert mcp["mcpServers"]["eddy"]["args"] == ["./scripts/eddy_plugin_mcp.py"]
+
+
+def test_mcp_extra_excludes_incompatible_v2() -> None:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
+
+    assert "mcp>=1.0,<2" in pyproject["project"]["optional-dependencies"]["mcp"]
 
 
 def test_bootstrap_tracks_stable_tags_and_dry_run_does_not_mutate(tmp_path: Path) -> None:
