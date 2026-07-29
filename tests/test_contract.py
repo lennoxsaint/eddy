@@ -29,7 +29,7 @@ def test_red_attempts_are_quarantined_not_delivered() -> None:
 
 
 def test_skill_declares_the_machine_readable_contract() -> None:
-    skill = (ROOT / "SKILL.md").read_text()
+    skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     assert "one ranked primary long" in skill
     assert "two complete alternate-hook longs" in skill
