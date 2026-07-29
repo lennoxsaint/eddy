@@ -58,6 +58,25 @@ def test_plugin_install_is_not_editable_before_atomic_move() -> None:
     assert "active_commit" in bootstrap
 
 
+def test_relocated_posix_console_scripts_get_final_shebang(tmp_path: Path) -> None:
+    bootstrap = load_bootstrap()
+    previous = tmp_path / "plugin-update" / "venv"
+    active = tmp_path / "venv"
+    bin_dir = active / "bin"
+    bin_dir.mkdir(parents=True)
+    eddy = bin_dir / "eddy"
+    eddy.write_bytes(f"#!{previous}/bin/python\nprint('ok')\n".encode())
+
+    repaired = bootstrap.repair_relocated_posix_scripts(
+        active,
+        previous,
+        platform_name="posix",
+    )
+
+    assert repaired == ["eddy"]
+    assert eddy.read_bytes().startswith(f"#!{active}/bin/python\n".encode())
+
+
 def test_plugin_uses_healthy_active_install_when_tag_lookup_is_offline(
     tmp_path: Path, monkeypatch
 ) -> None:

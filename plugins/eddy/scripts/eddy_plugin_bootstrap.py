@@ -150,6 +150,31 @@ def venv_tool(venv: Path, name: str) -> Path:
     return venv / "bin" / name
 
 
+def repair_relocated_posix_scripts(
+    venv: Path,
+    previous_venv: Path,
+    *,
+    platform_name: str = os.name,
+) -> list[str]:
+    if platform_name == "nt":
+        return []
+    repaired: list[str] = []
+    bin_dir = venv / "bin"
+    old_prefix = f"#!{previous_venv}".encode()
+    new_prefix = f"#!{venv}".encode()
+    for path in sorted(bin_dir.iterdir()):
+        if not path.is_file() or path.is_symlink():
+            continue
+        content = path.read_bytes()
+        line_end = content.find(b"\n")
+        first_line = content if line_end < 0 else content[:line_end]
+        if not first_line.startswith(old_prefix):
+            continue
+        path.write_bytes(content.replace(old_prefix, new_prefix, 1))
+        repaired.append(path.name)
+    return repaired
+
+
 def active_state(home: Path | None = None) -> dict:
     path = state_file(home)
     if not path.exists():
@@ -271,6 +296,15 @@ def swap_active(root: Path, candidate: dict, tag: str, repo_url: str, receipts: 
             active_venv.rename(previous_venv)
         source.rename(active_source)
         venv.rename(active_venv)
+        repaired_scripts = repair_relocated_posix_scripts(active_venv, venv)
+        command_smoke = check([str(venv_tool(active_venv, "eddy")), "--help"], timeout=60)
+        receipts.append(
+            {
+                "action": "repair_relocated_console_scripts",
+                "scripts": repaired_scripts,
+                "command_smoke": command_smoke.as_receipt(),
+            }
+        )
         shutil.rmtree(tmp_root, ignore_errors=True)
         payload = {
             "state_version": STATE_VERSION,
