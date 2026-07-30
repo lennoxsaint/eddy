@@ -24,7 +24,7 @@ eddy sync-doctor
 ## Workflow
 
 ```text
-eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.5
+eddy_edit_options -> eddy_edit_start -> awaiting_host_plan -> eddy_host_packet -> EditPlanV3.5|V3.6
 -> eddy_host_submit -> auto-selected | awaiting_opening_selection -> eddy_finalize
 -> awaiting_independent_review -> eddy_submit_review
 -> proof_gated_candidate_awaiting_owner_taste | awaiting_host_repair | blocked
@@ -54,8 +54,15 @@ The host model owns editorial taste. Eddy owns source locks, deterministic media
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full
 product contract.
 
-Current `edit-plan-v3.5` projects retain v3.2's opening choreography and v3.3's hash-bound,
-Sage-owned body spine, then bind the Lennox v2 profile, Project Fact Brief, design contracts,
+Strategy Profile V7 projects use `edit-plan-v3.6`; projects without a V7 Opening Edit Blueprint
+remain on `edit-plan-v3.5`. V3.6 retains v3.5's proof system and adds an exact delivered-opening map.
+The pre-production Opening Edit Blueprint binds every scene
+through second 60; each scene keeps its communication job and evidence requirement, while the
+editor remains free to adapt style to the footage. Threshold drift, missing scenes, and unreceipted
+deviations fail before render.
+
+V3.6 also retains v3.2's opening choreography and v3.3's hash-bound, Sage-owned body spine, then
+binds the Lennox v2 profile, Project Fact Brief, design contracts,
 sample-exact cut policy, Studio Sound lineage, independent verifier, and correction evals. A route
 understood by second 30 resolves through 3-5 ordered sections; Eddy
 maps every body scene to those sections and cannot silently reorder them. A hash-bound `frame.md`
