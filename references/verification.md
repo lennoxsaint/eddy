@@ -56,6 +56,10 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
   before second 30; 3-5 section IDs match Sage order; every shared-body scene maps exactly once;
   every section has a real proof scene; and every non-final boundary has a reset scene, transition
   card, and spoken callback.
+- **V3.6 delivered-opening contract** — V7 runs expose the exact Opening Edit Blueprint and Opening
+  Mechanics Library refs/hashes; preserve the locked `3/10/30` deadlines and `8-12` first-30
+  cadence; map every planned scene through second 60 exactly once; preserve each communication job
+  and evidence requirement; and receipt every deviation.
 - **Opening selection** — ranking and selected opening are receipted. A top-two gap of five points
   or less, or uncertain leading judgment, must pause before finalization.
 - **Caption sync** — cue timings align to word timings; no cue overlaps the next by >1 frame.
@@ -68,7 +72,7 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Motion coverage** — every intended motion interval is active through its last frame; no frozen
   tail, one-frame flash, accidental still ending, annotation miss, crop discontinuity, or proof/UI
   collision remains.
-- **Contract binding** — host packet, v3.5 plan, receipts, and final evidence expose matching
+- **Contract binding** — host packet, v3.6 plan, receipts, and final evidence expose matching
   profile, design, landscape frame, portrait frame, HyperFrames doctrine, correction-eval, and
   rubric hashes, plus Project Fact Brief and verifier contract hashes.
 - **100-point evidence** — exactly 100 one-point checks pass. Every point has a file, frame,

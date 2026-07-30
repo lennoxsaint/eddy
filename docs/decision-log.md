@@ -299,3 +299,18 @@ distinct reviewed source variant; extra unreviewed delivered variants still bloc
   `proof_gated_candidate_awaiting_owner_taste`. `owner-verdict-v2` alone approves or reopens it.
 - Corrections promote through narrow evals. Literal project facts cannot enter an owner profile or
   generic doctrine.
+
+## 2026-07-30 - V7 opening intent must survive delivery
+
+- `edit-plan-v3.6` binds the exact pre-production Opening Edit Blueprint and its
+  human-confirmed Opening Mechanics Library.
+- Every planned scene through second 60 maps exactly once to a delivered scene.
+- Communication jobs and evidence requirements are locked; visual style remains adaptable to the
+  real footage and project design.
+- Money shot by second 3, proof by second 10, route by second 30, and 8-12 meaningful first-30
+  changes remain versioned thresholds.
+- Any changed treatment, reorder, or replacement needs a hash-bound deviation receipt.
+- Legacy plans through v3.5 remain reproducible but cannot claim V7 delivered-opening proof.
+
+This closes the handoff gap where strong pre-production intent could be lost when post-production
+authored its own opening from scratch.

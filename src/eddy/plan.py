@@ -12,6 +12,11 @@ from .choreography import (
     validate_visual_choreography,
 )
 from .body_structure import BodyStructureValidationError, validate_body_structure_contract
+from .opening_blueprint import (
+    OpeningBlueprintValidationError,
+    validate_opening_blueprint_contract,
+    validate_opening_blueprint_delivery,
+)
 from .proof import screen_proof_share
 from .quality import (
     QualityContractError,
@@ -106,6 +111,7 @@ class EditPlanV3:
     shorts: tuple[ShortPlan, ...]
     motion_beats: tuple[dict[str, Any], ...]
     opening_visual_contract: dict[str, Any] | None
+    opening_blueprint_delivery: dict[str, Any] | None
     frame_contract: dict[str, Any] | None
     visual_choreography: dict[str, Any] | None
     body_structure_contract: dict[str, Any] | None
@@ -139,6 +145,7 @@ class EditPlanV3:
             "shorts",
             "motion_beats",
             "opening_visual_contract",
+            "opening_blueprint_delivery",
             "frame_contract",
             "visual_choreography",
             "body_structure_contract",
@@ -162,6 +169,7 @@ class EditPlanV3:
             "edit-plan-v3.3",
             "edit-plan-v3.4",
             "edit-plan-v3.5",
+            "edit-plan-v3.6",
         }:
             raise PlanValidationError("edit_plan_schema_version_invalid")
 
@@ -252,6 +260,7 @@ class EditPlanV3:
                 "edit-plan-v3.3",
                 "edit-plan-v3.4",
                 "edit-plan-v3.5",
+                "edit-plan-v3.6",
             },
         )
         for hook in hooks:
@@ -272,12 +281,23 @@ class EditPlanV3:
             "edit-plan-v3.3",
             "edit-plan-v3.4",
             "edit-plan-v3.5",
+            "edit-plan-v3.6",
         }:
-            opening_visual_contract = _parse_opening_visual_contract(
-                payload.get("opening_visual_contract"),
-                hooks=hooks,
-                motion_beats=motion_beats,
-            )
+            try:
+                opening_visual_contract = (
+                    validate_opening_blueprint_contract(
+                        payload.get("opening_visual_contract"),
+                        hook_ids=(hook.id for hook in hooks),
+                    )
+                    if schema_version == "edit-plan-v3.6"
+                    else _parse_opening_visual_contract(
+                        payload.get("opening_visual_contract"),
+                        hooks=hooks,
+                        motion_beats=motion_beats,
+                    )
+                )
+            except OpeningBlueprintValidationError as exc:
+                raise PlanValidationError(str(exc)) from exc
         elif payload.get("opening_visual_contract") is not None:
             raise PlanValidationError(
                 "opening_visual_contract_requires_edit_plan_v3_1_or_newer"
@@ -285,14 +305,24 @@ class EditPlanV3:
 
         frame_contract = None
         visual_choreography = None
+        opening_blueprint_delivery = None
         if schema_version in {
             "edit-plan-v3.2",
             "edit-plan-v3.3",
             "edit-plan-v3.4",
             "edit-plan-v3.5",
+            "edit-plan-v3.6",
         }:
-            if any(sum(end - start for start, end in hook.segments) < 30 for hook in hooks):
-                raise PlanValidationError("v3_2_opening_cut_must_cover_first_thirty_seconds")
+            minimum_opening_seconds = 60 if schema_version == "edit-plan-v3.6" else 30
+            if any(
+                sum(end - start for start, end in hook.segments) < minimum_opening_seconds
+                for hook in hooks
+            ):
+                raise PlanValidationError(
+                    "v3_6_opening_cut_must_cover_first_sixty_seconds"
+                    if schema_version == "edit-plan-v3.6"
+                    else "v3_2_opening_cut_must_cover_first_thirty_seconds"
+                )
             try:
                 frame_contract = validate_frame_contract(payload.get("frame_contract"))
                 visual_choreography = validate_visual_choreography(
@@ -328,13 +358,37 @@ class EditPlanV3:
                         raise PlanValidationError(
                             f"portrait_choreography_must_cover_complete_short:{short.id}"
                         )
+                if schema_version == "edit-plan-v3.6":
+                    if opening_visual_contract is None:
+                        raise OpeningBlueprintValidationError(
+                            "opening_blueprint_contract_required"
+                        )
+                    opening_blueprint_delivery = validate_opening_blueprint_delivery(
+                        payload.get("opening_blueprint_delivery"),
+                        contract=opening_visual_contract,
+                        visual_choreography=visual_choreography,
+                    )
             except ChoreographyValidationError as exc:
+                raise PlanValidationError(str(exc)) from exc
+            except OpeningBlueprintValidationError as exc:
                 raise PlanValidationError(str(exc)) from exc
         elif payload.get("frame_contract") is not None or payload.get("visual_choreography") is not None:
             raise PlanValidationError("visual_choreography_requires_edit_plan_v3_2")
+        if (
+            schema_version != "edit-plan-v3.6"
+            and payload.get("opening_blueprint_delivery") is not None
+        ):
+            raise PlanValidationError(
+                "opening_blueprint_delivery_requires_edit_plan_v3_6"
+            )
 
         body_structure_contract = None
-        if schema_version in {"edit-plan-v3.3", "edit-plan-v3.4", "edit-plan-v3.5"}:
+        if schema_version in {
+            "edit-plan-v3.3",
+            "edit-plan-v3.4",
+            "edit-plan-v3.5",
+            "edit-plan-v3.6",
+        }:
             if visual_choreography is None:
                 raise PlanValidationError("body_structure_requires_visual_choreography")
             try:
@@ -355,13 +409,17 @@ class EditPlanV3:
         project_fact_brief = None
         cut_integrity_plan = None
         proof_plan = None
-        if schema_version in {"edit-plan-v3.4", "edit-plan-v3.5"}:
+        if schema_version in {
+            "edit-plan-v3.4",
+            "edit-plan-v3.5",
+            "edit-plan-v3.6",
+        }:
             try:
                 contract_bundle = validate_contract_ref(
                     payload.get("contract_bundle"),
                     schema=(
                         "eddy-contract-bundle-ref-v2"
-                        if schema_version == "edit-plan-v3.5"
+                        if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
                         else "eddy-contract-bundle-ref-v1"
                     ),
                     label="contract_bundle",
@@ -372,7 +430,7 @@ class EditPlanV3:
                 production_review = validate_production_review(
                     payload.get("production_review")
                 )
-                if schema_version == "edit-plan-v3.5":
+                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
                     if audio_plan.get("schema_version") != "eddy-audio-plan-v2":
                         raise QualityContractError("audio_plan_v2_required")
                     if caption_policy.get("schema_version") != "eddy-caption-policy-v2":
@@ -416,6 +474,7 @@ class EditPlanV3:
             shorts=tuple(shorts),
             motion_beats=motion_beats,
             opening_visual_contract=opening_visual_contract,
+            opening_blueprint_delivery=opening_blueprint_delivery,
             frame_contract=frame_contract,
             visual_choreography=visual_choreography,
             body_structure_contract=body_structure_contract,
@@ -498,6 +557,8 @@ class EditPlanV3:
         }
         if self.opening_visual_contract is not None:
             payload["opening_visual_contract"] = self.opening_visual_contract
+        if self.opening_blueprint_delivery is not None:
+            payload["opening_blueprint_delivery"] = self.opening_blueprint_delivery
         if self.frame_contract is not None:
             payload["frame_contract"] = self.frame_contract
         if self.visual_choreography is not None:

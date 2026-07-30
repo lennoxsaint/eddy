@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -19,6 +20,7 @@ from .design_contracts import create_contract_bundle, revise_contract_bundle
 from .feedback import record_owner_feedback
 from .owner_plugin import owner_plugin_status
 from .privacy_repair import repair_short_privacy
+from .opening_blueprint import validate_opening_blueprint_contract
 from .project_brief import materialize_project_fact_brief
 from .quality import resolve_quality_profile
 from .review_submission import write_review_submission
@@ -26,6 +28,75 @@ from .runtime import JobManager, JobState
 from .sync import CANONICAL_SURFACES, canonical_surface_commit, check_projection
 from .support import create_support_bundle
 from .trust import trust_status
+
+
+OPENING_BLUEPRINT_RELATIVE = Path(
+    "pre-production/review/opening-edit-blueprint.json"
+)
+
+
+def _find_opening_blueprint(source: Path) -> Path | None:
+    current = source if source.is_dir() else source.parent
+    for root in (current, *current.parents):
+        candidate = root / OPENING_BLUEPRINT_RELATIVE
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _snapshot_opening_blueprint(source: Path, run_dir: Path) -> dict[str, Any] | None:
+    blueprint_source = _find_opening_blueprint(source)
+    if blueprint_source is None:
+        return None
+    blueprint = json.loads(blueprint_source.read_text())
+    if not isinstance(blueprint, dict):
+        raise ValueError("opening_edit_blueprint_must_be_object")
+    project_root = blueprint_source.parents[2]
+    binding = blueprint.get("benchmark_binding")
+    if not isinstance(binding, dict):
+        raise ValueError("opening_blueprint_benchmark_binding_required")
+    mechanics_ref = binding.get("mechanics_library_ref")
+    if not isinstance(mechanics_ref, str) or not mechanics_ref.strip():
+        raise ValueError("opening_blueprint_mechanics_library_ref_required")
+    mechanics_relative = Path(mechanics_ref)
+    if mechanics_relative.is_absolute() or ".." in mechanics_relative.parts:
+        raise ValueError("opening_blueprint_mechanics_library_ref_invalid")
+    mechanics_source = (project_root / mechanics_relative).resolve()
+    try:
+        mechanics_source.relative_to(project_root.resolve())
+    except ValueError as exc:
+        raise ValueError("opening_blueprint_mechanics_library_ref_invalid") from exc
+    if not mechanics_source.is_file():
+        raise ValueError("opening_blueprint_mechanics_library_missing")
+    expected_mechanics_hash = binding.get("mechanics_library_sha256")
+    if hashlib.sha256(mechanics_source.read_bytes()).hexdigest() != expected_mechanics_hash:
+        raise ValueError("opening_blueprint_mechanics_library_hash_mismatch")
+    mechanics_library = json.loads(mechanics_source.read_text())
+    if (
+        not isinstance(mechanics_library, dict)
+        or mechanics_library.get("gate_status") != "human_confirmed"
+    ):
+        raise ValueError("opening_blueprint_mechanics_library_not_human_confirmed")
+
+    blueprint_target = run_dir / OPENING_BLUEPRINT_RELATIVE
+    blueprint_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(blueprint_source, blueprint_target)
+    mechanics_target = run_dir / mechanics_relative
+    mechanics_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(mechanics_source, mechanics_target)
+    snapshotted = {
+        **blueprint,
+        "contract_ref": OPENING_BLUEPRINT_RELATIVE.as_posix(),
+        "contract_sha256": hashlib.sha256(blueprint_target.read_bytes()).hexdigest(),
+    }
+    variants = snapshotted.get("variants")
+    hook_ids = (
+        [str(row.get("hook_id")) for row in variants if isinstance(row, dict)]
+        if isinstance(variants, list)
+        else []
+    )
+    validate_opening_blueprint_contract(snapshotted, hook_ids=hook_ids)
+    return snapshotted
 
 
 def _worker_inspection_command(pid: int, platform_name: str) -> list[str]:
@@ -142,6 +213,7 @@ class EddyService:
             source_hashes=source_lock["before"],
             project_fact_brief=project_fact_brief,
         )
+        opening_blueprint = _snapshot_opening_blueprint(job.source, job.run_dir)
         created_bundle = json.loads(
             (job.run_dir / "contracts" / "contract-bundle.json").read_text()
         )
@@ -157,6 +229,11 @@ class EddyService:
             long_frame_sha256=created_bundle["design_contracts"]["long_frame"]["sha256"],
             short_frame_sha256=created_bundle["design_contracts"]["short_frame"]["sha256"],
             project_fact_brief_sha256=created_bundle["project_fact_brief"]["sha256"],
+            opening_blueprint_sha256=(
+                opening_blueprint["contract_sha256"]
+                if opening_blueprint is not None
+                else None
+            ),
         )
         if self.auto_prepare:
             self._launch_worker("prepare", job.id)
@@ -189,6 +266,20 @@ class EddyService:
             for relative in source_lock["before"]
             if "screen" in relative.lower() or "display" in relative.lower()
         ]
+        opening_blueprint_path = job.run_dir / OPENING_BLUEPRINT_RELATIVE
+        opening_blueprint = None
+        if opening_blueprint_path.is_file():
+            raw_blueprint = json.loads(opening_blueprint_path.read_text())
+            opening_blueprint = {
+                **raw_blueprint,
+                "contract_ref": OPENING_BLUEPRINT_RELATIVE.as_posix(),
+                "contract_sha256": hashlib.sha256(
+                    opening_blueprint_path.read_bytes()
+                ).hexdigest(),
+            }
+        current_edit_plan_schema = (
+            "edit-plan-v3.6" if opening_blueprint is not None else "edit-plan-v3.5"
+        )
         bundle_path = job.run_dir / "contracts" / "contract-bundle.json"
         if not bundle_path.is_file():
             raise RuntimeError("contract_bundle_missing")
@@ -237,6 +328,15 @@ class EddyService:
                         "stakes_by_second": 30,
                         "max_unexplained_static_hold_seconds": 4,
                         "requires_muted_mobile_and_taste_passes": True,
+                    },
+                    "opening_edit_blueprint": {
+                        "contract_version": "2.0",
+                        "delivery_schema": "eddy-opening-blueprint-delivery-v1",
+                        "function_policy": "function_locked_style_flexible",
+                        "opening_window_seconds": [0, 30],
+                        "bridge_window_seconds": [30, 60],
+                        "every_delivered_scene_requires_mapping": True,
+                        "deviation_receipt_required": True,
                     },
                     "adaptive_cadence": {
                         "target_seconds": [6, 12],
@@ -304,7 +404,7 @@ class EddyService:
                 if (job.run_dir / "repair-packet.json").exists()
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
-            "edit_plan_schema": "edit-plan-v3.5",
+            "edit_plan_schema": current_edit_plan_schema,
             "accepted_edit_plan_schemas": [
                 "edit-plan-v3",
                 "edit-plan-v3.1",
@@ -312,6 +412,7 @@ class EddyService:
                 "edit-plan-v3.3",
                 "edit-plan-v3.4",
                 "edit-plan-v3.5",
+                "edit-plan-v3.6",
             ],
             "frame_contract": {
                 "schema_version": "eddy-project-frame-v3",
@@ -367,6 +468,7 @@ class EddyService:
             },
             "quality_profile": json.loads(quality_profile_path.read_text()),
             "project_fact_brief": json.loads(project_fact_path.read_text()),
+            "opening_edit_blueprint": opening_blueprint,
             "project_fact_brief_ref": bundle["project_fact_brief"],
             "verifier_contract": json.loads(
                 (
@@ -383,6 +485,12 @@ class EddyService:
                 "alternate_hooks": 2,
                 "shared_body": True,
                 "packaging": False,
+                "opening_blueprint_delivery": {
+                    "required": opening_blueprint is not None,
+                    "schema_version": "eddy-opening-blueprint-delivery-v1",
+                    "map_through_second": 60,
+                    "deviation_receipts_required": True,
+                },
                 "body_structure_contract": {
                     "schema_version": "eddy-body-structure-v1",
                     "modes": ["countable_guide", "live_test", "proof_led_argument"],
@@ -403,6 +511,7 @@ class EddyService:
             "edit-plan-v3.3",
             "edit-plan-v3.4",
             "edit-plan-v3.5",
+            "edit-plan-v3.6",
         }:
             opening_selection = self.opening_candidates(job_id)
             result = {**self._job_payload(self.manager.load(job_id)), "opening_selection": opening_selection}
@@ -525,6 +634,7 @@ class EddyService:
                 "edit-plan-v3.3",
                 "edit-plan-v3.4",
                 "edit-plan-v3.5",
+                "edit-plan-v3.6",
             }:
                 selection = plan_path.parent / "opening-selection.json"
                 if not selection.exists():

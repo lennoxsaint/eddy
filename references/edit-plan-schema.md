@@ -1,6 +1,76 @@
 # EditPlanV3 schema
 
-## Current: `edit-plan-v3.5`
+## Current: `edit-plan-v3.6`
+
+V3.6 retains every v3.5 proof contract and adds a delivered-opening binding for Strategy Profile V7
+projects:
+
+```json
+{
+  "schema_version": "edit-plan-v3.6",
+  "opening_visual_contract": {
+    "schema_version": "2.0",
+    "contract_kind": "opening_edit_blueprint",
+    "profile_version": 7,
+    "contract_ref": "pre-production/review/opening-edit-blueprint.json",
+    "contract_sha256": "<sha256>",
+    "benchmark_binding": {
+      "benchmark_revision": "omb-v1-2026-07-30",
+      "mechanics_library_id": "opening-mechanics-library-v1",
+      "mechanics_library_ref": "pre-production/review/opening-mechanics-library.json",
+      "mechanics_library_sha256": "<sha256>",
+      "evidence_authority": "observed_cross_creator_not_causal",
+      "selected_mechanic_ids": ["proof-first-frame"]
+    },
+    "variants": ["<the three exact pre-production blueprint variants>"]
+  },
+  "opening_blueprint_delivery": {
+    "schema_version": "eddy-opening-blueprint-delivery-v1",
+    "contract_sha256": "<same sha256>",
+    "benchmark_binding": "<same exact benchmark binding>",
+    "openings": [
+      {
+        "hook_id": "proof",
+        "variant_id": "opening-proof",
+        "scene_mappings": [
+          {
+            "blueprint_beat_id": "opening-proof-01",
+            "delivered_scene_id": "long-proof-scene-01",
+            "mechanic_ids": ["proof-first-frame"],
+            "semantic_job": "land the outcome",
+            "spoken_anchor": "the exact source phrase",
+            "asset_job": "show owned proof",
+            "proof_job": "make the claim inspectable",
+            "audio_job": "support without masking speech",
+            "motion_job": "move evidence into focus",
+            "cut_job": "cut when the evidence state changes",
+            "intended_viewer_state": "understands the claim and next question",
+            "fallback": "hard cut to owned proof",
+            "jobs_match": false,
+            "deviation": {
+              "deviation_id": "opening-proof-01-mobile-repair",
+              "reason": "The planned split layout made the proof unreadable on mobile.",
+              "planned_job": "show owned proof in a split layout",
+              "delivered_job": "show the same proof full frame",
+              "viewer_impact": "the communication job is preserved with better legibility",
+              "status": "review_required",
+              "receipt_ref": "receipts/opening-proof-01-mobile-repair.json",
+              "receipt_sha256": "<sha256>"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Every blueprint scene through second 60 must appear exactly once in `scene_mappings`. The runtime
+locks the function of each scene—its communication job and evidence requirement—while allowing the
+host to adapt style to the footage. Missing mappings, threshold drift, and unreceipted deviations
+fail before render.
+
+## Prior production contract: `edit-plan-v3.5`
 
 V3.5 retains v3.4 and binds the Project Fact Brief, Studio Sound policy, cut-integrity
 authority, factual proof routing, independent review, and owner-locked promotion:
@@ -81,7 +151,8 @@ authority, factual proof routing, independent review, and owner-locked promotion
 }
 ```
 
-Readers through v3.4 remain accepted. A legacy plan cannot claim
+Readers through v3.5 remain accepted. A legacy plan cannot claim V7 delivered-opening proof.
+Readers through v3.4 also cannot claim
 `lennox-professional-youtube-v2` or the new owner-locked proof state.
 
 ## Legacy production contract: `edit-plan-v3.4`

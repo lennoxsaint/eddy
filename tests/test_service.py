@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 
 from eddy.service import EddyService, _worker_inspection_command
@@ -64,6 +65,8 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["motion_requirements"]["visual_choreography"]["opening_timelines"] == 3
     assert "speaker_edge_right" in packet["motion_requirements"]["visual_choreography"]["layouts"]
     assert packet["edit_plan_schema"] == "edit-plan-v3.5"
+    assert packet["opening_edit_blueprint"] is None
+    assert packet["requirements"]["opening_blueprint_delivery"]["required"] is False
     assert packet["accepted_edit_plan_schemas"] == [
         "edit-plan-v3",
         "edit-plan-v3.1",
@@ -71,7 +74,17 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
         "edit-plan-v3.3",
         "edit-plan-v3.4",
         "edit-plan-v3.5",
+        "edit-plan-v3.6",
     ]
+    assert packet["motion_requirements"]["longs"]["opening_edit_blueprint"] == {
+        "contract_version": "2.0",
+        "delivery_schema": "eddy-opening-blueprint-delivery-v1",
+        "function_policy": "function_locked_style_flexible",
+        "opening_window_seconds": [0, 30],
+        "bridge_window_seconds": [30, 60],
+        "every_delivered_scene_requires_mapping": True,
+        "deviation_receipt_required": True,
+    }
     assert packet["requirements"]["body_structure_contract"]["schema_version"] == "eddy-body-structure-v1"
     assert packet["requirements"]["body_structure_contract"]["section_count"] == [3, 5]
     assert packet["requirements"]["body_structure_contract"]["major_order_authority"] == "sage_locked_eddy_may_not_reorder"
@@ -85,6 +98,156 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["quality_profile"]["captions"]["terminal_punctuation"] == [".", "?", "!"]
     assert packet["requested_host_action"] == "review_every_chunk_and_resolve_every_ledger_item"
     assert cancelled["state"] == "cancelled"
+
+
+def test_v7_project_blueprint_is_snapshotted_and_selects_v36(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    source = project / "source" / "raw"
+    source.mkdir(parents=True)
+    (source / "camera.mp4").write_bytes(b"raw")
+    review = project / "pre-production" / "review"
+    review.mkdir(parents=True)
+    mechanics = review / "opening-mechanics-library.json"
+    mechanics.write_text(
+        '{"schema_version":"1.0","gate_status":"human_confirmed"}\n'
+    )
+
+    mechanics_hash = hashlib.sha256(mechanics.read_bytes()).hexdigest()
+    mechanic_ids = ["proof-first-frame"]
+
+    def planned_scene(scene_id: str, start: float, end: float) -> dict:
+        return {
+            "beat_id": scene_id,
+            "start_second": start,
+            "end_second": end,
+            "mechanic_ids": mechanic_ids,
+            "semantic_job": "change the viewer evidence state",
+            "spoken_anchor": "exact source phrase",
+            "asset_job": "show owned proof",
+            "proof_job": "make the claim inspectable",
+            "audio_job": "support without masking speech",
+            "motion_job": "move evidence into focus",
+            "cut_job": "cut when the evidence state changes",
+            "intended_viewer_state": "understands the claim and next question",
+            "fallback": "hard cut to owned proof",
+        }
+
+    variants = []
+    for variant_index, hook_id in enumerate(("proof", "speed", "cost")):
+        variants.append(
+            {
+                "variant_id": f"opening-{variant_index + 1}",
+                "hook_id": hook_id,
+                "style_policy": "function_locked_style_flexible",
+                "opening_edit_blueprint": {
+                    "window_seconds": [0, 30],
+                    "beats": [
+                        planned_scene(
+                            f"{hook_id}-beat-{index + 1}",
+                            index * 3.5,
+                            index * 3.5 + 3.4,
+                        )
+                        for index in range(8)
+                    ],
+                },
+                "bridge_30_60": {
+                    "window_seconds": [30, 60],
+                    "scenes": [
+                        planned_scene(
+                            f"{hook_id}-bridge-{index + 1}",
+                            30 + index * 10,
+                            40 + index * 10,
+                        )
+                        for index in range(3)
+                    ],
+                },
+                "thresholds": {
+                    "money_shot_by_second": 3,
+                    "real_proof_by_second": 10,
+                    "stakes_by_second": 30,
+                    "meaningful_visual_beats_min": 8,
+                    "meaningful_visual_beats_soft_max": 12,
+                },
+                "muted_preview": {"status": "pass"},
+                "mobile_preview": {"status": "pass"},
+                "taste_review": {"status": "pass"},
+            }
+        )
+    blueprint = {
+        "schema_version": "2.0",
+        "contract_kind": "opening_edit_blueprint",
+        "profile_version": 7,
+        "delivery_target_schema": "edit-plan-v3.6",
+        "opening_contact_sheet_ref": "pre-production/visuals/openings/contact-sheet.png",
+        "benchmark_binding": {
+            "benchmark_revision": "omb-v1-2026-07-30",
+            "mechanics_library_id": "opening-mechanics-library-v1",
+            "mechanics_library_ref": (
+                "pre-production/review/opening-mechanics-library.json"
+            ),
+            "mechanics_library_sha256": mechanics_hash,
+            "evidence_authority": "observed_cross_creator_not_causal",
+            "selected_mechanic_ids": mechanic_ids,
+        },
+        "variants": variants,
+    }
+    (review / "opening-edit-blueprint.json").write_text(
+        json.dumps(blueprint) + "\n"
+    )
+    service = EddyService(tmp_path / "runs", auto_prepare=False)
+
+    started = service.edit_start(str(source), profile_id="creator_good_v1")
+    packet = service.host_packet(started["job_id"])
+
+    assert packet["edit_plan_schema"] == "edit-plan-v3.6"
+    assert packet["opening_edit_blueprint"]["schema_version"] == "2.0"
+    assert packet["requirements"]["opening_blueprint_delivery"]["required"] is True
+    snapshotted = (
+        Path(started["run_dir"])
+        / "pre-production"
+        / "review"
+        / "opening-edit-blueprint.json"
+    )
+    assert snapshotted.read_bytes() == (
+        review / "opening-edit-blueprint.json"
+    ).read_bytes()
+
+
+def test_v7_project_blueprint_rejects_unconfirmed_mechanics_library(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    source = project / "source"
+    source.mkdir(parents=True)
+    (source / "camera.mp4").write_bytes(b"raw")
+    review = project / "pre-production" / "review"
+    review.mkdir(parents=True)
+    mechanics = review / "opening-mechanics-library.json"
+    mechanics.write_text(
+        '{"schema_version":"1.0","gate_status":"machine_reviewed"}\n'
+    )
+    blueprint = {
+        "benchmark_binding": {
+            "mechanics_library_ref": (
+                "pre-production/review/opening-mechanics-library.json"
+            ),
+            "mechanics_library_sha256": hashlib.sha256(
+                mechanics.read_bytes()
+            ).hexdigest(),
+        }
+    }
+    (review / "opening-edit-blueprint.json").write_text(
+        json.dumps(blueprint) + "\n"
+    )
+    service = EddyService(tmp_path / "runs", auto_prepare=False)
+
+    import pytest
+
+    with pytest.raises(
+        ValueError,
+        match="opening_blueprint_mechanics_library_not_human_confirmed",
+    ):
+        service.edit_start(str(source), profile_id="creator_good_v1")
 
 
 def test_explicit_lennox_profile_creates_portable_contract_bundle(tmp_path: Path) -> None:

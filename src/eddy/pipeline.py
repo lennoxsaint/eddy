@@ -431,8 +431,14 @@ class PipelineRunner:
                 if isinstance(body_structure_delivery, dict):
                     body_structure_green = body_structure_delivery.get("status") == "pass"
                     gates["body_structure_delivery"] = body_structure_green
-                    if not body_structure_green:
-                        blockers.append("body_structure_delivery_failed")
+                if not body_structure_green:
+                    blockers.append("body_structure_delivery_failed")
+            opening_blueprint_delivery = plan.opening_blueprint_delivery
+            if plan.schema_version == "edit-plan-v3.6":
+                blueprint_green = opening_blueprint_delivery is not None
+                gates["opening_blueprint_delivery"] = blueprint_green
+                if not blueprint_green:
+                    blockers.append("opening_blueprint_delivery_failed")
             _write_json(
                 attempt / "qa.json",
                 {
@@ -441,6 +447,7 @@ class PipelineRunner:
                     "gates": gates,
                     "blockers": blockers,
                     "opening_visual_delivery": opening_visual_delivery,
+                    "opening_blueprint_delivery": opening_blueprint_delivery,
                     "visual_choreography_delivery": choreography_delivery,
                 },
             )
@@ -452,7 +459,7 @@ class PipelineRunner:
             (attempt / "spot-check.md").write_text(
                 "# Spot checks\n\nNo uncertain cuts were recorded by the host plan.\n"
             )
-            if plan.schema_version == "edit-plan-v3.5":
+            if plan.schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
                 self.manager.transition(job_id, JobState.AWAITING_INDEPENDENT_REVIEW)
                 self.manager.receipt(
                     job_id,

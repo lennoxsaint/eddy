@@ -38,7 +38,14 @@ Treat 0-3 seconds and 0-30 seconds as hard-gated Viewer-Leverage Windows and the
 priority, without weakening the body. Frame one moves, the strongest honest money shot lands by 3s,
 real proof lands by 10s, and stakes plus route are legible by 30s.
 
-Use `edit-plan-v3.5` for current work. It retains the v3.3 Sage-owned body structure and binds
+Use `edit-plan-v3.6` when a Strategy Profile V7 Opening Edit Blueprint is present; otherwise use
+`edit-plan-v3.5`. V3.6 retains the v3.5 proof system and binds the pre-production
+`opening-edit-blueprint-v2` as delivered choreography through
+second 60. Every planned opening scene must map to a delivered scene, and every substantive
+deviation needs a reason and proof receipt. Legacy plans through v3.5 remain readable, but cannot
+claim V7 opening-blueprint delivery.
+
+V3.6 also retains the v3.3 Sage-owned body structure and binds
 `contracts/contract-bundle.json`, `design.md`, landscape `frame.md`, portrait `shorts/frame.md`,
 the selected quality profile, verified Project Fact Brief, HyperFrames v0.7.3 doctrine, Studio Sound
 lineage, audio plan, grade plan, caption policy, correction evals, independent-verifier contract,
@@ -53,7 +60,11 @@ vertical speaker left/right, embedded split left/right, speaker plus mental mode
 portrait speaker-top/screen-bottom. Every layout change, zoom, transition, and motion beat needs a
 communication job. Reject automated drift and filler punch-ins.
 
-Openings need 8-12 meaningful changes inside 30s and at least three layout states. Long bodies must
+Openings need 8-12 meaningful changes inside 30s and at least three layout states. In V7 projects,
+those changes inherit the blueprint's communication jobs: each beat names the claim or proof it
+carries, the viewer question it opens or closes, its evidence authority, and why a state change is
+needed. The exact `3/10/30` deadlines and `8-12` cadence are locked; style, geometry, typography,
+transition treatment, and motion language remain flexible. Long bodies must
 change visual state at least every 12s; holds beyond 8s require a semantic reason. Shorts use the
 same 3s opening deadline and then change state every 4-8s. Never repeat a layout more than twice
 without an uninterrupted-proof reason. Evidence authority is explicit and ordered: raw source,
@@ -98,8 +109,10 @@ outputs proof-gated candidates.
 4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
    Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
    screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
-5. Author the v3.5 body contract, cut-integrity plan, factual proof plan, audio plan, grade plan,
-   caption policy, production review, and choreography against the packet's frozen bundle, then call
+5. Author the v3.6 body contract, cut-integrity plan, factual proof plan, audio plan, grade plan,
+   caption policy, production review, and choreography against the packet's frozen bundle. If the
+   packet carries an Opening Edit Blueprint, map every planned scene through second 60 and record
+   every approved deviation with a hash-bound receipt. Then call
    `eddy_host_submit(job_id=..., payload=<EditPlanV3>)`. Repair validation errors rather than
    bypassing them. Eddy auto-selects a clear, certain opening leader; when the top two are within
    five points or uncertain, inspect `eddy_opening_candidates` and call `eddy_select_opening` with
@@ -162,6 +175,10 @@ eddy revise-design <job-id> design-contract-revision.json
    must meet speech within two frames unless the plan names a protected exception.
 7. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
 8. Compile the hash-bound frame and semantic scenes into one paused, seek-safe HyperFrames timeline.
+   For V7 projects, treat the Opening Edit Blueprint as the pre-recorded editorial intent: preserve
+   each scene's communication job and evidence requirement, while adapting visual style to the real
+   footage. A missing scene, an unexplained reorder, or a changed communication job is a contract
+   failure, not an invitation to improvise.
    Render three independent openings, one body composition reused byte-for-byte, and portrait
    compositions for Shorts. Motion must cover its full intended segment: frozen tails, one-frame
    flashes, accidental still endings, and broken boundaries fail. Layout changes follow the spoken
@@ -206,6 +223,9 @@ eddy revise-design <job-id> design-contract-revision.json
 - Exactly one shared body plan feeds all three longs; only their hook segments differ.
 - The project frame hash, source refs, choreography manifest, animation map, provenance, selected
   opening, shared-body hash, and 0/1/3/10/30 comparison frames are inspectable.
+- V7 plans expose the exact Opening Edit Blueprint ref/hash, benchmark library ref/hash, locked
+  `3/10/30` deadlines and `8-12` cadence, a one-to-one delivered scene map through second 60, and
+  explicit receipts for every deviation. No scene or communication job disappears silently.
 - The body contract hash/ref, mode, route, ordered section IDs, proof-scene mapping, progress cues,
   and final payoff are inspectable. Every shared-body scene belongs to exactly one locked section.
 - Every `keep` beat and protected span survives.

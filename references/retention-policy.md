@@ -40,6 +40,11 @@ If `--target-min N` is given, treat it as a **trim-aggressiveness dial**, not a 
 Mark sacred spans in `edit-plan.md`. The composite carries a `protected_count`; `verify.py` asserts
 it survived the edit end-to-end.
 
+For Strategy Profile V7, the Opening Edit Blueprint is also a retention contract. Every planned
+scene through second 60 maps to the delivered timeline. You may replace a treatment when real
+footage or mobile legibility requires it, but you may not silently remove, reorder, or change the
+scene's communication job. Record the replacement and its proof as an opening deviation receipt.
+
 ## Bias-to-keep + spot-check (autonomy without stalling)
 
 Run fully autonomous — never stop mid-edit to ask. But:
