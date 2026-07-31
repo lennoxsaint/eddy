@@ -70,6 +70,30 @@ locks the function of each scene—its communication job and evidence requiremen
 host to adapt style to the footage. Missing mappings, threshold drift, and unreceipted deviations
 fail before render.
 
+V3.6 can also declare an owner-locked standalone opening:
+
+```json
+{
+  "protected": [
+    {
+      "start": 0,
+      "end": 60,
+      "reason": "Frozen anonymous opening bake-off",
+      "preserve_audio_timing": true
+    }
+  ],
+  "body": {"keep": [[0, 60]], "drop": [], "retake_groups": []},
+  "hooks": [
+    {"id": "proof", "rank": 1, "segments": [[0, 60]], "proof_assets": ["screen.mp4"]}
+  ]
+}
+```
+
+`preserve_audio_timing` is optional and defaults to `false`. When true, Eddy rejects any editorial
+drop that overlaps the span, preserves its source timing exactly, receipts the source-to-delivery
+mapping, and exempts only cadence/editorial findings inside that explicit window. If the selected
+hook fully covers the nominal shared body, Eddy emits the hook once instead of duplicating it.
+
 ## Prior production contract: `edit-plan-v3.5`
 
 V3.5 retains v3.4 and binds the Project Fact Brief, Studio Sound policy, cut-integrity

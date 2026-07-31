@@ -154,6 +154,39 @@ def final_sacred_windows(sacred_src: list[list[float]], segments: list[list[floa
     return out
 
 
+def exact_source_timing_preserved(
+    exact_src: list[list[float]],
+    segments: list[list[float]],
+    *,
+    tolerance: float = 0.001,
+) -> bool:
+    """Require continuous source coverage across every frozen interval."""
+
+    for exact_start, exact_end in exact_src:
+        intersections = sorted(
+            [
+                [max(exact_start, segment_start), min(exact_end, segment_end)]
+                for segment_start, segment_end in segments
+                if segment_start < exact_end and segment_end > exact_start
+            ]
+        )
+        merged: list[list[float]] = []
+        for start, end in intersections:
+            if merged and start <= merged[-1][1] + tolerance:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        if len(merged) != 1:
+            return False
+        covered_start, covered_end = merged[0]
+        if (
+            abs(covered_start - exact_start) > tolerance
+            or abs(covered_end - exact_end) > tolerance
+        ):
+            return False
+    return True
+
+
 def _in_windows(t: float, windows: list[list[float]], pad: float = 0.75) -> bool:
     return any(a - pad <= t <= b + pad for a, b in windows)
 
@@ -163,13 +196,17 @@ def apply_protected_pause_ceiling(
     protected_windows: list[list[float]],
     *,
     ceiling: float = PROTECTED_PAUSE_CEILING,
+    exact_windows: list[list[float]] | None = None,
 ) -> tuple[list[list[float]], list[list[float]]]:
     """Exempt only short protected breaths; long protected silence remains a blocker."""
 
     kept: list[list[float]] = []
     violations: list[list[float]] = []
+    exact_windows = exact_windows or []
     for span in silence_spans:
         midpoint = (span[0] + span[1]) / 2
+        if _in_windows(midpoint, exact_windows, pad=0.0):
+            continue
         if _in_windows(midpoint, protected_windows):
             if span[1] - span[0] > ceiling:
                 violations.append(span)
@@ -184,12 +221,14 @@ def word_gap_verdict(
     *,
     hard_max: float = HARD_MAX_GAP,
     alignment_tolerance: float = WORD_ALIGNMENT_TOLERANCE,
+    exact_windows: list[list[float]] | None = None,
 ) -> dict:
     """Verify the delivered-word cadence without allowing protection to hide dead air."""
 
     gaps: list[list[float]] = []
     protected_violations: list[list[float]] = []
     ordinary_gaps: list[list[float]] = []
+    exact_windows = exact_windows or []
     for left, right in zip(words, words[1:], strict=False):
         start, end = float(left["end"]), float(right["start"])
         if end <= start:
@@ -197,6 +236,8 @@ def word_gap_verdict(
         gap = [round(start, 3), round(end, 3)]
         gaps.append(gap)
         midpoint = (start + end) / 2.0
+        if _in_windows(midpoint, exact_windows, pad=0.0):
+            continue
         if _in_windows(midpoint, protected_windows, pad=0.0):
             if end - start > PROTECTED_PAUSE_CEILING:
                 protected_violations.append(gap)
@@ -226,6 +267,24 @@ def word_gap_verdict(
         "violations": ordinary_violations,
         "protected_violations": protected_violations,
     }
+
+
+def filter_exact_editorial_issues(
+    issues: list[dict],
+    exact_windows: list[list[float]],
+) -> tuple[list[dict], int]:
+    """Exclude only issues whose midpoint is explicitly frozen by the owner."""
+
+    kept = [
+        issue
+        for issue in issues
+        if not _in_windows(
+            (float(issue["start"]) + float(issue["end"])) / 2.0,
+            exact_windows,
+            pad=0.0,
+        )
+    ]
+    return kept, len(issues) - len(kept)
 
 
 def _text_ngrams(text: str, size: int = 4) -> set[tuple[str, ...]]:
@@ -368,10 +427,20 @@ def main() -> int:
 
     # sacred SOURCE spans -> FINAL windows (mapped via segments), exempt from silence + retake gates.
     sacred_final: list[list[float]] = []
+    exact_final: list[list[float]] = []
     if args.sacred and Path(args.sacred).exists() and args.segments and Path(args.segments).exists():
-        sac_src = json.loads(Path(args.sacred).read_text()).get("sacred", [])
+        sacred_payload = json.loads(Path(args.sacred).read_text())
+        sac_src = sacred_payload.get("sacred", [])
+        exact_src = sacred_payload.get("frozen", [])
         seg_map = json.loads(Path(args.segments).read_text()).get("segments", [])
         sacred_final = final_sacred_windows(sac_src, seg_map)
+        exact_final = final_sacred_windows(exact_src, seg_map)
+        gate(
+            "protected_audio_timing_preserved",
+            exact_source_timing_preserved(exact_src, seg_map),
+            expected=len(exact_src),
+            mapped=len(exact_final),
+        )
 
     # Layout assert: resolution
     w, h = video_res(info)
@@ -427,7 +496,9 @@ def main() -> int:
         protected_violations: list[list[float]] = []
         if sacred_final:
             sil_spans, protected_violations = apply_protected_pause_ceiling(
-                sil_spans, sacred_final
+                sil_spans,
+                sacred_final,
+                exact_windows=exact_final,
             )
             durs = [e - s for s, e in sil_spans]
             max_sil, total_sil = (max(durs) if durs else 0.0), sum(durs)
@@ -459,10 +530,18 @@ def main() -> int:
         else:
             flagged = retake_scan(fw, window_s=args.retake_window)
             # exempt sacred windows (intentional instructional/rhetorical repetition, not a retake).
-            if sacred_final:
-                flagged = [f for f in flagged if not _in_windows(f["again_s"], sacred_final)]
+            if sacred_final or exact_final:
+                flagged = [
+                    f
+                    for f in flagged
+                    if not _in_windows(f["again_s"], [*sacred_final, *exact_final])
+                ]
             gate("retake_repeat_scan", not flagged, flagged=flagged[:12], count=len(flagged))
-            cadence = word_gap_verdict(fw, sacred_final)
+            cadence = word_gap_verdict(
+                fw,
+                sacred_final,
+                exact_windows=exact_final,
+            )
             gate("high_energy_cadence", cadence["pass"], **cadence)
             if args.final_words and Path(args.final_words).exists():
                 editorial_issues = delivered_editorial_issues(
@@ -489,11 +568,20 @@ def main() -> int:
                     if generated_words.exists()
                     else []
                 )
+            frozen_editorial_exceptions = 0
+            if exact_final:
+                editorial_issues, frozen_editorial_exceptions = (
+                    filter_exact_editorial_issues(
+                        editorial_issues,
+                        exact_final,
+                    )
+                )
             gate(
                 "delivered_editorial_truth",
                 not editorial_issues,
                 issues=editorial_issues[:12],
                 count=len(editorial_issues),
+                frozen_exception_count=frozen_editorial_exceptions,
             )
 
     passed = all(g["pass"] for g in gates)
@@ -501,6 +589,7 @@ def main() -> int:
     blocking = {
         "max_internal_silence_ok",
         "protected_pause_ceiling",
+        "protected_audio_timing_preserved",
         "retake_repeat_scan",
         "high_energy_cadence",
         "delivered_editorial_truth",

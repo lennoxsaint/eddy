@@ -20,7 +20,9 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
   no unprotected silence longer than `--max-deadair` (0.28s). Protected content may retain meaning,
   but `protected_pause_ceiling` blocks any protected silence above 0.8s. This catches the dead-air
   that word-only tightening missed (the 16s / 4s survivors). Runs on the source-of-truth audio, not
-  the segment receipt.
+  the segment receipt. A V3.6 span with explicit `preserve_audio_timing: true` is the narrow
+  exception: `protected_audio_timing_preserved` must map the complete source interval, and only
+  findings whose midpoint is inside that owner-locked interval are exempt.
 - **Speech ratio** (`speech_ratio_ok`) — 1 − (total silence / duration) ≥ floor; a low ratio means
   dead air slipped through.
 - **Retake scan** (`retake_repeat_scan`) — **re-transcribe the final render** (`transcribe.py` on the
@@ -39,7 +41,10 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Delivered editorial truth** (`delivered_editorial_truth`) — run the same repeat, reset-loop, and
   false-start detector over every delivered-media transcript. Any unresolved survivor blocks.
 - **Evidence-bearing Short** — source-mapped screen proof covers at least 25% of a dual-source Short
-  and three overlay-free delivered-frame samples match transformed raw screen frames. Its hook and
+  and three camera-free or camera-safe delivered-frame regions match transformed raw screen frames.
+  Sampling excludes a 150ms boundary guard around camera-only states so post-provider timing drift
+  cannot turn a valid state change into a false mismatch. Full-frame, lower-panel, and left/right
+  edge-presenter layouts are checked against their unobstructed proof regions. Its hook and
   supporting proof beats each show at least three perceptual states at 10 fps and stay frozen for
   less than 80% of their duration.
 - **Beat completeness** — every `keep` beat id from `edit-plan.md` is present in the final cut.

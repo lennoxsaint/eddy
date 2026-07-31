@@ -172,7 +172,9 @@ eddy revise-design <job-id> design-contract-revision.json
    evidence, audio evidence controls the cut. Preserve leading phonemes, terminal consonants, and
    word endings; use sequence-search parity instead of guessed offsets. Tighten gaps above 0.2s to
    0.1s, cap unprotected delivered gaps at 0.28s, and protect declared deliberate pauses. A new shot
-   must meet speech within two frames unless the plan names a protected exception.
+   must meet speech within two frames unless the plan names a protected exception. For an
+   owner-locked standalone V3.6 bake-off opening, set `preserve_audio_timing: true`; never combine
+   that flag with a drop inside the span, and never append the same protected body after the hook.
 7. Composite the full-frame screen and rounded camera treatment, or the talking-head layout.
 8. Compile the hash-bound frame and semantic scenes into one paused, seek-safe HyperFrames timeline.
    For V7 projects, treat the Opening Edit Blueprint as the pre-recorded editorial intent: preserve
