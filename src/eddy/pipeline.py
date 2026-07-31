@@ -41,6 +41,7 @@ class LongRenderPlan:
     hook_cutlist: Path
     body_cutlist: Path
     output_name: str
+    append_body: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +105,11 @@ def build_render_plan(
 ) -> RenderPlan:
     work.mkdir(parents=True, exist_ok=True)
     sacred = [[float(item["start"]), float(item["end"])] for item in plan.protected]
+    frozen = [
+        [float(item["start"]), float(item["end"])]
+        for item in plan.protected
+        if item.get("preserve_audio_timing") is True
+    ]
     body_cutlist = work / "body-cutlist.json"
     body_dropfile = work / "body-drops.json"
     _write_json(
@@ -111,6 +117,7 @@ def build_render_plan(
         {
             "keep": [list(item) for item in plan.body.keep],
             "sacred": sacred,
+            "frozen": frozen,
             "gap_tighten": {"threshold": 0.2, "target": 0.1},
         },
     )
@@ -161,6 +168,11 @@ def build_render_plan(
         key = (float(row["span"][0]), float(row["span"][1]))
         if key in seen_spans:
             continue
+        if any(
+            key[0] < frozen_end and key[1] > frozen_start
+            for frozen_start, frozen_end in frozen
+        ):
+            raise ValueError("protected_audio_timing_drop_conflict")
         seen_spans.add(key)
         unique_rows.append(row)
     _write_json(body_dropfile, {"explicit_drops": unique_rows})
@@ -188,6 +200,7 @@ def build_render_plan(
             {
                 "keep": [list(item) for item in hook.segments],
                 "sacred": sacred,
+                "frozen": frozen,
                 "gap_tighten": {"threshold": 0.2, "target": 0.1},
             },
         )
@@ -196,8 +209,36 @@ def build_render_plan(
             if hook.id == selected_hook_id
             else f"long-alternate-{_slug(hook.id)}.mp4"
         )
-        renders.append(LongRenderPlan(hook, hook_path, body_cutlist, output_name))
+        append_body = not _ranges_fully_cover(hook.segments, plan.body.keep)
+        renders.append(
+            LongRenderPlan(hook, hook_path, body_cutlist, output_name, append_body)
+        )
     return RenderPlan(body_cutlist, body_dropfile, tuple(renders))  # type: ignore[arg-type]
+
+
+def _ranges_fully_cover(
+    covering: tuple[tuple[float, float], ...],
+    targets: tuple[tuple[float, float], ...],
+) -> bool:
+    """Return whether every target interval is already present in the opening.
+
+    V3.6 may intentionally deliver a standalone 60-second opening where the
+    protected opening is also the nominal shared body. Appending that body
+    would repeat the entire opening. The normal long-form path is unchanged
+    whenever any body interval extends beyond the selected hook.
+    """
+
+    merged: list[list[float]] = []
+    for start, end in sorted(covering):
+        if merged and start <= merged[-1][1] + 0.001:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return all(
+        any(start >= cover_start - 0.001 and end <= cover_end + 0.001
+            for cover_start, cover_end in merged)
+        for start, end in targets
+    )
 
 
 class PipelineRunner:
@@ -490,11 +531,17 @@ class PipelineRunner:
             if plan.grade_plan is not None:
                 _grade_camera_footage(camera_hook)
             long_segments = stage / f"camera-long-{item.hook.rank}.segments.json"
-            _combine_segment_receipts(
-                camera_hook.with_name(f"hook-camera-{item.hook.rank}.segments.json"),
-                body_camera.with_name("body-camera.segments.json"),
-                long_segments,
+            hook_segments = camera_hook.with_name(
+                f"hook-camera-{item.hook.rank}.segments.json"
             )
+            if item.append_body:
+                _combine_segment_receipts(
+                    hook_segments,
+                    body_camera.with_name("body-camera.segments.json"),
+                    long_segments,
+                )
+            else:
+                shutil.copy2(hook_segments, long_segments)
             screen_hook = None
             if sources.screen and body_screen:
                 screen_hook = stage / f"hook-screen-{item.hook.rank}.mp4"
@@ -547,7 +594,12 @@ class PipelineRunner:
                     if row["hook_id"] == item.hook.id
                 )
                 opening_choreographed = stage / f"opening-choreographed-{item.hook.rank}.mp4"
-                opening_duration_green = _media_duration(hook_composite) >= 29.5
+                required_opening_duration = (
+                    59.5 if plan.schema_version == "edit-plan-v3.6" else 29.5
+                )
+                opening_duration_green = (
+                    _media_duration(hook_composite) >= required_opening_duration
+                )
                 opening_choreography = _render_visual_choreography(
                     self.root,
                     stage / f"opening-choreography-brief-{item.hook.rank}.json",
@@ -582,10 +634,20 @@ class PipelineRunner:
                     frame_sha256=plan.frame_contract["sha256"],
                 )
                 if not opening_duration_green:
-                    blockers.append(f"opening_cut_under_thirty_seconds:{item.hook.id}")
+                    duration_label = (
+                        "sixty"
+                        if plan.schema_version == "edit-plan-v3.6"
+                        else "thirty"
+                    )
+                    blockers.append(
+                        f"opening_cut_under_{duration_label}_seconds:{item.hook.id}"
+                    )
                 if opening_choreography_green:
                     hook_visual = opening_choreographed
-            _concat(hook_visual, body_visual, composite)
+            if item.append_body:
+                _concat(hook_visual, body_visual, composite)
+            else:
+                shutil.copy2(hook_visual, composite)
 
             self.manager.transition(job_id, JobState.RENDERING_FINAL)
             long_beats = _motion_beats_for_hook(plan.motion_beats, item.hook.id)
@@ -741,6 +803,10 @@ class PipelineRunner:
                     label=f"long-{item.hook.rank}",
                     receipts=attempt / "provider-receipts.jsonl",
                     artifact=item.output_name,
+                    sacred=tuple(
+                        (float(span["start"]), float(span["end"]))
+                        for span in plan.protected
+                    ),
                 )
                 qa = subprocess.run(
                     [
@@ -1112,6 +1178,27 @@ class PipelineRunner:
                     sources.screen is not None
                     and audio.passed
                 ):
+                    short_visual_plan = (
+                        next(
+                            (
+                                row
+                                for row in plan.visual_choreography["shorts"]
+                                if row["short_id"] == short.id
+                            ),
+                            None,
+                        )
+                        if plan.visual_choreography is not None
+                        else None
+                    )
+                    camera_only_ranges = (
+                        tuple(
+                            (float(scene["start"]), float(scene["end"]))
+                            for scene in short_visual_plan["scenes"]
+                            if scene["layout"] == "speaker_full"
+                        )
+                        if short_visual_plan is not None
+                        else ()
+                    )
                     proof = screen_proof_verdict(
                         short_final,
                         sources.screen,
@@ -1120,7 +1207,7 @@ class PipelineRunner:
                         excluded_final_ranges=tuple(
                             (float(beat["start"]), float(beat["start"]) + float(beat["dur"]))
                             for beat in short.motion_beats
-                        ),
+                        ) + camera_only_ranges,
                     )
                 else:
                     proof = {
@@ -1452,10 +1539,21 @@ def _repair_delivered_cadence(
     label: str,
     receipts: Path,
     artifact: str,
+    sacred: tuple[tuple[float, float], ...] = (),
 ) -> bool:
+    def unprotected_violations() -> list[list[float]]:
+        return [
+            violation
+            for violation in _delivered_gap_violations(final_words)
+            if not any(
+                violation[1] > protected_start and violation[0] < protected_end
+                for protected_start, protected_end in sacred
+            )
+        ]
+
     repaired_any = False
     for pass_number in range(1, MAX_DELIVERED_CADENCE_PASSES + 1):
-        violations = _delivered_gap_violations(final_words)
+        violations = unprotected_violations()
         if not violations:
             break
         duration = _media_duration(media)
@@ -1465,7 +1563,7 @@ def _repair_delivered_cadence(
             cutlist,
             {
                 "keep": [[0.0, duration]],
-                "sacred": [],
+                "sacred": [[start, end] for start, end in sacred],
                 "gap_tighten": {"threshold": 0.2, "target": 0.1},
             },
         )
@@ -1474,7 +1572,7 @@ def _repair_delivered_cadence(
         repair_segments = repaired.with_name(f"{repaired.stem}.segments.json")
         os.replace(repaired, media)
         _transcribe_final(root, media, final_words)
-        after_violations = _delivered_gap_violations(final_words)
+        after_violations = unprotected_violations()
         _append_receipt(
             receipts,
             {

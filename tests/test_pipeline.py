@@ -22,7 +22,7 @@ from eddy.pipeline import (
 )
 from eddy.plan import EditPlanV3
 from eddy.runtime import JobManager, JobState
-from test_runtime import valid_plan, valid_plan_v31, valid_plan_v32
+from test_runtime import valid_plan, valid_plan_v31, valid_plan_v32, valid_plan_v36
 
 
 def test_discover_sources_prefers_named_camera_and_screen(tmp_path: Path) -> None:
@@ -76,6 +76,45 @@ def test_v32_selected_opening_becomes_primary_without_changing_shared_body(
         "long-alternate-cost.mp4",
     ]
     assert len({item.body_cutlist for item in render_plan.longs}) == 1
+
+
+def test_v36_standalone_opening_does_not_append_duplicate_shared_body(
+    tmp_path: Path,
+) -> None:
+    payload = valid_plan_v36()
+    payload["body"]["keep"] = [[0.0, 60.0]]
+    payload["body"]["drop"] = []
+    payload["body"]["retake_groups"] = []
+    payload["protected"] = [
+        {
+            "start": 0.0,
+            "end": 60.0,
+            "reason": "standalone opening proof",
+            "preserve_audio_timing": True,
+        }
+    ]
+    for hook in payload["hooks"]:
+        hook["segments"] = [[0.0, 60.0]]
+    plan = EditPlanV3.from_dict(payload)
+
+    render_plan = build_render_plan(
+        plan,
+        tmp_path,
+        selected_opening_id=payload["visual_choreography"]["openings"][0]["id"],
+    )
+
+    assert all(item.append_body is False for item in render_plan.longs)
+    assert json.loads(render_plan.body_cutlist.read_text())["frozen"] == [[0.0, 60.0]]
+
+
+def test_long_form_render_plan_still_appends_non_overlapping_shared_body(
+    tmp_path: Path,
+) -> None:
+    plan = EditPlanV3.from_dict(valid_plan())
+
+    render_plan = build_render_plan(plan, tmp_path)
+
+    assert all(item.append_body is True for item in render_plan.longs)
 
 
 def test_v32_collects_complete_choreography_proof_packet(tmp_path: Path) -> None:

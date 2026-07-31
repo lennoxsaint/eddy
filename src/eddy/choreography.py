@@ -243,7 +243,19 @@ def build_hyperframes_project(
 
     duration = duration_override or max(float(scene["end"]) for scene in scene_rows)
     portrait = height > width
-    scene_markup: list[str] = []
+    scene_markup: list[str] = [
+        (
+            '<video id="eddy-camera" class="scene-media media-camera" '
+            f'src="./{html.escape(camera_name)}" data-start="0" data-duration="{duration:.3f}" '
+            'muted playsinline preload="auto"></video>'
+        )
+    ]
+    if screen_name:
+        scene_markup.append(
+            '<video id="eddy-screen" class="scene-media media-screen" '
+            f'src="./{html.escape(screen_name)}" data-start="0" data-duration="{duration:.3f}" '
+            'muted playsinline preload="auto"></video>'
+        )
     timeline_lines = ["const tl = gsap.timeline({paused:true});"]
     animation_rows: list[dict[str, Any]] = []
     asset_hashes: dict[str, str] = {}
@@ -253,9 +265,15 @@ def build_hyperframes_project(
         start = float(scene["start"])
         end = float(scene["end"])
         transition = str(scene["transition"])
-        camera_class, screen_class = _layout_media_classes(layout)
-        if screen_name is None and camera_class == "camera-hidden":
-            camera_class = "camera-full"
+        camera_style, screen_style = _layout_media_styles(
+            layout,
+            width=width,
+            height=height,
+            screen_available=screen_name is not None,
+        )
+        camera_object_position = scene.get("camera_object_position")
+        if isinstance(camera_object_position, str):
+            camera_style["objectPosition"] = camera_object_position
         asset_roots = tuple(source_roots or (() if source_root is None else (source_root,)))
         asset_name = _copy_scene_asset(
             scene,
@@ -266,16 +284,9 @@ def build_hyperframes_project(
         if asset_name is not None:
             asset_hashes[asset_name] = _sha256(project / asset_name)
         scene_markup.append(
-            f'<video id="{scene_id}-camera" class="scene-media {camera_class} layout-{html.escape(layout)}" '
-            f'src="./{html.escape(camera_name)}" data-start="0" data-duration="{duration:.3f}" '
-            'muted playsinline preload="auto"></video>'
+            f'<div id="{scene_id}-state" class="scene-state layout-{html.escape(layout)}" '
+            'aria-hidden="true"></div>'
         )
-        if screen_name:
-            scene_markup.append(
-                f'<video id="{scene_id}-screen" class="scene-media {screen_class} layout-{html.escape(layout)}" '
-                f'src="./{html.escape(screen_name)}" data-start="0" data-duration="{duration:.3f}" '
-                'muted playsinline preload="auto"></video>'
-            )
         if asset_name is not None:
             scene_markup.append(
                 f'<img id="{scene_id}-asset" class="scene-media proof-asset layout-{html.escape(layout)}" '
@@ -283,20 +294,52 @@ def build_hyperframes_project(
             )
         if transition == "brand_act_wipe":
             scene_markup.append(f'<div id="{scene_id}-wipe" class="brand-wipe"></div>')
-        targets = [f"#{scene_id}-camera"]
+        targets: list[str] = []
+        if not (start == 0 and camera_style["autoAlpha"] == 0):
+            timeline_lines.append(
+                f"tl.set('#eddy-camera', {json.dumps(camera_style)}, {start:.3f});"
+            )
+        if camera_style["autoAlpha"] == 1:
+            targets.append("#eddy-camera")
         if screen_name:
-            targets.append(f"#{scene_id}-screen")
+            if not (start == 0 and screen_style["autoAlpha"] == 0):
+                timeline_lines.append(
+                    f"tl.set('#eddy-screen', {json.dumps(screen_style)}, {start:.3f});"
+                )
+            if screen_style["autoAlpha"] == 1:
+                targets.append("#eddy-screen")
         if asset_name is not None:
             targets.append(f"#{scene_id}-asset")
         target_js = json.dumps(targets)
         transform = _motion_from(str(scene["motion_verb"]), transition)
         timeline_lines.append(f"tl.set({target_js}, {{autoAlpha:1}}, {start:.3f});")
         if transition != "hard_cut":
+            if camera_style["autoAlpha"] == 1:
+                timeline_lines.append(
+                    f"tl.fromTo('#eddy-camera', {json.dumps(transform)}, "
+                    f"{json.dumps({**camera_style, 'scale': 1, 'duration': 0.32, 'ease': 'power2.out'})}, "
+                    f"{start:.3f});"
+                )
+            if screen_name and screen_style["autoAlpha"] == 1:
+                timeline_lines.append(
+                    f"tl.fromTo('#eddy-screen', {json.dumps(transform)}, "
+                    f"{json.dumps({**screen_style, 'scale': 1, 'duration': 0.32, 'ease': 'power2.out'})}, "
+                    f"{start:.3f});"
+                )
+            if asset_name is not None:
+                timeline_lines.append(
+                    f"tl.fromTo('#{scene_id}-asset', {json.dumps(transform)}, "
+                    f"{{autoAlpha:1,x:0,y:0,scale:1,duration:0.32,ease:'power2.out'}}, {start:.3f});"
+                )
+        # Shared media persists between adjacent scenes and the next scene's
+        # start-state owns its visibility/layout. Hiding shared targets at the
+        # exact boundary creates a one-frame blackout when HyperFrames seeks
+        # to a hard-cut timestamp. Only scene-local proof assets need an
+        # explicit end-state.
+        if asset_name is not None:
             timeline_lines.append(
-                f"tl.fromTo({target_js}, {json.dumps(transform)}, "
-                f"{{autoAlpha:1,x:0,y:0,scale:1,duration:0.32,ease:'power2.out'}}, {start:.3f});"
+                f"tl.set('#{scene_id}-asset', {{autoAlpha:0}}, {end:.3f});"
             )
-        timeline_lines.append(f"tl.set({target_js}, {{autoAlpha:0}}, {end:.3f});")
         if transition == "brand_act_wipe":
             timeline_lines.append(
                 f"tl.fromTo('#{scene_id}-wipe', {{autoAlpha:1,scaleX:0}}, "
@@ -408,6 +451,15 @@ def _parse_scenes(value: object, *, label: str) -> tuple[dict[str, Any], ...]:
             raise ChoreographyValidationError(f"visual_scene_source_refs_required:{label}")
         if not isinstance(raw.get("preview_safe"), bool):
             raise ChoreographyValidationError(f"visual_scene_preview_safe_required:{label}")
+        camera_object_position = raw.get("camera_object_position")
+        if camera_object_position is not None and camera_object_position not in {
+            "left center",
+            "center center",
+            "right center",
+        }:
+            raise ChoreographyValidationError(
+                f"visual_scene_camera_object_position_invalid:{label}"
+            )
         scenes.append(dict(raw))
     _validate_layout_repetition(tuple(scenes))
     for left, right in zip(scenes, scenes[1:], strict=False):
@@ -587,18 +639,80 @@ def _sha256(path: Path | None) -> str:
     return digest.hexdigest()
 
 
-def _layout_media_classes(layout: str) -> tuple[str, str]:
-    if layout == "speaker_full":
-        return "camera-full", "screen-hidden"
-    if layout == "speaker_edge_left":
-        return "camera-edge-left", "screen-full"
-    if layout == "speaker_edge_right":
-        return "camera-edge-right", "screen-full"
+def _layout_media_styles(
+    layout: str,
+    *,
+    width: int,
+    height: int,
+    screen_available: bool,
+) -> tuple[dict[str, float | int | str], dict[str, float | int | str]]:
+    """Return seek-safe GSAP styles for one shared camera/screen pair.
+
+    HyperFrames discovers every video element in the composition. Repeating the
+    same 1080p camera and screen element per scene multiplied decoder pressure
+    and could close the browser session on a 60-second opening. One shared pair
+    keeps media discovery bounded while the timeline changes layout state.
+    """
+
+    full: dict[str, float | int | str] = {
+        "x": 0,
+        "y": 0,
+        "width": width,
+        "height": height,
+        "borderRadius": 0,
+        "borderWidth": 0,
+        "autoAlpha": 1,
+    }
+    hidden: dict[str, float | int | str] = {**full, "autoAlpha": 0}
+    screen_style: dict[str, float | int | str] = (
+        hidden if layout == "speaker_full" else {**full, "zIndex": 1}
+    )
+    if layout == "speaker_full" or not screen_available:
+        return {**full, "zIndex": 2}, screen_style
+    if layout in {"speaker_edge_left", "speaker_edge_right"}:
+        edge_width = round(width * 0.31)
+        return (
+            {
+                **full,
+                "x": 0 if layout == "speaker_edge_left" else width - edge_width,
+                "width": edge_width,
+                "zIndex": 3,
+            },
+            screen_style,
+        )
     if layout == "speaker_pip":
-        return "camera-pip", "screen-full"
+        pip_width = round(width * 0.25)
+        pip_height = round(height * 0.39)
+        return (
+            {
+                **full,
+                "x": width - pip_width - round(width * 0.04),
+                "y": height - pip_height - round(height * 0.06),
+                "width": pip_width,
+                "height": pip_height,
+                "borderRadius": 24,
+                "borderWidth": 2,
+                "zIndex": 3,
+            },
+            screen_style,
+        )
     if layout == "special_emphasis":
-        return "camera-circle", "screen-full"
-    return "camera-hidden", "screen-full"
+        circle_width = round(width * 0.30)
+        circle_height = round(height * 0.53)
+        return (
+            {
+                **full,
+                "x": width - circle_width - round(width * 0.05),
+                "y": height - circle_height - round(height * 0.07),
+                "width": circle_width,
+                "height": circle_height,
+                "borderRadius": 999,
+                "borderWidth": 5,
+                "zIndex": 3,
+            },
+            screen_style,
+        )
+    return hidden, screen_style
 
 
 def _motion_from(motion_verb: str, transition: str) -> dict[str, float | int]:
@@ -622,13 +736,10 @@ def _project_css(*, width: int, height: int, portrait: bool) -> str:
 *{{box-sizing:border-box}}html,body{{margin:0;width:{width}px;height:{height}px;overflow:hidden;background:#05070b}}
 #stage{{position:relative;width:{width}px;height:{height}px;overflow:hidden;background:#05070b}}
 .scene-media,.brand-wipe{{position:absolute;opacity:0;visibility:hidden;will-change:transform,opacity}}
-.scene-media{{inset:0;width:100%;height:100%;object-fit:cover}}
-.screen-full{{object-fit:cover;z-index:1}}.screen-hidden,.camera-hidden{{display:none}}
+.scene-media{{left:0;top:0;width:100%;height:100%;object-fit:cover;border-style:solid;border-color:rgba(255,255,255,.72)}}
+.scene-state{{display:none}}
+.media-screen{{object-fit:cover;z-index:1}}
+.media-camera{{z-index:2;object-fit:cover;box-shadow:0 18px 60px #000}}
 .proof-asset{{z-index:2;object-fit:contain;background:#05070b;padding:{0 if not portrait else 24}px}}
-.camera-full{{z-index:2;object-fit:cover}}
-.camera-edge-left,.camera-edge-right{{z-index:3;width:31%;height:100%;object-fit:cover;box-shadow:0 0 60px #000}}
-.camera-edge-left{{left:0;right:auto;object-position:center}}.camera-edge-right{{right:0;left:auto;object-position:center}}
-.camera-pip{{z-index:3;inset:auto 4% 6% auto;width:25%;height:39%;border-radius:24px;border:2px solid rgba(255,255,255,.72);box-shadow:0 18px 60px #000;object-fit:cover}}
-.camera-circle{{z-index:3;inset:auto 5% 7% auto;width:30%;height:53%;border-radius:50%;border:5px solid #d9b45b;box-shadow:0 18px 70px #000;object-fit:cover}}
 .brand-wipe{{z-index:10;inset:0;background:#d9b45b;transform-origin:left center}}
 """

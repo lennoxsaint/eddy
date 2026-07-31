@@ -49,6 +49,7 @@ def test_hyperframes_compiler_uses_one_paused_timeline_and_full_frame_layouts(
 ) -> None:
     plan = valid_plan_v32()
     scenes = plan["visual_choreography"]["openings"][0]["scenes"]
+    scenes[1]["camera_object_position"] = "right center"
     camera = tmp_path / "camera.mp4"
     screen = tmp_path / "screen.mp4"
     camera.write_bytes(b"camera")
@@ -70,10 +71,33 @@ def test_hyperframes_compiler_uses_one_paused_timeline_and_full_frame_layouts(
     assert "layout-proof_canvas" in html
     assert "layout-speaker_edge_right" in html
     assert "layout-special_emphasis" in html
-    assert "<video" in html
+    assert html.count("<video") == 2
+    assert html.count('id="eddy-camera"') == 1
+    assert html.count('id="eddy-screen"') == 1
+    assert "scene-1-camera" not in html
+    assert "scene-1-screen" not in html
+    assert "{autoAlpha:0}" not in html
+    assert '"objectPosition": "right center"' in html
     assert "position:absolute" in html
     assert manifest["frame_sha256"] == "d" * 64
     assert len(json.loads((tmp_path / "project" / "animation-map.json").read_text())["scenes"]) == 8
+
+
+def test_camera_object_position_rejects_unbounded_css_values() -> None:
+    plan = valid_plan_v32()
+    plan["visual_choreography"]["openings"][0]["scenes"][0][
+        "camera_object_position"
+    ] = "calc(100% + 1px)"
+
+    with pytest.raises(
+        ChoreographyValidationError,
+        match="visual_scene_camera_object_position_invalid",
+    ):
+        validate_visual_choreography(
+            plan["visual_choreography"],
+            hook_ids=[hook["id"] for hook in plan["hooks"]],
+            short_ids=[short["id"] for short in plan["shorts"]],
+        )
 
 
 def test_choreography_render_fake_proves_project_and_audio_mux(tmp_path: Path) -> None:

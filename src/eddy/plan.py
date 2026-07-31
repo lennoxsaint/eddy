@@ -232,6 +232,8 @@ class EditPlanV3:
                 raise PlanValidationError("protected_range_invalid")
             if not isinstance(item.get("reason"), str) or not item["reason"].strip():
                 raise PlanValidationError("protected_reason_required")
+            if not isinstance(item.get("preserve_audio_timing", False), bool):
+                raise PlanValidationError("protected_preserve_audio_timing_must_be_boolean")
             protected_range = (start, end)
             if not _range_fully_covered(protected_range, body.keep):
                 raise PlanValidationError("protected_span_missing_from_shared_body")

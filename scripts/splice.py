@@ -176,7 +176,8 @@ def subtract_spans(keep: list[list[float]], drops: list[list[float]]) -> list[li
 
 def span_gaps(span_start: float, span_end: float, inside: list[dict],
               silences: list[list[float]], sacred: list[list[float]],
-              threshold: float) -> list[list[float]]:
+              threshold: float,
+              preserve_exact: list[list[float]] | None = None) -> list[list[float]]:
     """Every stretch inside [span_start,span_end] that should be tightened: word-gaps AND detected
     silences (incl. leading/trailing), > threshold. Protection may retain a short pause, but it can
     never hide silence above the protected-pause ceiling. Merged + sorted."""
@@ -206,10 +207,12 @@ def span_gaps(span_start: float, span_end: float, inside: list[dict],
     # Transcript word protection applies only to transcript-inferred gaps; the configured handles
     # below preserve word onsets at measured-silence boundaries.
     gaps = _merge([*transcript_gaps, *audio_gaps])
+    preserve_exact = preserve_exact or []
     gaps = [
         gap
         for gap in gaps
-        if not (
+        if not in_any((gap[0] + gap[1]) / 2.0, preserve_exact)
+        and not (
             in_any((gap[0] + gap[1]) / 2.0, sacred)
             and gap[1] - gap[0] <= PROTECTED_PAUSE_CEILING
         )
@@ -219,7 +222,8 @@ def span_gaps(span_start: float, span_end: float, inside: list[dict],
 
 def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[list[float]],
                      threshold: float, target: float,
-                     silences: list[list[float]], max_gap: float = 0.28) -> list[list[float]]:
+                     silences: list[list[float]], max_gap: float = 0.28,
+                     preserve_exact: list[list[float]] | None = None) -> list[list[float]]:
     """Within each kept span, cap every dead-air stretch > threshold to `target` (unless sacred).
 
     Dead air = word-gaps OR silencedetect spans (so a span with no words is still tightened).
@@ -245,7 +249,15 @@ def compute_segments(keep: list[list[float]], words: list[dict], sacred: list[li
             if span_end - last_end > trailing_handle and not in_any(trailing_midpoint, sacred):
                 span_end = last_end + trailing_handle
         seg_start = span_start
-        for g0, g1 in span_gaps(span_start, span_end, inside, silences, sacred, eff_threshold):
+        for g0, g1 in span_gaps(
+            span_start,
+            span_end,
+            inside,
+            silences,
+            sacred,
+            eff_threshold,
+            preserve_exact,
+        ):
             touches_start = g0 <= span_start + 1e-6
             touches_end = g1 >= span_end - 1e-6
             keep_until = g0 if touches_start else g0 + trailing_handle
@@ -489,6 +501,7 @@ def main() -> int:
         words = load(args.words).get("words", [])
         keep = cut.get("keep", [])
         sacred = cut.get("sacred", [])
+        frozen = cut.get("frozen", [])
         if not keep:
             print("ERROR: cut list has no 'keep' spans.", file=sys.stderr)
             return 2
@@ -508,6 +521,13 @@ def main() -> int:
                 elif isinstance(item, (list, tuple)) and len(item) == 2:
                     explicit.append([float(item[0]), float(item[1])])
         drop_spans = [d["span"] for d in retakes] + explicit
+        if any(
+            drop_start < frozen_end and drop_end > frozen_start
+            for drop_start, drop_end in drop_spans
+            for frozen_start, frozen_end in frozen
+        ):
+            print("ERROR: drop overlaps frozen audio timing span.", file=sys.stderr)
+            return 3
         if drop_spans:
             keep = subtract_spans(keep, drop_spans)
             if not keep:
@@ -515,7 +535,16 @@ def main() -> int:
                       file=sys.stderr)
                 return 3
         silences = detect_silences(Path(args.inp), args.silence_db, min(threshold, args.max_gap))
-        segments = compute_segments(keep, words, sacred, threshold, target, silences, args.max_gap)
+        segments = compute_segments(
+            keep,
+            words,
+            sacred,
+            threshold,
+            target,
+            silences,
+            args.max_gap,
+            frozen,
+        )
         if not segments:
             print("ERROR: computed zero segments — check keep spans vs word timings.", file=sys.stderr)
             return 3

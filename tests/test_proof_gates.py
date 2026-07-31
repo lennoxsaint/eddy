@@ -5,10 +5,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageOps
 
 from eddy.proof import (
     _global_ssim,
+    _mapped_proof_points,
     caption_sync_verdict,
     contextual_motion_verdict,
     measure_motion_activity,
@@ -117,6 +118,48 @@ def test_protected_silence_is_never_exempt_above_point_eight_seconds() -> None:
     assert violations == [[2.0, 7.7]]
 
 
+def test_frozen_audio_timing_exempts_an_explicit_long_pause() -> None:
+    verify = _load_script("verify")
+
+    kept, violations = verify.apply_protected_pause_ceiling(
+        [[2.0, 7.7]],
+        [[0.0, 10.0]],
+        ceiling=0.8,
+        exact_windows=[[0.0, 10.0]],
+    )
+
+    assert kept == []
+    assert violations == []
+
+
+def test_frozen_audio_timing_exempts_only_editorial_issues_inside_window() -> None:
+    verify = _load_script("verify")
+
+    issues, exception_count = verify.filter_exact_editorial_issues(
+        [
+            {"start": 4.0, "end": 5.0, "kind": "false_start"},
+            {"start": 12.0, "end": 13.0, "kind": "false_start"},
+        ],
+        [[0.0, 10.0]],
+    )
+
+    assert issues == [{"start": 12.0, "end": 13.0, "kind": "false_start"}]
+    assert exception_count == 1
+
+
+def test_frozen_audio_timing_requires_continuous_source_coverage() -> None:
+    verify = _load_script("verify")
+
+    assert verify.exact_source_timing_preserved(
+        [[0.0, 60.0]],
+        [[0.0, 60.0]],
+    )
+    assert not verify.exact_source_timing_preserved(
+        [[0.0, 60.0]],
+        [[0.0, 10.0], [11.0, 60.0]],
+    )
+
+
 def test_splice_tightens_protected_silence_above_point_eight_seconds() -> None:
     splice = _load_script("splice")
 
@@ -131,6 +174,25 @@ def test_splice_tightens_protected_silence_above_point_eight_seconds() -> None:
     )
 
     assert gaps == [[1.0, 7.0], [8.0, 10.0]]
+
+
+def test_splice_preserves_explicitly_frozen_audio_timing() -> None:
+    splice = _load_script("splice")
+
+    gaps = splice.span_gaps(
+        0.0,
+        10.0,
+        [
+            {"word": "before", "start": 0.0, "end": 1.0},
+            {"word": "after", "start": 7.0, "end": 8.0},
+        ],
+        [[1.0, 7.0]],
+        [[0.0, 10.0]],
+        0.2,
+        [[0.0, 10.0]],
+    )
+
+    assert gaps == []
 
 
 def test_splice_preserves_onset_preroll_and_never_removes_through_words() -> None:
@@ -151,6 +213,91 @@ def test_splice_preserves_onset_preroll_and_never_removes_through_words() -> Non
     )
 
     assert segments == [[0.0, 0.14], [0.68, 0.8]]
+
+
+def test_screen_proof_accepts_portrait_full_frame_with_lower_overlay(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "screen.mp4"
+    final = tmp_path / "short.mp4"
+    receipt = tmp_path / "segments.json"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30:duration=2",
+            "-vf", "format=yuv420p", str(source),
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error", "-i", str(source),
+            "-vf",
+            (
+                "scale=1080:1920:force_original_aspect_ratio=increase,"
+                "crop=1080:1920,"
+                "drawbox=x=780:y=1250:w=260:h=580:color=black:t=fill"
+            ),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(final),
+        ],
+        check=True,
+    )
+    receipt.write_text(json.dumps({"segments": [[0.0, 2.0]]}) + "\n")
+
+    verdict = screen_proof_verdict(
+        final,
+        source,
+        receipt,
+        ((0.0, 2.0),),
+    )
+
+    assert verdict["pass"] is True
+
+
+def test_screen_proof_accepts_source_with_edge_presenter_overlay(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    receipt = tmp_path / "segments.json"
+    receipt.write_text(json.dumps({"segments": [[0.0, 10.0]]}) + "\n")
+    source = Image.fromarray(
+        np.dstack(
+            [
+                np.tile(np.arange(1920, dtype=np.uint16) % 256, (1080, 1)).astype(np.uint8),
+                np.tile(np.arange(1080, dtype=np.uint16)[:, None] % 256, (1, 1920)).astype(np.uint8),
+                np.full((1080, 1920), 120, dtype=np.uint8),
+            ]
+        )
+    )
+    delivered = ImageOps.fit(source, (1080, 1920))
+    delivered.paste(Image.new("RGB", (335, 1920), "black"), (745, 0))
+    final_path = tmp_path / "final.mp4"
+    source_path = tmp_path / "screen.mp4"
+    monkeypatch.setattr(
+        "eddy.proof._frame",
+        lambda media, _timestamp: delivered if media == final_path else source,
+    )
+
+    verdict = screen_proof_verdict(
+        final_path,
+        source_path,
+        receipt,
+        ((0.0, 10.0),),
+    )
+
+    assert verdict["pass"] is True
+    assert all(row["ssim"] >= 0.99 for row in verdict["samples"])
+
+
+def test_screen_proof_sampling_avoids_camera_only_boundaries() -> None:
+    points = _mapped_proof_points(
+        ((0.0, 14.0),),
+        [(0.0, 14.0)],
+        ((9.5, 12.8),),
+    )
+
+    assert len(points) >= 3
+    assert all(not 9.35 <= final_time <= 12.95 for _, final_time in points)
 
 
 def test_single_pass_audio_splice_keeps_only_requested_intervals(tmp_path: Path) -> None:

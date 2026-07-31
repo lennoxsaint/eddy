@@ -97,7 +97,9 @@ def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
     ) -> None:
         assert source == media
         assert transcript == words
-        assert json.loads(cutlist.read_text())["keep"] == [[0.0, 1.2]]
+        payload = json.loads(cutlist.read_text())
+        assert payload["keep"] == [[0.0, 1.2]]
+        assert payload["sacred"] == [[1.1, 1.2]]
         output.write_bytes(b"after")
         output.with_name(f"{output.stem}.segments.json").write_text(
             json.dumps({"segments": [[0.0, 0.2], [0.6, 1.0]]}) + "\n"
@@ -129,6 +131,7 @@ def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
         label="long-1",
         receipts=receipts,
         artifact="long-primary.mp4",
+        sacred=((1.1, 1.2),),
     )
 
     row = json.loads(receipts.read_text())
@@ -139,6 +142,49 @@ def test_delivered_cadence_repair_replaces_media_and_writes_receipt(
     assert row["violations_after"] == []
     assert row["before_sha256"] != row["output_sha256"]
     assert transcribed == [media]
+
+
+def test_delivered_cadence_repair_skips_protected_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    media = tmp_path / "long.mp4"
+    media.write_bytes(b"before")
+    words = tmp_path / "words.json"
+    words.write_text(
+        json.dumps(
+            {
+                "words": [
+                    {"word": "one", "start": 0.0, "end": 0.1},
+                    {"word": "two", "start": 1.0, "end": 1.1},
+                ]
+            }
+        )
+        + "\n"
+    )
+    work = tmp_path / "stage"
+    work.mkdir()
+    receipts = tmp_path / "provider-receipts.jsonl"
+
+    monkeypatch.setattr(
+        pipeline,
+        "_splice",
+        lambda *args, **kwargs: pytest.fail("protected gap must not be retimed"),
+    )
+
+    repaired = _repair_delivered_cadence(
+        tmp_path,
+        media,
+        words,
+        work,
+        label="long-1",
+        receipts=receipts,
+        artifact="long-primary.mp4",
+        sacred=((0.0, 60.0),),
+    )
+
+    assert repaired is False
+    assert media.read_bytes() == b"before"
+    assert not receipts.exists()
 
 
 def test_delivered_cadence_repair_stops_when_violation_count_does_not_improve(
