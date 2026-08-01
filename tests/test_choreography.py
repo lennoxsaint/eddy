@@ -9,6 +9,7 @@ import pytest
 
 from eddy.choreography import (
     ChoreographyValidationError,
+    _layout_media_styles,
     build_hyperframes_project,
     rank_opening_candidates,
     validate_frame_contract,
@@ -19,6 +20,43 @@ from test_runtime import valid_plan_v32
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_speaker_close_preserves_presenter_continuity_with_a_subtle_crop() -> None:
+    camera, screen = _layout_media_styles(
+        "speaker_close",
+        width=1920,
+        height=1080,
+        screen_available=True,
+    )
+
+    assert camera["autoAlpha"] == 1
+    assert camera["x"] < 0
+    assert camera["y"] < 0
+    assert camera["width"] > 1920
+    assert camera["height"] > 1080
+    assert screen["autoAlpha"] == 0
+
+
+def test_speaker_tight_adds_a_distinct_but_bounded_crop_state() -> None:
+    close, _ = _layout_media_styles(
+        "speaker_close",
+        width=1920,
+        height=1080,
+        screen_available=True,
+    )
+    tight, screen = _layout_media_styles(
+        "speaker_tight",
+        width=1920,
+        height=1080,
+        screen_available=True,
+    )
+
+    assert tight["x"] < close["x"]
+    assert tight["y"] < close["y"]
+    assert tight["width"] > close["width"]
+    assert tight["height"] > close["height"]
+    assert screen["autoAlpha"] == 0
 
 
 def test_opening_ranking_auto_selects_only_with_clear_certain_lead() -> None:

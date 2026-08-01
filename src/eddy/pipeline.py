@@ -1194,7 +1194,8 @@ class PipelineRunner:
                         tuple(
                             (float(scene["start"]), float(scene["end"]))
                             for scene in short_visual_plan["scenes"]
-                            if scene["layout"] == "speaker_full"
+                            if scene["layout"]
+                            in {"speaker_full", "speaker_close", "speaker_tight"}
                         )
                         if short_visual_plan is not None
                         else ()

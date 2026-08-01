@@ -385,9 +385,13 @@ a frame contract plus three opening timelines, one shared body, and one portrait
 
 The abbreviated arrays above show shape only. Production plans require exactly three openings in
 hook-rank order, populated shared-body scenes, and populated scenes for every Short. Allowed layouts
-are `proof_canvas`, `speaker_full`, `speaker_edge_left`, `speaker_edge_right`, `speaker_pip`,
+are `proof_canvas`, `speaker_full`, `speaker_close`, `speaker_tight`, `speaker_edge_left`,
+`speaker_edge_right`, `speaker_pip`,
 `source_screen`, `illustration_canvas`, and `special_emphasis`. Evidence authority is one of
 `raw_source`, `supplied_asset`, `pixel_faithful_demo`, `diagram`, or `metaphor`.
+`speaker_close` and `speaker_tight` are bounded crops of the same continuous camera source. Use
+them only for a named semantic emphasis; they do not authorize filler punch-ins, source
+replacement, or a reset of the active proof state.
 Eddy computes the 100-point opening score from the eight normalized signals with weights
 `15/20/20/10/10/10/10/5` in the order shown. `ranking_evidence` names the muted/mobile/taste review
 artifacts behind those numbers; a naked subjective total is not accepted.

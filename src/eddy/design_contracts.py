@@ -420,7 +420,8 @@ caption_policy:
         safe = "{ top: 72, right: 88, bottom: 96, left: 88 }"
         caption = "{ y_min: 840, y_max: 1000 }"
         grammar = (
-            "speaker_full, pip_bottom_right, pip_bottom_left, pip_top_right, pip_top_left, "
+            "speaker_full, speaker_close, speaker_tight, pip_bottom_right, pip_bottom_left, "
+            "pip_top_right, pip_top_left, "
             "vertical_speaker_left, vertical_speaker_right, embedded_split_left, "
             "embedded_split_right, speaker_plus_mental_model, proof_canvas"
         )

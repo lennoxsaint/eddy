@@ -61,6 +61,8 @@
     "semantic_reason_required": true,
     "allowed": [
       "speaker_full",
+      "speaker_close",
+      "speaker_tight",
       "pip_bottom_right",
       "pip_bottom_left",
       "pip_top_right",

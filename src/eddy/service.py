@@ -360,6 +360,8 @@ class EddyService:
                     "layouts": [
                         "proof_canvas",
                         "speaker_full",
+                        "speaker_close",
+                        "speaker_tight",
                         "speaker_edge_left",
                         "speaker_edge_right",
                         "speaker_pip",

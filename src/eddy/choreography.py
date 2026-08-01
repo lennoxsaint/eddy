@@ -19,6 +19,8 @@ class ChoreographyValidationError(ValueError):
 LAYOUTS = {
     "proof_canvas",
     "speaker_full",
+    "speaker_close",
+    "speaker_tight",
     "speaker_edge_left",
     "speaker_edge_right",
     "speaker_pip",
@@ -665,8 +667,25 @@ def _layout_media_styles(
     }
     hidden: dict[str, float | int | str] = {**full, "autoAlpha": 0}
     screen_style: dict[str, float | int | str] = (
-        hidden if layout == "speaker_full" else {**full, "zIndex": 1}
+        hidden
+        if layout in {"speaker_full", "speaker_close", "speaker_tight"}
+        else {**full, "zIndex": 1}
     )
+    if layout in {"speaker_close", "speaker_tight"}:
+        crop_ratio = 0.04 if layout == "speaker_close" else 0.07
+        crop_x = round(width * crop_ratio)
+        crop_y = round(height * crop_ratio)
+        return (
+            {
+                **full,
+                "x": -crop_x,
+                "y": -crop_y,
+                "width": width + crop_x * 2,
+                "height": height + crop_y * 2,
+                "zIndex": 2,
+            },
+            screen_style,
+        )
     if layout == "speaker_full" or not screen_available:
         return {**full, "zIndex": 2}, screen_style
     if layout in {"speaker_edge_left", "speaker_edge_right"}:

@@ -64,6 +64,8 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
     assert packet["motion_requirements"]["longs"]["adaptive_cadence"]["hard_max_seconds"] == 12
     assert packet["motion_requirements"]["visual_choreography"]["opening_timelines"] == 3
     assert "speaker_edge_right" in packet["motion_requirements"]["visual_choreography"]["layouts"]
+    assert "speaker_close" in packet["motion_requirements"]["visual_choreography"]["layouts"]
+    assert "speaker_tight" in packet["motion_requirements"]["visual_choreography"]["layouts"]
     assert packet["edit_plan_schema"] == "edit-plan-v3.5"
     assert packet["opening_edit_blueprint"] is None
     assert packet["requirements"]["opening_blueprint_delivery"]["required"] is False
