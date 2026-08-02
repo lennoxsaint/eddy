@@ -37,13 +37,19 @@ def build_server() -> Any:
         format: str = "youtube",
         profile_id: str | None = None,
         project_brief: str | dict[str, Any] | None = None,
+        correction_pack: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return service.edit_start(
             source,
             format=format,
             profile_id=profile_id,
             project_brief=project_brief,
+            correction_pack=correction_pack,
         )
+
+    @server.tool(name="eddy_capabilities")
+    def capabilities() -> dict[str, Any]:
+        return service.capabilities()
 
     @server.tool(name="eddy_host_packet")
     def host_packet(job_id: str) -> dict[str, Any]:

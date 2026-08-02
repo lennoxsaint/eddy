@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 
-PROJECT_FACT_BRIEF_SCHEMA = "eddy-project-fact-brief-v1"
+PROJECT_FACT_BRIEF_SCHEMA = "eddy-project-fact-brief-v2"
+PROJECT_FACT_BRIEF_LEGACY_SCHEMA = "eddy-project-fact-brief-v1"
 
 
 class ProjectFactBriefError(ValueError):
@@ -21,10 +22,13 @@ def materialize_project_fact_brief(
     *,
     source: Path,
     explicit: str | Path | dict[str, Any] | None = None,
+    preferred_schema: str = PROJECT_FACT_BRIEF_SCHEMA,
 ) -> dict[str, Any]:
     """Validate a supplied brief or create a restrictive project-local default."""
 
-    payload, provenance = _load_or_derive(source, explicit)
+    if preferred_schema not in {PROJECT_FACT_BRIEF_SCHEMA, PROJECT_FACT_BRIEF_LEGACY_SCHEMA}:
+        raise ProjectFactBriefError("project_fact_brief_preferred_schema_invalid")
+    payload, provenance = _load_or_derive(source, explicit, preferred_schema=preferred_schema)
     normalized = validate_project_fact_brief(payload)
     output = run_dir / "project-fact-brief.json"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -32,7 +36,11 @@ def materialize_project_fact_brief(
     temporary.write_text(json.dumps(normalized, indent=2, sort_keys=True) + "\n")
     os.replace(temporary, output)
     return {
-        "schema_version": "eddy-project-fact-brief-ref-v1",
+        "schema_version": (
+            "eddy-project-fact-brief-ref-v2"
+            if normalized["schema_version"] == PROJECT_FACT_BRIEF_SCHEMA
+            else "eddy-project-fact-brief-ref-v1"
+        ),
         "path": str(output),
         "ref": output.relative_to(run_dir).as_posix(),
         "sha256": _sha256(output),
@@ -45,8 +53,12 @@ def materialize_project_fact_brief(
 def validate_project_fact_brief(value: object) -> dict[str, Any]:
     """Fail closed on unsupported, unverified, or path-escaping project facts."""
 
-    if not isinstance(value, dict) or value.get("schema_version") != PROJECT_FACT_BRIEF_SCHEMA:
+    if not isinstance(value, dict) or value.get("schema_version") not in {
+        PROJECT_FACT_BRIEF_SCHEMA,
+        PROJECT_FACT_BRIEF_LEGACY_SCHEMA,
+    }:
         raise ProjectFactBriefError("project_fact_brief_schema_invalid")
+    schema_version = str(value["schema_version"])
     project_id = value.get("project_id")
     if not isinstance(project_id, str) or not project_id.strip():
         raise ProjectFactBriefError("project_fact_project_id_required")
@@ -128,6 +140,45 @@ def validate_project_fact_brief(value: object) -> dict[str, Any]:
         not isinstance(runtime, (int, float)) or isinstance(runtime, bool) or runtime <= 0
     ):
         raise ProjectFactBriefError("project_fact_runtime_target_invalid")
+    if schema_version == PROJECT_FACT_BRIEF_SCHEMA:
+        routes = _list_of_dicts(
+            output.get("long_routes"),
+            "project_fact_long_routes_invalid",
+        )
+        if not 3 <= len(routes) <= 6:
+            raise ProjectFactBriefError("project_fact_long_routes_count_invalid")
+        route_ids: list[str] = []
+        primary_count = 0
+        for index, route in enumerate(routes, start=1):
+            route_id = _required_text(
+                route,
+                "id",
+                "project_fact_long_route_id_required",
+            )
+            _required_text(
+                route,
+                "label",
+                f"project_fact_long_route_label_required:{route_id}",
+            )
+            if route.get("required") is not True:
+                raise ProjectFactBriefError(
+                    f"project_fact_long_route_required_flag_invalid:{route_id}"
+                )
+            if route.get("rank") != index:
+                raise ProjectFactBriefError(
+                    f"project_fact_long_route_rank_invalid:{route_id}"
+                )
+            primary = route.get("primary", False)
+            if not isinstance(primary, bool):
+                raise ProjectFactBriefError(
+                    f"project_fact_long_route_primary_invalid:{route_id}"
+                )
+            primary_count += int(primary)
+            route_ids.append(route_id)
+        if len(set(route_ids)) != len(route_ids):
+            raise ProjectFactBriefError("project_fact_long_route_ids_duplicated")
+        if primary_count != 1:
+            raise ProjectFactBriefError("project_fact_one_primary_long_route_required")
 
     audio = value.get("audio")
     if not isinstance(audio, dict) or audio.get("studio_sound_required") is not True:
@@ -138,6 +189,55 @@ def validate_project_fact_brief(value: object) -> dict[str, Any]:
                 raise ProjectFactBriefError(f"project_fact_audio_{key}_invalid")
             if key.endswith("_ref"):
                 _safe_ref(audio[key], f"project_fact_audio_{key}_invalid")
+    if schema_version == PROJECT_FACT_BRIEF_SCHEMA:
+        roles = _list_of_dicts(
+            audio.get("source_audio_roles"),
+            "project_fact_source_audio_roles_invalid",
+        )
+        role_ids: set[str] = set()
+        for row in roles:
+            role_id = _required_text(
+                row,
+                "id",
+                "project_fact_source_audio_role_id_required",
+            )
+            if role_id in role_ids:
+                raise ProjectFactBriefError(
+                    f"project_fact_source_audio_role_duplicated:{role_id}"
+                )
+            role_ids.add(role_id)
+            if row.get("role") not in {
+                "authoritative_dialogue",
+                "system_response",
+                "non_authoritative",
+            }:
+                raise ProjectFactBriefError(
+                    f"project_fact_source_audio_role_invalid:{role_id}"
+                )
+            _safe_ref(
+                _required_text(
+                    row,
+                    "source_ref",
+                    f"project_fact_source_audio_ref_required:{role_id}",
+                ),
+                f"project_fact_source_audio_ref_invalid:{role_id}",
+            )
+            intervals = row.get("required_intervals", [])
+            if not isinstance(intervals, list):
+                raise ProjectFactBriefError(
+                    f"project_fact_source_audio_intervals_invalid:{role_id}"
+                )
+            for interval in intervals:
+                if (
+                    not isinstance(interval, list)
+                    or len(interval) != 2
+                    or not all(isinstance(point, (int, float)) for point in interval)
+                    or float(interval[0]) < 0
+                    or float(interval[1]) <= float(interval[0])
+                ):
+                    raise ProjectFactBriefError(
+                        f"project_fact_source_audio_intervals_invalid:{role_id}"
+                    )
 
     protected = _list_of_dicts(
         value.get("protected_moments"),
@@ -153,15 +253,15 @@ def validate_project_fact_brief(value: object) -> dict[str, Any]:
         _required_text(row, "reason", "project_fact_protected_reason_required")
 
     return {
-        "schema_version": PROJECT_FACT_BRIEF_SCHEMA,
+        "schema_version": schema_version,
         "project_id": project_id.strip(),
         "status": value["status"],
         "people": people,
         "facts": facts,
         "brand": brand,
         "ui_surfaces": ui_surfaces,
-        "output": output,
-        "audio": audio,
+        "output": dict(output),
+        "audio": dict(audio),
         "protected_moments": protected,
     }
 
@@ -169,6 +269,8 @@ def validate_project_fact_brief(value: object) -> dict[str, Any]:
 def _load_or_derive(
     source: Path,
     explicit: str | Path | dict[str, Any] | None,
+    *,
+    preferred_schema: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if isinstance(explicit, dict):
         return dict(explicit), {"kind": "inline", "source_ref": None}
@@ -195,18 +297,47 @@ def _load_or_derive(
             "source_sha256": _sha256(candidate),
         }
     project_id = source.stem if source.is_file() else source.name
-    return {
-        "schema_version": PROJECT_FACT_BRIEF_SCHEMA,
+    payload = {
+        "schema_version": preferred_schema,
         "project_id": project_id or "untitled-project",
         "status": "derived_restrictive",
         "people": [],
         "facts": [],
         "brand": {"tokens": {}, "asset_refs": []},
         "ui_surfaces": [],
-        "output": {"long_captions": False},
-        "audio": {"studio_sound_required": True},
+        "output": {
+            "long_captions": False,
+            "long_routes": [
+                {
+                    "id": "primary",
+                    "label": "Primary",
+                    "rank": 1,
+                    "required": True,
+                    "primary": True,
+                },
+                {
+                    "id": "alternate-a",
+                    "label": "Alternate A",
+                    "rank": 2,
+                    "required": True,
+                    "primary": False,
+                },
+                {
+                    "id": "alternate-b",
+                    "label": "Alternate B",
+                    "rank": 3,
+                    "required": True,
+                    "primary": False,
+                },
+            ],
+        },
+        "audio": {"studio_sound_required": True, "source_audio_roles": []},
         "protected_moments": [],
-    }, {"kind": "derived_restrictive", "source_ref": None}
+    }
+    if preferred_schema == PROJECT_FACT_BRIEF_LEGACY_SCHEMA:
+        payload["output"] = {"long_captions": False}
+        payload["audio"] = {"studio_sound_required": True}
+    return payload, {"kind": "derived_restrictive", "source_ref": None}
 
 
 def _list_of_dicts(value: object, error: str) -> list[dict[str, Any]]:

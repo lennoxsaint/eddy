@@ -171,3 +171,16 @@ one-word label where a full HTML render is overkill. No longer the default or th
 
 - Talking-head long-form karaoke: `embedded-captions` `anchor` identity (matts the person). Does NOT fit
   a screen-share composite or the Shorts split-stack — use `scripts/karaoke_ass.py` for those.
+
+## Cut-boundary audit and review surfaces
+
+```bash
+python3 scripts/boundary_audit.py work/timeline-boundaries.json \
+  --output work/cut-boundary-audit.json \
+  --media work/final-candidate.mp4 \
+  --review-dir work/boundary-review
+```
+
+The timeline manifest uses `eddy-cut-boundary-manifest-v1`. The command detects unexplained
+1-6-frame third shots and silent handles below the v3 thresholds, then decodes every boundary with
+`fps_mode=passthrough`, writes +/-8-frame strips, a 0.25x supercut, and a hash-bound review receipt.

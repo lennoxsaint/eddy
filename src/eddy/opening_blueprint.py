@@ -121,7 +121,8 @@ def validate_opening_blueprint_contract(
         raise OpeningBlueprintValidationError("opening_blueprint_contract_version_invalid")
     if value.get("contract_kind") != "opening_edit_blueprint":
         raise OpeningBlueprintValidationError("opening_blueprint_contract_kind_invalid")
-    if value.get("delivery_target_schema") != "edit-plan-v3.6":
+    target_schema = value.get("delivery_target_schema")
+    if target_schema not in {"edit-plan-v3.6", "edit-plan-v3.7"}:
         raise OpeningBlueprintValidationError(
             "opening_blueprint_delivery_target_schema_invalid"
         )
@@ -140,9 +141,16 @@ def validate_opening_blueprint_contract(
     )
 
     expected_hooks = tuple(hook_ids)
-    variants = value.get("variants")
-    if not isinstance(variants, list) or len(variants) != 3:
+    expected_count = len(expected_hooks)
+    if target_schema == "edit-plan-v3.6" and expected_count != 3:
         raise OpeningBlueprintValidationError("three_opening_blueprint_variants_required")
+    if target_schema == "edit-plan-v3.7" and not 3 <= expected_count <= 6:
+        raise OpeningBlueprintValidationError("opening_blueprint_routes_must_be_3_to_6")
+    variants = value.get("variants")
+    if not isinstance(variants, list) or len(variants) != expected_count:
+        raise OpeningBlueprintValidationError(
+            "opening_blueprint_variant_count_must_match_routes"
+        )
     actual_hooks: list[str] = []
     variant_ids: list[str] = []
     for variant in variants:
@@ -270,7 +278,7 @@ def validate_opening_blueprint_contract(
                 )
     if tuple(actual_hooks) != expected_hooks:
         raise OpeningBlueprintValidationError("opening_blueprint_hooks_must_match_ranked_hooks")
-    if len(set(variant_ids)) != 3:
+    if len(set(variant_ids)) != expected_count:
         raise OpeningBlueprintValidationError("opening_blueprint_variant_ids_must_be_unique")
     return dict(value)
 
@@ -360,7 +368,12 @@ def validate_opening_blueprint_delivery(
 ) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise OpeningBlueprintValidationError("opening_blueprint_delivery_required")
-    if value.get("schema_version") != "eddy-opening-blueprint-delivery-v1":
+    expected_schema = (
+        "eddy-opening-blueprint-delivery-v2"
+        if contract.get("delivery_target_schema") == "edit-plan-v3.7"
+        else "eddy-opening-blueprint-delivery-v1"
+    )
+    if value.get("schema_version") != expected_schema:
         raise OpeningBlueprintValidationError("opening_blueprint_delivery_schema_invalid")
     if value.get("contract_sha256") != contract.get("contract_sha256"):
         raise OpeningBlueprintValidationError("opening_blueprint_delivery_contract_hash_mismatch")
@@ -376,9 +389,9 @@ def validate_opening_blueprint_delivery(
         if isinstance(opening, dict)
     }
     openings = value.get("openings")
-    if not isinstance(openings, list) or len(openings) != 3:
+    if not isinstance(openings, list) or len(openings) != len(contract_by_hook):
         raise OpeningBlueprintValidationError(
-            "three_opening_blueprint_deliveries_required"
+            "opening_blueprint_delivery_count_must_match_routes"
         )
     delivered_hooks: list[str] = []
     for delivery in openings:

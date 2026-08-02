@@ -77,6 +77,7 @@ def test_start_status_packet_and_cancel_use_public_job_states(tmp_path: Path) ->
         "edit-plan-v3.4",
         "edit-plan-v3.5",
         "edit-plan-v3.6",
+        "edit-plan-v3.7",
     ]
     assert packet["motion_requirements"]["longs"]["opening_edit_blueprint"] == {
         "contract_version": "2.0",

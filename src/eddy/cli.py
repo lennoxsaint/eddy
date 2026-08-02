@@ -27,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     edit.add_argument("--format", default="youtube")
     edit.add_argument("--profile-id", default=None)
     edit.add_argument("--project-brief", default=None)
+    edit.add_argument("--correction-pack", default=None)
     options = sub.add_parser("options")
     options.add_argument("source")
     options.add_argument("--format", default="youtube")
@@ -66,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     revise_design.add_argument("job_id")
     revise_design.add_argument("revision", help="design-contract-revision-v1 JSON path, or -")
     sub.add_parser("sync-doctor")
+    sub.add_parser("capabilities")
     args = parser.parse_args(argv)
     service = _service(args.runs_root)
     actions: dict[str, Any] = {
@@ -74,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             format=args.format,
             profile_id=args.profile_id,
             project_brief=args.project_brief,
+            correction_pack=args.correction_pack,
         ),
         "options": lambda: service.edit_options(
             args.source,
@@ -103,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
             _read_plan(args.revision),
         ),
         "sync-doctor": service.sync_doctor,
+        "capabilities": getattr(service, "capabilities", lambda: {}),
     }
     try:
         payload = actions[args.command]()

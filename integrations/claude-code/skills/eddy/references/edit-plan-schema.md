@@ -1,6 +1,24 @@
 # EditPlanV3 schema
 
-## Current: `edit-plan-v3.6`
+## Current: `edit-plan-v3.7`
+
+V3.7 is negotiated through `eddy-capabilities-v1`. It preserves the v3.5/v3.6 edit mechanics and
+adds dynamic 3-6 Long routes, `eddy-project-fact-brief-ref-v2`,
+`eddy-contract-bundle-ref-v3`, `eddy-cut-integrity-plan-v2`, gate-specific professional evidence,
+and `verifier-review-v2`. All Long routes share one body. Opening Blueprint delivery is optional;
+it exists only when a blueprint contract is explicitly supplied.
+
+Required v3.7 production bindings:
+
+- 3-6 unique, sequentially ranked `hooks` matching the Project Fact Brief route IDs;
+- 3-5 Shorts;
+- `eddy-contract-bundle-ref-v3` and `eddy-project-fact-brief-ref-v2`;
+- `eddy-cut-integrity-plan-v2` with 1-6-frame, 0.24-second/-40 dBFS, +/-8-frame,
+  0.25x-supercut and decoder-passthrough thresholds;
+- `professional-gate-evidence-v2` with one evaluator-specific receipt per gate;
+- `verifier-review-v2` covering every delivered route and every Short.
+
+## Blueprint-bound predecessor: `edit-plan-v3.6`
 
 V3.6 retains every v3.5 proof contract and adds a delivered-opening binding for Strategy Profile V7
 projects:

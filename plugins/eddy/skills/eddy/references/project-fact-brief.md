@@ -1,7 +1,9 @@
 # Project Fact Brief
 
 `project-fact-brief.json` carries facts that must not leak into Eddy doctrine. It uses
-`eddy-project-fact-brief-v1` and is hash-bound into `eddy-contract-bundle-v2`.
+`eddy-project-fact-brief-v2` is the preferred owner-profile contract and is hash-bound into
+`eddy-contract-bundle-v3`. It declares 3-6 unique Long routes, exactly one primary route, factual
+bindings, and source-audio roles. V1 remains valid for legacy bundles.
 
 The brief may supply:
 

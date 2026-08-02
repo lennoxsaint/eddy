@@ -109,9 +109,13 @@ def validate_visual_choreography(
         raise ChoreographyValidationError("visual_choreography_schema_invalid")
 
     expected_hooks = tuple(hook_ids)
+    if not 3 <= len(expected_hooks) <= 6:
+        raise ChoreographyValidationError("opening_routes_must_be_3_to_6")
     openings = value.get("openings")
-    if not isinstance(openings, list) or len(openings) != 3:
-        raise ChoreographyValidationError("three_opening_choreographies_required")
+    if not isinstance(openings, list) or len(openings) != len(expected_hooks):
+        raise ChoreographyValidationError(
+            "opening_choreography_count_must_match_routes"
+        )
     opening_hooks: list[str] = []
     opening_ids: list[str] = []
     opening_scene_sets: list[tuple[dict[str, Any], ...]] = []
@@ -135,7 +139,7 @@ def validate_visual_choreography(
         opening_scene_sets.append(scenes)
         opening_ids.append(opening_id)
         opening_hooks.append(hook_id)
-    if len(set(opening_ids)) != 3:
+    if len(set(opening_ids)) != len(expected_hooks):
         raise ChoreographyValidationError("opening_choreography_ids_must_be_unique")
     if tuple(opening_hooks) != expected_hooks:
         raise ChoreographyValidationError("opening_choreography_hooks_must_match_ranked_hooks")
@@ -170,8 +174,8 @@ def validate_visual_choreography(
 
 
 def rank_opening_candidates(openings: object) -> dict[str, Any]:
-    if not isinstance(openings, list) or len(openings) != 3:
-        raise ChoreographyValidationError("three_opening_choreographies_required")
+    if not isinstance(openings, list) or not 3 <= len(openings) <= 6:
+        raise ChoreographyValidationError("opening_routes_must_be_3_to_6")
     rows: list[dict[str, Any]] = []
     for opening in openings:
         if not isinstance(opening, dict):
@@ -186,7 +190,7 @@ def rank_opening_candidates(openings: object) -> dict[str, Any]:
             }
         )
     rows.sort(key=lambda row: (-float(row["score"]), str(row["opening_id"])))
-    if len(rows) != 3:
+    if len(rows) != len(openings):
         raise ChoreographyValidationError("opening_choreography_invalid")
     gap = round(float(rows[0]["score"]) - float(rows[1]["score"]), 3)
     uncertain = any(row["confidence"] == "uncertain" for row in rows[:2])

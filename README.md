@@ -54,8 +54,9 @@ The host model owns editorial taste. Eddy owns source locks, deterministic media
 asynchronous state, receipts, cancellation, and proof gates. Read [SKILL.md](SKILL.md) for the full
 product contract.
 
-Strategy Profile V7 projects use `edit-plan-v3.6`; projects without a V7 Opening Edit Blueprint
-remain on `edit-plan-v3.5`. V3.6 retains v3.5's proof system and adds an exact delivered-opening map.
+Owner-profile v3 projects negotiate `edit-plan-v3.7` from `eddy-capabilities-v1`. V3.7 supports
+3-6 named Long routes over one shared body and 3-5 Shorts. An Opening Blueprint is optional and is
+never inferred from route count. Existing v3.5 and v3.6 plans remain readable unchanged.
 The pre-production Opening Edit Blueprint binds every scene
 through second 60; each scene keeps its communication job and evidence requirement, while the
 editor remains free to adapt style to the footage. Threshold drift, missing scenes, and unreceipted
@@ -80,7 +81,7 @@ footage. Quality transcripts are cached only by the camera SHA-256 and every reu
 
 ## v3.0 boundary
 
-Included: three long variants, quality-gated Shorts, transcript, edit plan, spot checks, QA, and
+Included: 3-6 long routes, quality-gated Shorts, transcript, edit plan, spot checks, QA, and
 receipts.
 
 Excluded: titles, descriptions, chapters, thumbnails, uploading, publishing, sending, scheduling,

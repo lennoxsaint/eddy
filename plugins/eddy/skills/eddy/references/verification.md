@@ -80,6 +80,13 @@ Run the gate suite on **every emitted file — each long AND each Short**, not j
 - **Contract binding** — host packet, v3.6 plan, receipts, and final evidence expose matching
   profile, design, landscape frame, portrait frame, HyperFrames doctrine, correction-eval, and
   rubric hashes, plus Project Fact Brief and verifier contract hashes.
+- **V3.7 capability binding** — freeze `eddy-capabilities-v1`, bundle v3, profile v3, Project Fact
+  Brief v2, correction pack, and verifier/gate contracts before editing.
+- **Boundary integrity** — inspect every cut using source-mapped candidates, +/-8 frames without
+  decoder duplication, and a 0.25x supercut. Unexplained 1-6-frame third shots and silent handles
+  under 0.24 seconds and -40 dBFS block promotion unless purpose-specific protection is proven.
+- **Gate-specific proof** — unrelated professional gates cannot share one generic evidence file,
+  and editor-authored prose cannot self-clear detected candidates.
 - **100-point evidence** — exactly 100 one-point checks pass. Every point has a file, frame,
   timestamp, hash, playback, or measurement reference. Audience performance remains `NOT_RUN`;
   final authority remains `owner_taste_lock`.
@@ -129,7 +136,7 @@ Autonomy means never stalling on a non-essential layer. On a stage failure:
 ## Independent review and promotion
 
 At `awaiting_independent_review`, a fresh context with `edit_authority: false` reviews repaired
-intervals and their adjacent joins, then fully watches and listens to all three Longs and every
+intervals and their adjacent joins, then fully watches and listens to every Long and every
 Short. Submit `review-passes.json`, `production-score.json`, `professional-gates.json`,
 `verifier-review.json`, and `open-items.json` together. Any stale hash, missing output, incomplete
 playback, surviving defect, or objective open item reopens repair.

@@ -9,12 +9,14 @@ from typing import Any
 
 
 GENERIC_PROFILE_ID = "creator_good_v1"
-LENNOX_PROFILE_ID = "lennox-professional-youtube-v2"
+LENNOX_PROFILE_ID = "lennox-professional-youtube-v3"
+LENNOX_PROFILE_V2_ID = "lennox-professional-youtube-v2"
 LENNOX_PROFILE_V1_ID = "lennox-professional-youtube-v1"
 PROFILE_FILES = {
     GENERIC_PROFILE_ID: "references/creator-good-v1.json",
     LENNOX_PROFILE_V1_ID: "references/owner-profiles/lennox-professional-youtube-v1.json",
-    LENNOX_PROFILE_ID: "references/owner-profiles/lennox-professional-youtube-v2.json",
+    LENNOX_PROFILE_V2_ID: "references/owner-profiles/lennox-professional-youtube-v2.json",
+    LENNOX_PROFILE_ID: "references/owner-profiles/lennox-professional-youtube-v3.json",
 }
 
 
@@ -54,6 +56,7 @@ def resolve_quality_profile(
         "eddy-quality-profile-v1",
         "eddy-quality-profile-v2",
         "eddy-quality-profile-v3",
+        "eddy-quality-profile-v4",
     }:
         raise QualityContractError(f"quality_profile_schema_invalid:{profile_id}")
     return profile, path
@@ -228,7 +231,8 @@ def validate_production_review(value: object) -> dict[str, Any]:
 def validate_cut_integrity_plan(value: object) -> dict[str, Any]:
     if (
         not isinstance(value, dict)
-        or value.get("schema_version") != "eddy-cut-integrity-plan-v1"
+        or value.get("schema_version")
+        not in {"eddy-cut-integrity-plan-v1", "eddy-cut-integrity-plan-v2"}
     ):
         raise QualityContractError("cut_integrity_plan_schema_invalid")
     required = {
@@ -248,6 +252,20 @@ def validate_cut_integrity_plan(value: object) -> dict[str, Any]:
         isinstance(item, str) and item.strip() for item in exceptions
     ):
         raise QualityContractError("cut_integrity_exceptions_invalid")
+    if value["schema_version"] == "eddy-cut-integrity-plan-v2":
+        v2_required = {
+            "boundary_manifest_required": True,
+            "micro_insert_frames": [1, 6],
+            "silent_handle_max_seconds": 0.24,
+            "silent_handle_max_dbfs": -40,
+            "boundary_frame_window_each_side": 8,
+            "boundary_supercut_speed": 0.25,
+            "decoder_policy": "fps_mode_passthrough",
+            "protected_exception_evidence_required": True,
+            "complete_clause_source_check_required": True,
+        }
+        if any(value.get(key) != expected for key, expected in v2_required.items()):
+            raise QualityContractError("cut_integrity_plan_v2_contract_invalid")
     return dict(value)
 
 

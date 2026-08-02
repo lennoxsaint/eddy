@@ -16,6 +16,8 @@ from typing import Any
 from .choreography import rank_opening_candidates
 from .contract import canonical_contract
 from .caption_repair import repair_captions
+from .capabilities import eddy_capabilities
+from .correction_pack import materialize_correction_pack
 from .design_contracts import create_contract_bundle, revise_contract_bundle
 from .feedback import record_owner_feedback
 from .owner_plugin import owner_plugin_status
@@ -191,6 +193,7 @@ class EddyService:
         format: str = "youtube",
         profile_id: str | None = None,
         project_brief: str | dict[str, Any] | None = None,
+        correction_pack: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.edit_options(source, format=format, profile_id=profile_id)
         profile, profile_path = resolve_quality_profile(
@@ -203,6 +206,16 @@ class EddyService:
             job.run_dir,
             source=job.source,
             explicit=project_brief,
+            preferred_schema=(
+                "eddy-project-fact-brief-v2"
+                if profile["id"] == "lennox-professional-youtube-v3"
+                else "eddy-project-fact-brief-v1"
+            ),
+        )
+        correction_pack_ref = materialize_correction_pack(
+            job.run_dir,
+            project_id=project_fact_brief["project_id"],
+            explicit=correction_pack,
         )
         create_contract_bundle(
             job.run_dir,
@@ -212,6 +225,7 @@ class EddyService:
             profile_path=profile_path,
             source_hashes=source_lock["before"],
             project_fact_brief=project_fact_brief,
+            correction_pack=correction_pack_ref,
         )
         opening_blueprint = _snapshot_opening_blueprint(job.source, job.run_dir)
         created_bundle = json.loads(
@@ -229,6 +243,9 @@ class EddyService:
             long_frame_sha256=created_bundle["design_contracts"]["long_frame"]["sha256"],
             short_frame_sha256=created_bundle["design_contracts"]["short_frame"]["sha256"],
             project_fact_brief_sha256=created_bundle["project_fact_brief"]["sha256"],
+            correction_pack_sha256=(created_bundle.get("correction_pack") or {}).get(
+                "sha256"
+            ),
             opening_blueprint_sha256=(
                 opening_blueprint["contract_sha256"]
                 if opening_blueprint is not None
@@ -240,6 +257,9 @@ class EddyService:
         else:
             job = self.manager.transition(job.id, JobState.AWAITING_HOST_PLAN)
         return self._job_payload(job)
+
+    def capabilities(self) -> dict[str, Any]:
+        return eddy_capabilities(self.canonical_root)
 
     def job_status(self, job_id: str) -> dict[str, Any]:
         return self._job_payload(self.manager.load(job_id))
@@ -277,9 +297,6 @@ class EddyService:
                     opening_blueprint_path.read_bytes()
                 ).hexdigest(),
             }
-        current_edit_plan_schema = (
-            "edit-plan-v3.6" if opening_blueprint is not None else "edit-plan-v3.5"
-        )
         bundle_path = job.run_dir / "contracts" / "contract-bundle.json"
         if not bundle_path.is_file():
             raise RuntimeError("contract_bundle_missing")
@@ -293,8 +310,34 @@ class EddyService:
         short_frame_sha256 = hashlib.sha256(short_frame_path.read_bytes()).hexdigest()
         design_sha256 = hashlib.sha256(design_path.read_bytes()).hexdigest()
         bundle_sha256 = hashlib.sha256(bundle_path.read_bytes()).hexdigest()
+        project_fact_payload = json.loads(project_fact_path.read_text())
+        long_routes = (project_fact_payload.get("output") or {}).get("long_routes", [])
+        route_count = (
+            len(long_routes)
+            if isinstance(long_routes, list) and long_routes
+            else 3
+        )
+        use_v3_contract = bundle.get("schema_version") == "eddy-contract-bundle-v3"
+        current_edit_plan_schema = (
+            "edit-plan-v3.7"
+            if use_v3_contract
+            else ("edit-plan-v3.6" if opening_blueprint is not None else "edit-plan-v3.5")
+        )
+        blueprint_delivery_schema = (
+            "eddy-opening-blueprint-delivery-v2"
+            if (
+                opening_blueprint is None and use_v3_contract
+            )
+            or (
+                isinstance(opening_blueprint, dict)
+                and opening_blueprint.get("delivery_target_schema")
+                == "edit-plan-v3.7"
+            )
+            else "eddy-opening-blueprint-delivery-v1"
+        )
+        capabilities = eddy_capabilities(self.canonical_root)
         return {
-            "schema_version": "eddy-host-packet-v3.2",
+            "schema_version": "eddy-host-packet-v3.3" if use_v3_contract else "eddy-host-packet-v3.2",
             "job_id": job.id,
             "state": job.state.value,
             "source_hashes": source_lock["before"],
@@ -320,7 +363,7 @@ class EddyService:
                     "minimum_animated_beats_per_hook": 2,
                     "render_host_authored_plan": True,
                     "opening_proof_trailer": {
-                        "variants": 3,
+                        "variants": route_count,
                         "meaningful_visual_beats_first_30_min": 8,
                         "frame_one_activity_by_second": 0.04,
                         "money_shot_by_second": 3,
@@ -331,7 +374,7 @@ class EddyService:
                     },
                     "opening_edit_blueprint": {
                         "contract_version": "2.0",
-                        "delivery_schema": "eddy-opening-blueprint-delivery-v1",
+                        "delivery_schema": blueprint_delivery_schema,
                         "function_policy": "function_locked_style_flexible",
                         "opening_window_seconds": [0, 30],
                         "bridge_window_seconds": [30, 60],
@@ -354,7 +397,7 @@ class EddyService:
                 },
                 "visual_choreography": {
                     "schema_version": "eddy-visual-choreography-v1",
-                    "opening_timelines": 3,
+                    "opening_timelines": route_count,
                     "shared_body_timelines": 1,
                     "portrait_timeline_per_short": True,
                     "layouts": [
@@ -407,15 +450,8 @@ class EddyService:
                 else "review_every_chunk_and_resolve_every_ledger_item"
             ),
             "edit_plan_schema": current_edit_plan_schema,
-            "accepted_edit_plan_schemas": [
-                "edit-plan-v3",
-                "edit-plan-v3.1",
-                "edit-plan-v3.2",
-                "edit-plan-v3.3",
-                "edit-plan-v3.4",
-                "edit-plan-v3.5",
-                "edit-plan-v3.6",
-            ],
+            "accepted_edit_plan_schemas": capabilities["supported_edit_plan_schemas"],
+            "capabilities": capabilities,
             "frame_contract": {
                 "schema_version": "eddy-project-frame-v3",
                 "path": str(frame_path),
@@ -446,7 +482,11 @@ class EddyService:
                 },
             },
             "contract_bundle": {
-                "schema_version": "eddy-contract-bundle-ref-v2",
+                "schema_version": (
+                    "eddy-contract-bundle-ref-v3"
+                    if use_v3_contract
+                    else "eddy-contract-bundle-ref-v2"
+                ),
                 "path": str(bundle_path),
                 "ref": "contracts/contract-bundle.json",
                 "sha256": bundle_sha256,
@@ -467,9 +507,22 @@ class EddyService:
                 "design_adherence": bundle["quality_evidence"]["design_adherence"][
                     "sha256"
                 ],
+                **(
+                    {
+                        "correction_pack": bundle["correction_pack"]["sha256"],
+                        "correction_evals_base": bundle["quality_evidence"][
+                            "correction_evals_base"
+                        ]["sha256"],
+                        "professional_gate_contracts": bundle["quality_evidence"][
+                            "professional_gate_contracts"
+                        ]["sha256"],
+                    }
+                    if use_v3_contract
+                    else {}
+                ),
             },
             "quality_profile": json.loads(quality_profile_path.read_text()),
-            "project_fact_brief": json.loads(project_fact_path.read_text()),
+            "project_fact_brief": project_fact_payload,
             "opening_edit_blueprint": opening_blueprint,
             "project_fact_brief_ref": bundle["project_fact_brief"],
             "verifier_contract": json.loads(
@@ -484,12 +537,13 @@ class EddyService:
             "completion_policy": json.loads(quality_profile_path.read_text()).get("review", {}),
             "requirements": {
                 "primary_hooks": 1,
-                "alternate_hooks": 2,
+                "alternate_hooks": max(2, route_count - 1),
+                "long_routes": {"minimum": 3, "maximum": 6, "required": route_count},
                 "shared_body": True,
                 "packaging": False,
                 "opening_blueprint_delivery": {
                     "required": opening_blueprint is not None,
-                    "schema_version": "eddy-opening-blueprint-delivery-v1",
+                    "schema_version": blueprint_delivery_schema,
                     "map_through_second": 60,
                     "deviation_receipts_required": True,
                 },
@@ -514,6 +568,7 @@ class EddyService:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
             opening_selection = self.opening_candidates(job_id)
             result = {**self._job_payload(self.manager.load(job_id)), "opening_selection": opening_selection}
@@ -637,6 +692,7 @@ class EddyService:
                 "edit-plan-v3.4",
                 "edit-plan-v3.5",
                 "edit-plan-v3.6",
+                "edit-plan-v3.7",
             }:
                 selection = plan_path.parent / "opening-selection.json"
                 if not selection.exists():

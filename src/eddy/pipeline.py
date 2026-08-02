@@ -48,7 +48,7 @@ class LongRenderPlan:
 class RenderPlan:
     body_cutlist: Path
     body_dropfile: Path
-    longs: tuple[LongRenderPlan, LongRenderPlan, LongRenderPlan]
+    longs: tuple[LongRenderPlan, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +213,7 @@ def build_render_plan(
         renders.append(
             LongRenderPlan(hook, hook_path, body_cutlist, output_name, append_body)
         )
-    return RenderPlan(body_cutlist, body_dropfile, tuple(renders))  # type: ignore[arg-type]
+    return RenderPlan(body_cutlist, body_dropfile, tuple(renders))
 
 
 def _ranges_fully_cover(
@@ -443,6 +443,12 @@ class PipelineRunner:
                     else "shared_body_choreography_failed"
                 )
 
+        has_blueprint = bool(
+            isinstance(plan.opening_visual_contract, dict)
+            and plan.opening_visual_contract.get("contract_kind")
+            == "opening_edit_blueprint"
+        )
+
         def finish_attempt() -> None:
             opening_visual_delivery = _build_opening_visual_surfaces(
                 attempt,
@@ -475,7 +481,7 @@ class PipelineRunner:
                 if not body_structure_green:
                     blockers.append("body_structure_delivery_failed")
             opening_blueprint_delivery = plan.opening_blueprint_delivery
-            if plan.schema_version == "edit-plan-v3.6":
+            if has_blueprint:
                 blueprint_green = opening_blueprint_delivery is not None
                 gates["opening_blueprint_delivery"] = blueprint_green
                 if not blueprint_green:
@@ -500,7 +506,7 @@ class PipelineRunner:
             (attempt / "spot-check.md").write_text(
                 "# Spot checks\n\nNo uncertain cuts were recorded by the host plan.\n"
             )
-            if plan.schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
+            if plan.schema_version in {"edit-plan-v3.5", "edit-plan-v3.6", "edit-plan-v3.7"}:
                 self.manager.transition(job_id, JobState.AWAITING_INDEPENDENT_REVIEW)
                 self.manager.receipt(
                     job_id,
@@ -594,9 +600,7 @@ class PipelineRunner:
                     if row["hook_id"] == item.hook.id
                 )
                 opening_choreographed = stage / f"opening-choreographed-{item.hook.rank}.mp4"
-                required_opening_duration = (
-                    59.5 if plan.schema_version == "edit-plan-v3.6" else 29.5
-                )
+                required_opening_duration = 59.5 if has_blueprint else 29.5
                 opening_duration_green = (
                     _media_duration(hook_composite) >= required_opening_duration
                 )
@@ -636,7 +640,7 @@ class PipelineRunner:
                 if not opening_duration_green:
                     duration_label = (
                         "sixty"
-                        if plan.schema_version == "edit-plan-v3.6"
+                        if has_blueprint
                         else "thirty"
                     )
                     blockers.append(
@@ -852,7 +856,9 @@ class PipelineRunner:
                 if not qa_green:
                     blockers.append("deterministic_qa_failed")
 
-        gates["three_long_variants"] = len(list(long_dir.glob("*.mp4"))) == 3
+        rendered_long_count = len(list(long_dir.glob("*.mp4")))
+        gates["three_long_variants"] = rendered_long_count == 3
+        gates["long_route_count"] = rendered_long_count == len(plan.hooks)
         gates["shared_body"] = body_camera.exists() and body_choreography_green
         if fatal_audio_failure or fatal_privacy_failure:
             gates["shorts_quality"] = False
@@ -1954,9 +1960,12 @@ def _build_opening_visual_surfaces(
         "status": "fail",
         "blocking_reasons": [],
     }
-    if len(candidate_order) != 3 or len({hook_id for hook_id, _ in candidate_order}) != 3:
+    candidate_count = len(candidate_order)
+    if not 3 <= candidate_count <= 6 or len(
+        {hook_id for hook_id, _ in candidate_order}
+    ) != candidate_count:
         delivery["blocking_reasons"].append(
-            f"three ranked Long candidates required; found {len(candidate_order)}"
+            f"three to six unique ranked Long candidates required; found {candidate_count}"
         )
         return delivery
     if any(row["variant_id"] is None for row in candidate_variants):
@@ -1983,20 +1992,19 @@ def _build_opening_visual_surfaces(
             "scale=640:360:force_original_aspect_ratio=decrease,"
             f"pad=640:360:(ow-iw)/2:(oh-ih)/2:black[v{index}]"
         )
-        for index in range(3)
+        for index in range(candidate_count)
     ]
-    reel_filter = ";".join(scale_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"])
+    stack_inputs = "".join(f"[v{index}]" for index in range(candidate_count))
+    reel_filter = ";".join(
+        scale_filters + [f"{stack_inputs}hstack=inputs={candidate_count}[outv]"]
+    )
+    input_args = [part for path in candidates for part in ("-i", str(path))]
     try:
         _run(
             [
                 "ffmpeg",
                 "-y",
-                "-i",
-                str(candidates[0]),
-                "-i",
-                str(candidates[1]),
-                "-i",
-                str(candidates[2]),
+                *input_args,
                 "-filter_complex",
                 reel_filter,
                 "-map",
@@ -2024,21 +2032,17 @@ def _build_opening_visual_surfaces(
                     "scale=640:360:force_original_aspect_ratio=decrease,"
                     f"pad=640:360:(ow-iw)/2:(oh-ih)/2:black[v{index}]"
                 )
-                for index in range(3)
+                for index in range(candidate_count)
             ]
             still_filter = ";".join(
-                still_filters + ["[v0][v1][v2]hstack=inputs=3[outv]"]
+                still_filters
+                + [f"{stack_inputs}hstack=inputs={candidate_count}[outv]"]
             )
             _run(
                 [
                     "ffmpeg",
                     "-y",
-                    "-i",
-                    str(candidates[0]),
-                    "-i",
-                    str(candidates[1]),
-                    "-i",
-                    str(candidates[2]),
+                    *input_args,
                     "-filter_complex",
                     still_filter,
                     "-map",
