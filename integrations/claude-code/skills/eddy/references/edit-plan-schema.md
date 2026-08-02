@@ -1,6 +1,100 @@
 # EditPlanV3 schema
 
-## Current: `edit-plan-v3.5`
+## Current: `edit-plan-v3.6`
+
+V3.6 retains every v3.5 proof contract and adds a delivered-opening binding for Strategy Profile V7
+projects:
+
+```json
+{
+  "schema_version": "edit-plan-v3.6",
+  "opening_visual_contract": {
+    "schema_version": "2.0",
+    "contract_kind": "opening_edit_blueprint",
+    "profile_version": 7,
+    "contract_ref": "pre-production/review/opening-edit-blueprint.json",
+    "contract_sha256": "<sha256>",
+    "benchmark_binding": {
+      "benchmark_revision": "omb-v1-2026-07-30",
+      "mechanics_library_id": "opening-mechanics-library-v1",
+      "mechanics_library_ref": "pre-production/review/opening-mechanics-library.json",
+      "mechanics_library_sha256": "<sha256>",
+      "evidence_authority": "observed_cross_creator_not_causal",
+      "selected_mechanic_ids": ["proof-first-frame"]
+    },
+    "variants": ["<the three exact pre-production blueprint variants>"]
+  },
+  "opening_blueprint_delivery": {
+    "schema_version": "eddy-opening-blueprint-delivery-v1",
+    "contract_sha256": "<same sha256>",
+    "benchmark_binding": "<same exact benchmark binding>",
+    "openings": [
+      {
+        "hook_id": "proof",
+        "variant_id": "opening-proof",
+        "scene_mappings": [
+          {
+            "blueprint_beat_id": "opening-proof-01",
+            "delivered_scene_id": "long-proof-scene-01",
+            "mechanic_ids": ["proof-first-frame"],
+            "semantic_job": "land the outcome",
+            "spoken_anchor": "the exact source phrase",
+            "asset_job": "show owned proof",
+            "proof_job": "make the claim inspectable",
+            "audio_job": "support without masking speech",
+            "motion_job": "move evidence into focus",
+            "cut_job": "cut when the evidence state changes",
+            "intended_viewer_state": "understands the claim and next question",
+            "fallback": "hard cut to owned proof",
+            "jobs_match": false,
+            "deviation": {
+              "deviation_id": "opening-proof-01-mobile-repair",
+              "reason": "The planned split layout made the proof unreadable on mobile.",
+              "planned_job": "show owned proof in a split layout",
+              "delivered_job": "show the same proof full frame",
+              "viewer_impact": "the communication job is preserved with better legibility",
+              "status": "review_required",
+              "receipt_ref": "receipts/opening-proof-01-mobile-repair.json",
+              "receipt_sha256": "<sha256>"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Every blueprint scene through second 60 must appear exactly once in `scene_mappings`. The runtime
+locks the function of each scene—its communication job and evidence requirement—while allowing the
+host to adapt style to the footage. Missing mappings, threshold drift, and unreceipted deviations
+fail before render.
+
+V3.6 can also declare an owner-locked standalone opening:
+
+```json
+{
+  "protected": [
+    {
+      "start": 0,
+      "end": 60,
+      "reason": "Frozen anonymous opening bake-off",
+      "preserve_audio_timing": true
+    }
+  ],
+  "body": {"keep": [[0, 60]], "drop": [], "retake_groups": []},
+  "hooks": [
+    {"id": "proof", "rank": 1, "segments": [[0, 60]], "proof_assets": ["screen.mp4"]}
+  ]
+}
+```
+
+`preserve_audio_timing` is optional and defaults to `false`. When true, Eddy rejects any editorial
+drop that overlaps the span, preserves its source timing exactly, receipts the source-to-delivery
+mapping, and exempts only cadence/editorial findings inside that explicit window. If the selected
+hook fully covers the nominal shared body, Eddy emits the hook once instead of duplicating it.
+
+## Prior production contract: `edit-plan-v3.5`
 
 V3.5 retains v3.4 and binds the Project Fact Brief, Studio Sound policy, cut-integrity
 authority, factual proof routing, independent review, and owner-locked promotion:
@@ -81,7 +175,8 @@ authority, factual proof routing, independent review, and owner-locked promotion
 }
 ```
 
-Readers through v3.4 remain accepted. A legacy plan cannot claim
+Readers through v3.5 remain accepted. A legacy plan cannot claim V7 delivered-opening proof.
+Readers through v3.4 also cannot claim
 `lennox-professional-youtube-v2` or the new owner-locked proof state.
 
 ## Legacy production contract: `edit-plan-v3.4`
@@ -290,9 +385,13 @@ a frame contract plus three opening timelines, one shared body, and one portrait
 
 The abbreviated arrays above show shape only. Production plans require exactly three openings in
 hook-rank order, populated shared-body scenes, and populated scenes for every Short. Allowed layouts
-are `proof_canvas`, `speaker_full`, `speaker_edge_left`, `speaker_edge_right`, `speaker_pip`,
+are `proof_canvas`, `speaker_full`, `speaker_close`, `speaker_tight`, `speaker_edge_left`,
+`speaker_edge_right`, `speaker_pip`,
 `source_screen`, `illustration_canvas`, and `special_emphasis`. Evidence authority is one of
 `raw_source`, `supplied_asset`, `pixel_faithful_demo`, `diagram`, or `metaphor`.
+`speaker_close` and `speaker_tight` are bounded crops of the same continuous camera source. Use
+them only for a named semantic emphasis; they do not authorize filler punch-ins, source
+replacement, or a reset of the active proof state.
 Eddy computes the 100-point opening score from the eight normalized signals with weights
 `15/20/20/10/10/10/10/5` in the order shown. `ranking_evidence` names the muted/mobile/taste review
 artifacts behind those numbers; a naked subjective total is not accepted.

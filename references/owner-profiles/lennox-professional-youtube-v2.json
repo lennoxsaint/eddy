@@ -72,6 +72,8 @@
     "repeat_without_proof_reason_max": 2,
     "allowed": [
       "speaker_full",
+      "speaker_close",
+      "speaker_tight",
       "pip_bottom_right",
       "pip_bottom_left",
       "pip_top_right",

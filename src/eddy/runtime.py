@@ -187,7 +187,7 @@ class JobManager:
                 _assert_inside(job.run_dir, contract_path)
                 if not contract_path.is_file() or _sha256(contract_path) != contract["sha256"]:
                     raise PlanValidationError("design_contract_hash_mismatch")
-            if plan.schema_version == "edit-plan-v3.5":
+            if plan.schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
                 if bundle.get("schema_version") != "eddy-contract-bundle-v2":
                     raise PlanValidationError("contract_bundle_v2_required")
                 if (
@@ -218,6 +218,65 @@ class JobManager:
             for claim in (plan.proof_plan or {}).get("claims", []):
                 if not set(claim["factual_bindings"]).issubset(fact_ids):
                     raise PlanValidationError("proof_plan_fact_binding_missing")
+        if plan.schema_version == "edit-plan-v3.6":
+            opening_contract = plan.opening_visual_contract
+            if opening_contract is None:
+                raise PlanValidationError("opening_blueprint_contract_required")
+            blueprint_path = (
+                job.run_dir / str(opening_contract["contract_ref"])
+            ).resolve()
+            _assert_inside(job.run_dir, blueprint_path)
+            if not blueprint_path.is_file():
+                raise PlanValidationError("opening_blueprint_contract_file_missing")
+            if _sha256(blueprint_path) != opening_contract["contract_sha256"]:
+                raise PlanValidationError("opening_blueprint_contract_hash_mismatch")
+            source_blueprint = json.loads(blueprint_path.read_text())
+            if any(
+                opening_contract.get(key) != value
+                for key, value in source_blueprint.items()
+            ):
+                raise PlanValidationError("opening_blueprint_contract_content_mismatch")
+            benchmark_binding = opening_contract["benchmark_binding"]
+            mechanics_path = (
+                job.run_dir / str(benchmark_binding["mechanics_library_ref"])
+            ).resolve()
+            _assert_inside(job.run_dir, mechanics_path)
+            if not mechanics_path.is_file():
+                raise PlanValidationError("opening_blueprint_mechanics_library_missing")
+            if (
+                _sha256(mechanics_path)
+                != benchmark_binding["mechanics_library_sha256"]
+            ):
+                raise PlanValidationError(
+                    "opening_blueprint_mechanics_library_hash_mismatch"
+                )
+            mechanics_library = json.loads(mechanics_path.read_text())
+            if (
+                not isinstance(mechanics_library, dict)
+                or mechanics_library.get("gate_status") != "human_confirmed"
+            ):
+                raise PlanValidationError(
+                    "opening_blueprint_mechanics_library_not_human_confirmed"
+                )
+            for delivery in (
+                plan.opening_blueprint_delivery or {}
+            ).get("openings", []):
+                for mapping in delivery.get("scene_mappings", []):
+                    deviation = mapping.get("deviation")
+                    if not isinstance(deviation, dict):
+                        continue
+                    receipt_path = (
+                        job.run_dir / str(deviation["receipt_ref"])
+                    ).resolve()
+                    _assert_inside(job.run_dir, receipt_path)
+                    if not receipt_path.is_file():
+                        raise PlanValidationError(
+                            "opening_blueprint_deviation_receipt_missing"
+                        )
+                    if _sha256(receipt_path) != deviation["receipt_sha256"]:
+                        raise PlanValidationError(
+                            "opening_blueprint_deviation_receipt_hash_mismatch"
+                        )
         if plan.audio_plan is not None:
             for cue in [*plan.audio_plan["music"], *plan.audio_plan["sfx"]]:
                 cue_path = (job.run_dir / str(cue["ref"])).resolve()
@@ -412,7 +471,11 @@ class JobManager:
         plan_path = job.run_dir / "edit-plan.json"
         plan_payload = json.loads(plan_path.read_text()) if plan_path.is_file() else {}
         schema_version = plan_payload.get("schema_version")
-        if schema_version in {"edit-plan-v3.4", "edit-plan-v3.5"}:
+        if schema_version in {
+            "edit-plan-v3.4",
+            "edit-plan-v3.5",
+            "edit-plan-v3.6",
+        }:
             evidence_gates, evidence_blockers = _production_evidence(job.run_dir, attempt)
             verified_gates.update(evidence_gates)
             binding_gates, binding_blockers = _contract_binding_evidence(
@@ -420,7 +483,7 @@ class JobManager:
                 plan_payload,
             )
             verified_gates.update(binding_gates)
-            if schema_version == "edit-plan-v3.5":
+            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
                 professional_gates, professional_blockers = _professional_v35_evidence(
                     attempt
                 )
@@ -468,7 +531,7 @@ class JobManager:
                         verified_gates[gate] = False
         required_gates = (
             V35_REQUIRED_FINAL_GATES
-            if schema_version == "edit-plan-v3.5"
+            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
             else REQUIRED_FINAL_GATES
         )
         missing_gates = sorted(required_gates - set(verified_gates))
@@ -500,14 +563,14 @@ class JobManager:
             shutil.move(str(attempt), str(final))
             final_state = (
                 JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE
-                if schema_version == "edit-plan-v3.5"
+                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
                 else JobState.COMPLETED
             )
             updated = Job(job.id, job.source, job.snapshot, job.run_dir, final_state)
             _receipt(
                 updated,
                 "proof_gated_candidate_ready"
-                if schema_version == "edit-plan-v3.5"
+                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
                 else "proof_gated_edit_completed",
                 **contract_bindings,
             )

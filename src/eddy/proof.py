@@ -282,15 +282,41 @@ def screen_proof_verdict(
         source_frame = _frame(screen_source, source_time)
         if actual_frame is None or source_frame is None:
             continue
-        actual = actual_frame.crop((0, 1230, 1080, 1838)).convert("L")
-        expected = ImageOps.fit(source_frame.convert("RGB"), (1080, 608)).convert("L")
-        actual = actual.crop((40, 40, 1040, 568))
-        expected = expected.crop((40, 40, 1040, 568))
+        legacy_actual = actual_frame.crop((0, 1230, 1080, 1838)).convert("L")
+        legacy_expected = ImageOps.fit(
+            source_frame.convert("RGB"), (1080, 608)
+        ).convert("L")
+        legacy_actual = legacy_actual.crop((40, 40, 1040, 568))
+        legacy_expected = legacy_expected.crop((40, 40, 1040, 568))
+        legacy_score = _global_ssim(legacy_actual, legacy_expected)
+
+        # Full-frame choreography uses the screen as a portrait proof canvas.
+        # Compare the unobscured upper half as well as the legacy lower panel:
+        # captions and speaker PIP occupy the lower region, while the source
+        # pixels above remain inspectable.
+        portrait_expected = ImageOps.fit(
+            source_frame.convert("RGB"), actual_frame.size
+        ).convert("L")
+        portrait_actual = actual_frame.convert("L")
+        safe_height = max(1, round(actual_frame.height * 0.52))
+        safe_width = max(1, round(actual_frame.width * 0.65))
+        portrait_boxes = (
+            (0, 0, actual_frame.width, safe_height),
+            (0, 0, safe_width, safe_height),
+            (actual_frame.width - safe_width, 0, actual_frame.width, safe_height),
+        )
+        portrait_score = max(
+            _global_ssim(
+                portrait_actual.crop(box),
+                portrait_expected.crop(box),
+            )
+            for box in portrait_boxes
+        )
         scores.append(
             {
                 "source_s": round(source_time, 3),
                 "final_s": round(final_time, 3),
-                "ssim": round(_global_ssim(actual, expected), 4),
+                "ssim": round(max(legacy_score, portrait_score), 4),
             }
         )
     passed = share >= 0.25 and len(scores) >= 3 and all(row["ssim"] >= threshold for row in scores)
@@ -371,10 +397,10 @@ def _mapped_proof_points(
             end = min(segment_end, proof_end)
             if end <= start:
                 continue
-            for fraction in (0.2, 0.5, 0.8):
+            for fraction in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
                 source_time = start + (end - start) * fraction
                 final_time = final_cursor + (source_time - segment_start)
-                if not any(a <= final_time <= b for a, b in excluded):
+                if not any(a - 0.15 <= final_time <= b + 0.15 for a, b in excluded):
                     points.append((source_time, final_time))
         final_cursor += segment_end - segment_start
     return points

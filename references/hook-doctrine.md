@@ -24,6 +24,23 @@ The viewer promise is the north star. The hook must **pay off exactly that promi
   Z"). This creates micro-curiosity-gaps that pull viewers across the hook→content cliff (a large
   retention drop happens right here).
 
+For Strategy Profile V7 projects, this structure arrives as a hash-bound Opening Edit Blueprint.
+Do not start the hook by inventing decoration from the raw footage. First map every blueprint scene
+through second 60, then adapt its visual treatment to the available source. The scene's function is
+locked; its style is flexible.
+
+Each 0-30 beat must answer four editorial questions:
+
+1. What claim, proof, contrast, or viewer question does this beat carry?
+2. Why does the visual state need to change at this exact semantic boundary?
+3. What is the strongest honest evidence authority available?
+4. What new question should the viewer carry into the next beat?
+
+Use proof before explanation when the source supports it, alternate claim and evidence rather than
+stacking abstract claims, and let the 30-60 bridge preview a concrete route instead of restarting
+the introduction. The benchmark teaches functions, not identities: never copy a creator's brand
+look, recurring graphic package, wording, or signature transition.
+
 ## Step 3 — Score the hook (rubric)
 
 Score the drafted 0-60s. Re-cut until it clears threshold (redo up to 3, per verification):
@@ -37,6 +54,9 @@ Score the drafted 0-60s. Re-cut until it clears threshold (redo up to 3, per ver
 | Payoff visible | Does the bridge promise concrete upcoming reveals? | must pass |
 | **Proof on screen** | Is every concrete artifact the hook NAMES (a post, receipt, demo, screenshot, number) actually **shown on screen within 0-60s** — not just spoken? A hook that says "look what this post did" and never shows the post fails. Use the real screenshot if present in `source/`; else render it on-brand (HyperFrames `receipt_print`). | **must pass** |
 | Visuals | Is the first-60 motion (see `motion-layer.md`) carrying the promise? | should pass |
+
+V7 also fails when the exact `3/10/30` deadlines or `8-12` meaningful-change band drift, when a
+blueprint scene disappears, or when a changed communication job lacks a deviation receipt.
 
 ## Step 4 — Three full versions, one per hook (A/B/C)
 
@@ -64,3 +84,6 @@ inspection. Auto-select only when the leader is certain and more than five point
 use `eddy opening-candidates` and make a receipted `eddy select-opening` choice. Selection does not
 erase the alternates; it determines `long-primary.mp4`, while all three complete Longs still ship
 for like-for-like comparison.
+
+For v3.6 V7 work, all three treatments map the same locked blueprint functions. Variation belongs in
+style and source-supported treatment, not in whether the promised proof or route appears.

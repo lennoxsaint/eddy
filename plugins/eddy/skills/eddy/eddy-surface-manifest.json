@@ -1,8 +1,8 @@
 {
-  "canonical_commit": "97b3a28b9691dbfc173a74b469da971b4e8bc4dc",
+  "canonical_commit": "0c3d0a22e0c3f278ee066237009d1702ddfb4e72",
   "files": {
-    "README.md": "1cbc830f4b6c7ac9458e033f7dbf55b8d8089409d988b96ff5d0980d1b5f7a96",
-    "SKILL.md": "4c335d3c7a9520d9b033bd544036eb58102df0ceddaaf7505da81fabf0b2ee8b",
+    "README.md": "857a0d5f1a12ddd928759fb0782d28507e8137560d31fd71175c963cee7adc6e",
+    "SKILL.md": "1bb23078f92152a32237863191f30c0ffce4795f6a079f329e1e74acd8c61910",
     "agents/openai.yaml": "bbb89a517e1b489c9f7c3decfcab7f6466e4391e98ab4602962c7a729174c6d6",
     "assets/eddy-eagle-icon.png": "fc3de64ea2499cf8b769da8197ef0868e6d3f5680e0ede2c1632d320a7d22993",
     "assets/eddy-eagle-logo.png": "1808a090c36fe43f28143f6d678959a21a3d5cbfbae4494a7656d4758fddb3ca",
@@ -20,9 +20,9 @@
     "references/commands.md": "f4521ca782d7271325e0b6123e2c412778c7eeb1b73538084c9dfbf9ea7eed6f",
     "references/correction-promotion.md": "ed3b720f0ddc78848fc6408daafe971a0f1dfb1f456beae2e68b1124ba0b9cca",
     "references/creator-good-v1.json": "ab413315506a77148ecc1778a9bf2b16b127a6f427b75a6a56c542b941ed7a19",
-    "references/design-contract-lifecycle.md": "3d690722ca95f9cb49496ce8240fefde1a5d706caaa230206c80d43da7895505",
-    "references/edit-plan-schema.md": "bd97bcd9e925bb547e5e0dc377691a68111e22daa31e52a9427ce650ca6761f8",
-    "references/hook-doctrine.md": "c840feea652f476fb036b503ce1504db69a86cc0b89d9ac6fd59c8f85c922a8e",
+    "references/design-contract-lifecycle.md": "b45a713574a8ae2983bb3c055c314482939331b92733df7441eb209414e2be3b",
+    "references/edit-plan-schema.md": "959c11a26b68a4c77e650059816cb9576527d5e1c5a0c09d9a964d050a1a4b6b",
+    "references/hook-doctrine.md": "3428a76d357f39062d08d1f7092cdbbbbd01d4c0211d0732118955e922b79b9b",
     "references/hyperframes-doctrine-v0.7.3.json": "91696cb65ec98a6143e386d9a1c60b8608da48d4284f0f025c9c56ab1df03e1a",
     "references/hyperframes-v0.7.3/design-adherence.md": "ff21deb80143c8e09092958a6f40bc712173a43d23c5ea88742566573a2a7241",
     "references/hyperframes-v0.7.3/design-spec.md": "2287b88dab08bbbab4314e52f2770f34f6937e6eb69d37249c6b6fa8e1339d13",
@@ -30,12 +30,12 @@
     "references/hyperframes-v0.7.3/video-composition.md": "6aae0bc1e79e9e8c1451ced986b5bbb4d59680c94276a299b6ecf67e3f440b09",
     "references/layout-constants.md": "f22038962ed146f2074af716272543159669437f012f252236086d43671968bb",
     "references/motion-layer.md": "1503a9fa8a1201ed60770e33cc91448928e0ccbd48d91454d242baad3ee9f4c7",
-    "references/owner-profiles/lennox-professional-youtube-v1.json": "ac9a346395e522509b2b6271e72b6bc9fe0bc2efb4f3b51dcfef26d53232e09e",
-    "references/owner-profiles/lennox-professional-youtube-v2.json": "6af8705fd056ea6d64cee9c7843f1001f433a6a77ad4b9e2d7ab8a1e0876a66f",
+    "references/owner-profiles/lennox-professional-youtube-v1.json": "14dd1a5109f5646e3b43d4097d3f09315d4db7b636867676c605e9ae4d73de6a",
+    "references/owner-profiles/lennox-professional-youtube-v2.json": "4291568a5970dedca9afb3c8ba9c5342dc4263abbe47420366fa7dc5c95952ae",
     "references/project-fact-brief.md": "130209f0120e44465625470224d9d2bfbadff1150c33e3a29ba113ec4e3dadf7",
-    "references/retention-policy.md": "edc5973a55792b6afab4fe49a0ff3c3cca979cdce7ef9b1fae50d2fa8732b664",
+    "references/retention-policy.md": "561ef3c2cd6cd43d63ad9c128d861572a5952ee2e7d5b45b934cf0f013c8dfd8",
     "references/sop.md": "f32834c03b98c33e760b02c9fd2a5b18f2fda0ba6c73cad787d6f095ef7fed89",
-    "references/verification.md": "b0d2756bd19c2da1bcde2d69957283c529f61b5b122e85175126da835bd6919b",
+    "references/verification.md": "3336692c0d3f45cf957fe8c8ba447d63b8b29b4382cece112d740d999b623ce5",
     "references/verifier-review-contract.json": "85669a849069d7d50dcf2b8a11468254d778b1382195f3d3420839935988caf9",
     "scripts/choreography_render.py": "a695c77b65946b0c8ee43ce03904e513fb8eabd4ab47007db9190949a8fa1e83",
     "scripts/composite_render.py": "c59cbb9e4cba840c60cd1ee4e3f30a7561af36511f9f1141e0d641a91fe7940e",
@@ -43,9 +43,9 @@
     "scripts/karaoke_ass.py": "6fd1aaba3737b224f4d13da3cdc3f5780ec8cc4b943c086b6a30e07f838ff8ac",
     "scripts/motion_render.py": "64e3512fff954d1c64f42b9a6efe2160296a3b7a09cfab521dc2e0f2932cf3b7",
     "scripts/motion_type.py": "740b69b9e69cef71d1689ab95cacafa731cc0aff2609f7cae6680eac08d210d1",
-    "scripts/splice.py": "a1509230a4e4a3d974864d2dfdc1284797cf16e7aa3561dcfe66a199fcf075e3",
+    "scripts/splice.py": "89254dd2778c8f113a6589ee0b520ed45a7ef7afba60ddc6bbfa64d7de78ef52",
     "scripts/transcribe.py": "6dc38ffc28b1896270ee380957092b65e6b576dba9d85b75ea9de82fdd5323ba",
-    "scripts/verify.py": "f8feb9fecfcc7bcf2428cf452bcef47d9a9c574f380b31d944956f588931d45f"
+    "scripts/verify.py": "cd21f8d056bb1ba98a511f0dfbb24b5e1dc51a953593582394796c045f9031d2"
   },
   "schema_version": "eddy-surface-manifest-v1"
 }

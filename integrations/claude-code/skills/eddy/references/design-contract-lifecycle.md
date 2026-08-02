@@ -29,7 +29,7 @@ At `eddy_edit_start`, Eddy:
 4. Writes `contracts/contract-bundle.json` with provenance, revisions, and SHA-256 hashes.
 5. Returns matching refs and hashes through `eddy-host-packet-v3.2`.
 
-The host enriches the run-local contracts before submitting v3.5 when the detected evidence is not
+The host enriches the run-local contracts before submitting v3.6 when the detected evidence is not
 enough. Another checkout is never hotlinked at render time.
 
 ## Static-first composition

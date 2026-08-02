@@ -479,6 +479,180 @@ def valid_plan_v35() -> dict:
     return payload
 
 
+def valid_plan_v36() -> dict:
+    payload = valid_plan_v35()
+    payload["schema_version"] = "edit-plan-v3.6"
+    payload["hooks"][0]["segments"] = [[50.0, 110.0]]
+    payload["hooks"][1]["segments"] = [[70.0, 130.0]]
+    payload["hooks"][2]["segments"] = [[75.0, 135.0]]
+    mechanic_ids = [
+        "proof-first-frame",
+        "claim-proof-alternation",
+        "promise-to-roadmap-bridge",
+    ]
+    benchmark_binding = {
+        "benchmark_revision": "omb-v1-2026-07-30",
+        "mechanics_library_id": "opening-mechanics-library-v1",
+        "mechanics_library_ref": (
+            "pre-production/review/opening-mechanics-library.json"
+        ),
+        "mechanics_library_sha256": "a" * 64,
+        "evidence_authority": "observed_cross_creator_not_causal",
+        "selected_mechanic_ids": mechanic_ids,
+    }
+    variants = []
+    delivery_openings = []
+    for opening in payload["visual_choreography"]["openings"]:
+        hook_id = opening["hook_id"]
+        variant_id = opening["id"]
+        bridge_scenes = [
+            _scene(
+                f"{hook_id}-bridge-{index + 1}",
+                30.0 + index * 10.0,
+                40.0 + index * 10.0,
+                job=("reset", "proof", "explain")[index],
+                layout=("speaker_full", "source_screen", "illustration_canvas")[index],
+                authority="supplied_asset" if index == 1 else "raw_source",
+                reason="The viewer needs time to inspect the bridge state.",
+            )
+            for index in range(3)
+        ]
+        opening["scenes"].extend(bridge_scenes)
+        blueprint_ids = [f"{hook_id}-blueprint-{index + 1}" for index in range(8)]
+        bridge_ids = [f"{hook_id}-bridge-plan-{index + 1}" for index in range(3)]
+        variants.append(
+            {
+                "variant_id": variant_id,
+                "hook_id": hook_id,
+                "style_policy": "function_locked_style_flexible",
+                "blueprint_beat_ids": blueprint_ids,
+                "bridge_scene_ids": bridge_ids,
+                "selected_mechanic_ids": mechanic_ids,
+                "thresholds": {
+                    "money_shot_by_second": 3,
+                    "real_proof_by_second": 10,
+                    "stakes_by_second": 30,
+                    "meaningful_visual_beats_min": 8,
+                    "meaningful_visual_beats_soft_max": 12,
+                },
+                "muted_preview_status": "pass",
+                "mobile_preview_status": "pass",
+                "taste_review_status": "pass",
+            }
+        )
+        planned_ids = blueprint_ids + bridge_ids
+        scene_mappings = []
+        for scene, planned_id in zip(opening["scenes"], planned_ids, strict=True):
+            scene_mappings.append(
+                {
+                    "delivered_scene_id": scene["id"],
+                    "blueprint_beat_id": planned_id,
+                    "mechanic_ids": [mechanic_ids[0]],
+                    "semantic_job": scene["semantic_job"],
+                    "spoken_anchor": "the exact planned source phrase",
+                    "asset_job": "show the planned owned asset",
+                    "proof_job": "make the claim inspectable",
+                    "audio_job": "support the state change without masking speech",
+                    "motion_job": scene["meaningful_change"],
+                    "cut_job": "cut when the evidence or viewer state changes",
+                    "intended_viewer_state": "understands the proof and next question",
+                    "fallback": "hard cut to the strongest owned proof",
+                    "jobs_match": True,
+                    "deviation": None,
+                }
+            )
+        delivery_openings.append(
+            {
+                "hook_id": hook_id,
+                "variant_id": variant_id,
+                "scene_mappings": scene_mappings,
+            }
+        )
+    payload["opening_visual_contract"] = {
+        "schema_version": "2.0",
+        "contract_kind": "opening_edit_blueprint",
+        "profile_version": 7,
+        "delivery_target_schema": "edit-plan-v3.6",
+        "contract_ref": "pre-production/review/opening-edit-blueprint.json",
+        "contract_sha256": "b" * 64,
+        "comparison_reel_ref": "review/opening-comparison.mp4",
+        "contact_sheet_ref": "review/opening-contact-sheet.jpg",
+        "benchmark_binding": benchmark_binding,
+        "variants": variants,
+    }
+    payload["opening_blueprint_delivery"] = {
+        "schema_version": "eddy-opening-blueprint-delivery-v1",
+        "contract_sha256": "b" * 64,
+        "benchmark_binding": benchmark_binding,
+        "openings": delivery_openings,
+    }
+    return payload
+
+
+def valid_plan_v36_full_blueprint() -> dict:
+    payload = valid_plan_v36()
+    contract = payload["opening_visual_contract"]
+    contract["opening_contact_sheet_ref"] = contract.pop("contact_sheet_ref")
+    contract.pop("comparison_reel_ref")
+    deliveries = {
+        delivery["hook_id"]: delivery
+        for delivery in payload["opening_blueprint_delivery"]["openings"]
+    }
+    for variant in contract["variants"]:
+        delivery = deliveries[variant["hook_id"]]
+        mappings = delivery["scene_mappings"]
+
+        def planned(mapping: dict, start: float, end: float) -> dict:
+            return {
+                "beat_id": mapping["blueprint_beat_id"],
+                "start_second": start,
+                "end_second": end,
+                "mechanic_ids": mapping["mechanic_ids"],
+                **{
+                    field: mapping[field]
+                    for field in (
+                        "semantic_job",
+                        "spoken_anchor",
+                        "asset_job",
+                        "proof_job",
+                        "audio_job",
+                        "motion_job",
+                        "cut_job",
+                        "intended_viewer_state",
+                        "fallback",
+                    )
+                },
+            }
+
+        variant["opening_edit_blueprint"] = {
+            "window_seconds": [0, 30],
+            "beats": [
+                planned(mapping, index * 3.5, index * 3.5 + 3.4)
+                for index, mapping in enumerate(mappings[:8])
+            ],
+        }
+        variant["bridge_30_60"] = {
+            "window_seconds": [30, 60],
+            "scenes": [
+                planned(mapping, 30 + index * 10, 40 + index * 10)
+                for index, mapping in enumerate(mappings[8:])
+            ],
+        }
+        variant["muted_preview"] = {"status": "pass"}
+        variant["mobile_preview"] = {"status": "pass"}
+        variant["taste_review"] = {"status": "pass"}
+        for field in (
+            "blueprint_beat_ids",
+            "bridge_scene_ids",
+            "selected_mechanic_ids",
+            "muted_preview_status",
+            "mobile_preview_status",
+            "taste_review_status",
+        ):
+            variant.pop(field)
+    return payload
+
+
 def plan_for_job(job) -> dict:
     payload = valid_plan()
     lock = json.loads((job.run_dir / "source-lock.json").read_text())
@@ -1027,6 +1201,140 @@ def test_v35_requires_independent_proof_and_cut_contracts() -> None:
     del missing["cut_integrity_plan"]
     with pytest.raises(PlanValidationError, match="cut_integrity_plan_schema_invalid"):
         EditPlanV3.from_dict(missing)
+
+
+def test_v36_maps_every_delivered_zero_to_sixty_scene_to_the_blueprint() -> None:
+    payload = valid_plan_v36()
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.schema_version == "edit-plan-v3.6"
+    assert plan.opening_visual_contract["schema_version"] == "2.0"
+    assert plan.opening_blueprint_delivery == payload["opening_blueprint_delivery"]
+    assert plan.to_dict()["opening_blueprint_delivery"] == payload[
+        "opening_blueprint_delivery"
+    ]
+
+
+def test_v36_rejects_unmapped_scene_and_unreceipted_deviation() -> None:
+    unmapped = valid_plan_v36()
+    unmapped["opening_blueprint_delivery"]["openings"][0]["scene_mappings"].pop()
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_every_delivered_scene_requires_mapping",
+    ):
+        EditPlanV3.from_dict(unmapped)
+
+    deviation = valid_plan_v36()
+    mapping = deviation["opening_blueprint_delivery"]["openings"][1][
+        "scene_mappings"
+    ][2]
+    mapping["jobs_match"] = False
+    mapping["deviation"] = None
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_deviation_receipt_required",
+    ):
+        EditPlanV3.from_dict(deviation)
+
+    unnecessary = valid_plan_v36()
+    unnecessary_mapping = unnecessary["opening_blueprint_delivery"]["openings"][0][
+        "scene_mappings"
+    ][0]
+    unnecessary_mapping["deviation"] = {
+        "deviation_id": "not-needed",
+        "reason": "The planned and delivered jobs already match.",
+    }
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_unnecessary_deviation_receipt",
+    ):
+        EditPlanV3.from_dict(unnecessary)
+
+    unknown_mechanic = valid_plan_v36()
+    unknown_mechanic["opening_blueprint_delivery"]["openings"][0]["scene_mappings"][
+        0
+    ]["mechanic_ids"] = ["creator-signature-treatment"]
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_mapping_mechanic_unknown",
+    ):
+        EditPlanV3.from_dict(unknown_mechanic)
+
+
+def test_v36_full_blueprint_jobs_are_locked_until_deviation_is_receipted() -> None:
+    payload = valid_plan_v36_full_blueprint()
+
+    plan = EditPlanV3.from_dict(payload)
+
+    assert plan.opening_visual_contract["opening_contact_sheet_ref"]
+
+    drifted = valid_plan_v36_full_blueprint()
+    drifted["opening_blueprint_delivery"]["openings"][0]["scene_mappings"][0][
+        "proof_job"
+    ] = "replace the planned proof with an unsupported claim"
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_jobs_match_claim_invalid",
+    ):
+        EditPlanV3.from_dict(drifted)
+
+    bad_bridge = valid_plan_v36_full_blueprint()
+    bad_bridge["opening_visual_contract"]["variants"][0]["bridge_30_60"][
+        "window_seconds"
+    ] = [30, 59]
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_bridge_window_invalid",
+    ):
+        EditPlanV3.from_dict(bad_bridge)
+
+    missing_contact_sheet = valid_plan_v36_full_blueprint()
+    missing_contact_sheet["opening_visual_contract"].pop(
+        "opening_contact_sheet_ref"
+    )
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_contact_sheet_ref_required",
+    ):
+        EditPlanV3.from_dict(missing_contact_sheet)
+
+    missing_planned_job = valid_plan_v36_full_blueprint()
+    missing_planned_job["opening_visual_contract"]["variants"][0][
+        "opening_edit_blueprint"
+    ]["beats"][0].pop("spoken_anchor")
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_planned_scene_spoken_anchor_required",
+    ):
+        EditPlanV3.from_dict(missing_planned_job)
+
+    duplicate_mechanics = valid_plan_v36_full_blueprint()
+    duplicate_mechanics["opening_visual_contract"]["benchmark_binding"][
+        "selected_mechanic_ids"
+    ] = ["proof-first-frame", "proof-first-frame"]
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_selected_mechanics_required",
+    ):
+        EditPlanV3.from_dict(duplicate_mechanics)
+
+    wrong_target = valid_plan_v36_full_blueprint()
+    wrong_target["opening_visual_contract"]["delivery_target_schema"] = (
+        "edit-plan-v3.5"
+    )
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_delivery_target_schema_invalid",
+    ):
+        EditPlanV3.from_dict(wrong_target)
+
+    wrong_kind = valid_plan_v36_full_blueprint()
+    wrong_kind["opening_visual_contract"]["contract_kind"] = "opening_proof_trailer"
+    with pytest.raises(
+        PlanValidationError,
+        match="opening_blueprint_contract_kind_invalid",
+    ):
+        EditPlanV3.from_dict(wrong_kind)
 
 
 def test_cancelled_job_has_terminal_receipt(tmp_path: Path) -> None:
