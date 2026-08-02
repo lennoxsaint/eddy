@@ -106,7 +106,7 @@ class EditPlanV3:
     protected: tuple[dict[str, Any], ...]
     editorial_review: EditorialReview
     body: BodyPlan
-    hooks: tuple[HookPlan, HookPlan, HookPlan]
+    hooks: tuple[HookPlan, ...]
     privacy_masks: tuple[PrivacyMask, ...]
     shorts: tuple[ShortPlan, ...]
     motion_beats: tuple[dict[str, Any], ...]
@@ -129,7 +129,7 @@ class EditPlanV3:
         return self.hooks[0]
 
     @property
-    def alternate_hooks(self) -> tuple[HookPlan, HookPlan]:
+    def alternate_hooks(self) -> tuple[HookPlan, ...]:
         return self.hooks[1:]
 
     @classmethod
@@ -170,16 +170,27 @@ class EditPlanV3:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
             raise PlanValidationError("edit_plan_schema_version_invalid")
 
         raw_hooks = payload.get("hooks")
-        if not isinstance(raw_hooks, list) or len(raw_hooks) != 3:
+        if not isinstance(raw_hooks, list):
+            raise PlanValidationError("ranked_hooks_required")
+        if schema_version == "edit-plan-v3.7":
+            if not 3 <= len(raw_hooks) <= 6:
+                raise PlanValidationError("long_routes_count_must_be_3_to_6")
+        elif len(raw_hooks) != 3:
             raise PlanValidationError("three_ranked_hooks_required")
         hooks = tuple(_parse_hook(item) for item in raw_hooks)
-        if tuple(hook.rank for hook in hooks) != (1, 2, 3):
-            raise PlanValidationError("hook_ranks_must_be_1_2_3")
-        if len({hook.id for hook in hooks}) != 3:
+        expected_ranks = tuple(range(1, len(hooks) + 1))
+        if tuple(hook.rank for hook in hooks) != expected_ranks:
+            raise PlanValidationError(
+                "hook_ranks_must_be_sequential"
+                if schema_version == "edit-plan-v3.7"
+                else "hook_ranks_must_be_1_2_3"
+            )
+        if len({hook.id for hook in hooks}) != len(hooks):
             raise PlanValidationError("hook_ids_must_be_unique")
         privacy_masks = _parse_privacy_masks(
             payload.get("privacy_masks", []),
@@ -263,6 +274,7 @@ class EditPlanV3:
                 "edit-plan-v3.4",
                 "edit-plan-v3.5",
                 "edit-plan-v3.6",
+                "edit-plan-v3.7",
             },
         )
         for hook in hooks:
@@ -284,16 +296,27 @@ class EditPlanV3:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
             try:
+                raw_opening_contract = payload.get("opening_visual_contract")
+                blueprint_contract = (
+                    schema_version == "edit-plan-v3.6"
+                    or (
+                        schema_version == "edit-plan-v3.7"
+                        and isinstance(raw_opening_contract, dict)
+                        and raw_opening_contract.get("contract_kind")
+                        == "opening_edit_blueprint"
+                    )
+                )
                 opening_visual_contract = (
                     validate_opening_blueprint_contract(
-                        payload.get("opening_visual_contract"),
+                        raw_opening_contract,
                         hook_ids=(hook.id for hook in hooks),
                     )
-                    if schema_version == "edit-plan-v3.6"
+                    if blueprint_contract
                     else _parse_opening_visual_contract(
-                        payload.get("opening_visual_contract"),
+                        raw_opening_contract,
                         hooks=hooks,
                         motion_beats=motion_beats,
                     )
@@ -314,15 +337,21 @@ class EditPlanV3:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
-            minimum_opening_seconds = 60 if schema_version == "edit-plan-v3.6" else 30
+            has_blueprint = bool(
+                isinstance(opening_visual_contract, dict)
+                and opening_visual_contract.get("contract_kind")
+                == "opening_edit_blueprint"
+            )
+            minimum_opening_seconds = 60 if has_blueprint else 30
             if any(
                 sum(end - start for start, end in hook.segments) < minimum_opening_seconds
                 for hook in hooks
             ):
                 raise PlanValidationError(
-                    "v3_6_opening_cut_must_cover_first_sixty_seconds"
-                    if schema_version == "edit-plan-v3.6"
+                    "opening_blueprint_cut_must_cover_first_sixty_seconds"
+                    if has_blueprint
                     else "v3_2_opening_cut_must_cover_first_thirty_seconds"
                 )
             try:
@@ -360,7 +389,7 @@ class EditPlanV3:
                         raise PlanValidationError(
                             f"portrait_choreography_must_cover_complete_short:{short.id}"
                         )
-                if schema_version == "edit-plan-v3.6":
+                if has_blueprint:
                     if opening_visual_contract is None:
                         raise OpeningBlueprintValidationError(
                             "opening_blueprint_contract_required"
@@ -376,12 +405,14 @@ class EditPlanV3:
                 raise PlanValidationError(str(exc)) from exc
         elif payload.get("frame_contract") is not None or payload.get("visual_choreography") is not None:
             raise PlanValidationError("visual_choreography_requires_edit_plan_v3_2")
-        if (
-            schema_version != "edit-plan-v3.6"
-            and payload.get("opening_blueprint_delivery") is not None
-        ):
+        if schema_version == "edit-plan-v3.7" and not has_blueprint:
+            if payload.get("opening_blueprint_delivery") is not None:
+                raise PlanValidationError(
+                    "opening_blueprint_delivery_requires_blueprint_contract"
+                )
+        elif schema_version != "edit-plan-v3.6" and schema_version != "edit-plan-v3.7" and payload.get("opening_blueprint_delivery") is not None:
             raise PlanValidationError(
-                "opening_blueprint_delivery_requires_edit_plan_v3_6"
+                "opening_blueprint_delivery_requires_edit_plan_v3_6_or_v3_7"
             )
 
         body_structure_contract = None
@@ -390,6 +421,7 @@ class EditPlanV3:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
             if visual_choreography is None:
                 raise PlanValidationError("body_structure_requires_visual_choreography")
@@ -415,14 +447,19 @@ class EditPlanV3:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
             try:
                 contract_bundle = validate_contract_ref(
                     payload.get("contract_bundle"),
                     schema=(
-                        "eddy-contract-bundle-ref-v2"
-                        if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
-                        else "eddy-contract-bundle-ref-v1"
+                        "eddy-contract-bundle-ref-v3"
+                        if schema_version == "edit-plan-v3.7"
+                        else (
+                            "eddy-contract-bundle-ref-v2"
+                            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
+                            else "eddy-contract-bundle-ref-v1"
+                        )
                     ),
                     label="contract_bundle",
                 )
@@ -432,7 +469,7 @@ class EditPlanV3:
                 production_review = validate_production_review(
                     payload.get("production_review")
                 )
-                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
+                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6", "edit-plan-v3.7"}:
                     if audio_plan.get("schema_version") != "eddy-audio-plan-v2":
                         raise QualityContractError("audio_plan_v2_required")
                     if caption_policy.get("schema_version") != "eddy-caption-policy-v2":
@@ -441,7 +478,11 @@ class EditPlanV3:
                         raise QualityContractError("production_review_v2_required")
                     project_fact_brief = validate_contract_ref(
                         payload.get("project_fact_brief"),
-                        schema="eddy-project-fact-brief-ref-v1",
+                        schema=(
+                            "eddy-project-fact-brief-ref-v2"
+                            if schema_version == "edit-plan-v3.7"
+                            else "eddy-project-fact-brief-ref-v1"
+                        ),
                         label="project_fact_brief",
                     )
                     cut_integrity_plan = validate_cut_integrity_plan(
@@ -471,7 +512,7 @@ class EditPlanV3:
             protected=protected,
             editorial_review=editorial_review,
             body=body,
-            hooks=hooks,  # type: ignore[arg-type]
+            hooks=hooks,
             privacy_masks=privacy_masks,
             shorts=tuple(shorts),
             motion_beats=motion_beats,
@@ -828,8 +869,8 @@ def _parse_opening_visual_contract(
             raise PlanValidationError(f"opening_visual_{field}_required")
 
     variants = value.get("variants")
-    if not isinstance(variants, list) or len(variants) != 3:
-        raise PlanValidationError("three_opening_visual_variants_required")
+    if not isinstance(variants, list) or len(variants) != len(hooks):
+        raise PlanValidationError("opening_visual_variant_count_must_match_routes")
     hook_ids = {hook.id for hook in hooks}
     variant_hook_ids: list[str] = []
     variant_ids: list[str] = []
@@ -907,7 +948,7 @@ def _parse_opening_visual_contract(
             for field in ("tldraw_canvas_ref", "tldraw_capture_plan_ref"):
                 if not isinstance(item.get(field), str) or not item[field].strip():
                     raise PlanValidationError(f"opening_{field}_required:{hook_id}")
-    if len(set(variant_ids)) != 3:
+    if len(set(variant_ids)) != len(hooks):
         raise PlanValidationError("opening_visual_variant_ids_must_be_unique")
     if set(variant_hook_ids) != hook_ids:
         raise PlanValidationError("opening_visual_variants_must_cover_each_hook")

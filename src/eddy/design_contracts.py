@@ -14,6 +14,7 @@ from .design_adherence import (
     validate_design_contract_texts,
 )
 from .project_brief import materialize_project_fact_brief
+from .correction_pack import materialize_correction_pack
 
 
 HYPERFRAMES_VERSION = "0.7.3"
@@ -39,15 +40,27 @@ def create_contract_bundle(
     profile_path: Path,
     source_hashes: dict[str, str],
     project_fact_brief: dict[str, Any] | None = None,
+    correction_pack: dict[str, Any] | None = None,
     hyperframes_root: Path | None = None,
 ) -> dict[str, Any]:
     """Create design.md, both frame contracts, doctrine snapshots, and the bundle."""
 
     run_dir = run_dir.resolve()
+    use_v3 = profile.get("id") == "lennox-professional-youtube-v3"
     if project_fact_brief is None:
         project_fact_brief = materialize_project_fact_brief(
             run_dir,
             source=source,
+            preferred_schema=(
+                "eddy-project-fact-brief-v2"
+                if use_v3
+                else "eddy-project-fact-brief-v1"
+            ),
+        )
+    if use_v3 and correction_pack is None:
+        correction_pack = materialize_correction_pack(
+            run_dir,
+            project_id=str(project_fact_brief["project_id"]),
         )
     contracts = run_dir / "contracts"
     contracts.mkdir(parents=True, exist_ok=True)
@@ -72,13 +85,22 @@ def create_contract_bundle(
     )
     rubric_path = canonical_root / "evals" / "professional-youtube-100-rubric.json"
     corrections_name = (
-        "professional-youtube-corrections-v2.json"
+        "professional-youtube-corrections-v3.json"
+        if use_v3
+        else "professional-youtube-corrections-v2.json"
         if profile.get("id") == "lennox-professional-youtube-v2"
         else "professional-youtube-corrections-v1.json"
     )
     corrections_path = canonical_root / "evals" / corrections_name
-    verifier_path = canonical_root / "references" / "verifier-review-contract.json"
-    if not rubric_path.is_file() or not corrections_path.is_file() or not verifier_path.is_file():
+    corrections_base_path = canonical_root / "evals" / "professional-youtube-corrections-v2.json"
+    verifier_path = canonical_root / "references" / (
+        "verifier-review-contract-v2.json" if use_v3 else "verifier-review-contract.json"
+    )
+    gate_contract_path = canonical_root / "references" / "professional-gate-evidence-contracts-v2.json"
+    required_surfaces = [rubric_path, corrections_path, verifier_path]
+    if use_v3:
+        required_surfaces.extend([corrections_base_path, gate_contract_path])
+    if not all(path.is_file() for path in required_surfaces):
         raise DesignContractError("quality_evidence_surface_missing")
     quality_dir = contracts / "quality"
     quality_dir.mkdir(parents=True, exist_ok=True)
@@ -90,9 +112,14 @@ def create_contract_bundle(
     shutil.copy2(rubric_path, rubric_snapshot)
     shutil.copy2(corrections_path, corrections_snapshot)
     shutil.copy2(verifier_path, verifier_snapshot)
+    correction_base_snapshot = quality_dir / "professional-youtube-corrections-v2.json"
+    gate_contract_snapshot = quality_dir / "professional-gate-evidence-contracts-v2.json"
+    if use_v3:
+        shutil.copy2(corrections_base_path, correction_base_snapshot)
+        shutil.copy2(gate_contract_path, gate_contract_snapshot)
     source_lock_path = run_dir / "source-lock.json"
     bundle = {
-        "schema_version": "eddy-contract-bundle-v2",
+        "schema_version": "eddy-contract-bundle-v3" if use_v3 else "eddy-contract-bundle-v2",
         "created_at": datetime.now(UTC).isoformat(),
         "profile": {
             "id": profile["id"],
@@ -116,6 +143,11 @@ def create_contract_bundle(
             run_dir,
             project_fact_brief,
         ),
+        **(
+            {"correction_pack": _correction_pack_entry(run_dir, correction_pack)}
+            if use_v3
+            else {}
+        ),
         "hyperframes": doctrine_manifest,
         "quality_evidence": {
             "rubric": {
@@ -128,6 +160,22 @@ def create_contract_bundle(
                 "sha256": _sha256(corrections_snapshot),
                 "source_ref": corrections_path.relative_to(canonical_root).as_posix(),
             },
+            **(
+                {
+                    "correction_evals_base": {
+                        "ref": correction_base_snapshot.relative_to(run_dir).as_posix(),
+                        "sha256": _sha256(correction_base_snapshot),
+                        "source_ref": corrections_base_path.relative_to(canonical_root).as_posix(),
+                    },
+                    "professional_gate_contracts": {
+                        "ref": gate_contract_snapshot.relative_to(run_dir).as_posix(),
+                        "sha256": _sha256(gate_contract_snapshot),
+                        "source_ref": gate_contract_path.relative_to(canonical_root).as_posix(),
+                    },
+                }
+                if use_v3
+                else {}
+            ),
             "verifier_contract": {
                 "ref": verifier_snapshot.relative_to(run_dir).as_posix(),
                 "sha256": _sha256(verifier_snapshot),
@@ -158,13 +206,15 @@ def create_contract_bundle(
             "repair_review": "repaired_intervals_and_joins_plus_full_final",
             "promotion_state": "proof_gated_candidate_awaiting_owner_taste",
             "open_items": "objective_closed_subjective_optional",
+            "gate_specific_evidence": use_v3,
+            "boundary_supercut_required": use_v3,
         },
         "revision_history": [],
     }
     bundle_path = contracts / "contract-bundle.json"
     _write_json(bundle_path, bundle)
     return {
-        "schema_version": "eddy-contract-bundle-ref-v2",
+        "schema_version": "eddy-contract-bundle-ref-v3" if use_v3 else "eddy-contract-bundle-ref-v2",
         "path": str(bundle_path),
         "ref": bundle_path.relative_to(run_dir).as_posix(),
         "sha256": _sha256(bundle_path),
@@ -255,7 +305,11 @@ def revise_contract_bundle(
     }
     _write_json(run_dir / "contracts" / "render-invalidation.json", invalidation)
     return {
-        "schema_version": "eddy-contract-bundle-ref-v2",
+        "schema_version": (
+            "eddy-contract-bundle-ref-v3"
+            if bundle.get("schema_version") == "eddy-contract-bundle-v3"
+            else "eddy-contract-bundle-ref-v2"
+        ),
         "path": str(bundle_path),
         "ref": bundle_path.relative_to(run_dir).as_posix(),
         "sha256": _sha256(bundle_path),
@@ -494,6 +548,29 @@ def _project_fact_entry(
         "sha256": value["sha256"],
         "project_id": value.get("project_id"),
         "status": value.get("status"),
+        "provenance": value.get("provenance"),
+    }
+
+
+def _correction_pack_entry(
+    run_dir: Path,
+    value: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise DesignContractError("correction_pack_required")
+    if value.get("schema_version") != "eddy-correction-pack-ref-v1":
+        raise DesignContractError("correction_pack_ref_schema_invalid")
+    ref = value.get("ref")
+    if not isinstance(ref, str):
+        raise DesignContractError("correction_pack_ref_invalid")
+    path = run_dir / ref
+    if not path.is_file() or _sha256(path) != value.get("sha256"):
+        raise DesignContractError("correction_pack_hash_mismatch")
+    return {
+        "schema_version": value["schema_version"],
+        "ref": ref,
+        "sha256": value["sha256"],
+        "project_id": value.get("project_id"),
         "provenance": value.get("provenance"),
     }
 

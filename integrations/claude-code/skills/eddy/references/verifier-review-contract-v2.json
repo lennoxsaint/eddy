@@ -1,0 +1,30 @@
+{
+  "schema_version": "verifier-review-contract-v2",
+  "review_schema": "verifier-review-v2",
+  "authority": "independent_no_edit_context",
+  "edit_authority": false,
+  "repair_review": "all_cut_boundaries_plus_repaired_intervals_and_joins_plus_full_final",
+  "promotion_recommendation": "objective_green",
+  "required_output_proof": [
+    "sha256",
+    "duration_seconds",
+    "watched_seconds",
+    "listened_seconds",
+    "full_watch",
+    "full_listen",
+    "defects"
+  ],
+  "boundary_review": {
+    "all_boundaries_reviewed": true,
+    "playback_speed": 0.25,
+    "frame_window_each_side": 8,
+    "decoder_policy": "fps_mode_passthrough",
+    "supercut_hash_required": true,
+    "candidate_decisions_hash_required": true,
+    "editor_prose_may_self_clear": false
+  },
+  "output_contract": {"longs_min": 3, "longs_max": 6, "shorts_min": 3, "shorts_max": 5},
+  "open_items_policy": "objective_closed_subjective_optional",
+  "audience_performance": "NOT_RUN",
+  "final_state": "proof_gated_candidate_awaiting_owner_taste"
+}

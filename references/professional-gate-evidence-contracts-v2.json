@@ -1,0 +1,31 @@
+{
+  "schema_version": "professional-gate-evidence-contracts-v2",
+  "receipt_schema": "professional-gate-evidence-v2",
+  "evidence_artifact_schema": "professional-gate-evidence-v2",
+  "rules": {
+    "one_gate_per_evidence_manifest": true,
+    "gate_id_must_match_receipt_key": true,
+    "evaluator_id_must_match_capability_handshake": true,
+    "metric_requirements_must_match_capability_handshake": true,
+    "self_attested": false,
+    "artifact_hashes_required": true,
+    "generic_evidence_reuse_allowed": false,
+    "editor_prose_may_clear_detected_defect": false
+  },
+  "cut_boundary": {
+    "manifest_schema": "eddy-cut-boundary-manifest-v1",
+    "audit_schema": "eddy-cut-boundary-audit-v1",
+    "micro_insert_frames": [1, 6],
+    "silent_handle_max_seconds": 0.24,
+    "silent_handle_max_dbfs": -40,
+    "frame_window_each_side": 8,
+    "supercut_speed": 0.25,
+    "decoder_policy": "fps_mode_passthrough",
+    "protected_insert_evidence": {
+      "relative_ref_required": true,
+      "sha256_required": true,
+      "purpose_specific": true,
+      "self_attested": false
+    }
+  }
+}

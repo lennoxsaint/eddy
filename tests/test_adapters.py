@@ -107,6 +107,7 @@ def test_mcp_server_exposes_every_public_tool(tmp_path: Path, monkeypatch) -> No
     assert {
         "eddy_edit_options",
         "eddy_edit_start",
+        "eddy_capabilities",
         "eddy_host_packet",
         "eddy_host_submit",
         "eddy_opening_candidates",

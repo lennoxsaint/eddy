@@ -16,8 +16,11 @@ from typing import Any
 from .editorial import validate_editorial_review
 from .plan import EditPlanV3, PlanValidationError
 from .professional_proof import (
+    GATE_EVALUATORS,
     REQUIRED_PROFESSIONAL_GATES,
+    REQUIRED_PROFESSIONAL_GATES_V2,
     validate_open_items,
+    validate_gate_evidence_v2,
     validate_professional_gate_receipt,
     validate_verifier_review,
 )
@@ -87,6 +90,44 @@ V35_REQUIRED_FINAL_GATES = REQUIRED_FINAL_GATES | {
     "design_adherence_bound",
     *REQUIRED_PROFESSIONAL_GATES,
 }
+
+
+def required_final_gates(schema_version: object, route_count: int = 3) -> set[str]:
+    """Return the exact promotion gates negotiated by the plan schema."""
+
+    if schema_version != "edit-plan-v3.7":
+        return (
+            V35_REQUIRED_FINAL_GATES
+            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
+            else REQUIRED_FINAL_GATES
+        )
+    return (
+        REQUIRED_FINAL_GATES
+        - {
+            "three_long_variants",
+            *(f"hyperframes_motion_hook_{rank}" for rank in range(1, 4)),
+            *(f"contextual_motion_hook_{rank}" for rank in range(1, 4)),
+            *(f"privacy_masks_hook_{rank}" for rank in range(1, 4)),
+            *(f"descript_effect_survival_hook_{rank}" for rank in range(1, 4)),
+            *(f"deterministic_qa_hook_{rank}" for rank in range(1, 4)),
+        }
+        | {
+            "long_route_count",
+            "independent_verifier",
+            "objective_open_items_closed",
+            "project_fact_brief_bound",
+            "correction_pack_bound",
+            "verifier_contract_bound",
+            "professional_gate_contracts_bound",
+            "design_adherence_bound",
+            *REQUIRED_PROFESSIONAL_GATES_V2,
+            *(f"hyperframes_motion_hook_{rank}" for rank in range(1, route_count + 1)),
+            *(f"contextual_motion_hook_{rank}" for rank in range(1, route_count + 1)),
+            *(f"privacy_masks_hook_{rank}" for rank in range(1, route_count + 1)),
+            *(f"descript_effect_survival_hook_{rank}" for rank in range(1, route_count + 1)),
+            *(f"deterministic_qa_hook_{rank}" for rank in range(1, route_count + 1)),
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,15 +228,35 @@ class JobManager:
                 _assert_inside(job.run_dir, contract_path)
                 if not contract_path.is_file() or _sha256(contract_path) != contract["sha256"]:
                     raise PlanValidationError("design_contract_hash_mismatch")
-            if plan.schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
-                if bundle.get("schema_version") != "eddy-contract-bundle-v2":
-                    raise PlanValidationError("contract_bundle_v2_required")
+            if plan.schema_version in {"edit-plan-v3.5", "edit-plan-v3.6", "edit-plan-v3.7"}:
+                expected_bundle_schema = (
+                    "eddy-contract-bundle-v3"
+                    if plan.schema_version == "edit-plan-v3.7"
+                    else "eddy-contract-bundle-v2"
+                )
+                if bundle.get("schema_version") != expected_bundle_schema:
+                    raise PlanValidationError(
+                        "contract_bundle_v3_required"
+                        if plan.schema_version == "edit-plan-v3.7"
+                        else "contract_bundle_v2_required"
+                    )
                 if (
                     plan.project_fact_brief is None
                     or bundle.get("project_fact_brief", {}).get("sha256")
                     != plan.project_fact_brief.get("sha256")
                 ):
                     raise PlanValidationError("project_fact_brief_bundle_mismatch")
+                if plan.schema_version == "edit-plan-v3.7":
+                    correction = bundle.get("correction_pack") or {}
+                    correction_path = (
+                        job.run_dir / str(correction.get("ref", "missing"))
+                    ).resolve()
+                    _assert_inside(job.run_dir, correction_path)
+                    if (
+                        not correction_path.is_file()
+                        or _sha256(correction_path) != correction.get("sha256")
+                    ):
+                        raise PlanValidationError("correction_pack_bundle_mismatch")
         if plan.project_fact_brief is not None:
             brief_path = (job.run_dir / str(plan.project_fact_brief["ref"])).resolve()
             _assert_inside(job.run_dir, brief_path)
@@ -205,6 +266,15 @@ class JobManager:
             ):
                 raise PlanValidationError("project_fact_brief_hash_mismatch")
             brief = json.loads(brief_path.read_text())
+            if plan.schema_version == "edit-plan-v3.7":
+                brief_routes = (brief.get("output") or {}).get("long_routes", [])
+                expected_route_ids = [
+                    str(route.get("id"))
+                    for route in brief_routes
+                    if isinstance(route, dict)
+                ]
+                if [hook.id for hook in plan.hooks] != expected_route_ids:
+                    raise PlanValidationError("long_routes_project_brief_mismatch")
             long_captions = bool(
                 ((plan.caption_policy or {}).get("longs") or {}).get("designed_captions")
             )
@@ -218,7 +288,14 @@ class JobManager:
             for claim in (plan.proof_plan or {}).get("claims", []):
                 if not set(claim["factual_bindings"]).issubset(fact_ids):
                     raise PlanValidationError("proof_plan_fact_binding_missing")
-        if plan.schema_version == "edit-plan-v3.6":
+        has_opening_blueprint = bool(
+            isinstance(plan.opening_visual_contract, dict)
+            and plan.opening_visual_contract.get("contract_kind")
+            == "opening_edit_blueprint"
+        )
+        if plan.schema_version == "edit-plan-v3.6" or (
+            plan.schema_version == "edit-plan-v3.7" and has_opening_blueprint
+        ):
             opening_contract = plan.opening_visual_contract
             if opening_contract is None:
                 raise PlanValidationError("opening_blueprint_contract_required")
@@ -475,6 +552,7 @@ class JobManager:
             "edit-plan-v3.4",
             "edit-plan-v3.5",
             "edit-plan-v3.6",
+            "edit-plan-v3.7",
         }:
             evidence_gates, evidence_blockers = _production_evidence(job.run_dir, attempt)
             verified_gates.update(evidence_gates)
@@ -483,7 +561,7 @@ class JobManager:
                 plan_payload,
             )
             verified_gates.update(binding_gates)
-            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}:
+            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6", "edit-plan-v3.7"}:
                 professional_gates, professional_blockers = _professional_v35_evidence(
                     attempt
                 )
@@ -529,25 +607,44 @@ class JobManager:
                         "rubric_evidence_complete",
                     ):
                         verified_gates[gate] = False
-        required_gates = (
-            V35_REQUIRED_FINAL_GATES
-            if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
-            else REQUIRED_FINAL_GATES
-        )
+        route_count = len(plan_payload.get("hooks", [])) or 3
+        required_gates = required_final_gates(schema_version, route_count)
         missing_gates = sorted(required_gates - set(verified_gates))
+        failed_gates = sorted(
+            gate for gate in required_gates if verified_gates.get(gate) is False
+        )
+        required_gates_green = all(
+            verified_gates.get(gate) is True for gate in required_gates
+        )
         verified_blockers = list(
             dict.fromkeys(
                 blockers
                 + ([] if source_green else ["source_hash_changed"])
                 + [f"required_gate_missing:{gate}" for gate in missing_gates]
+                + [f"required_gate_failed:{gate}" for gate in failed_gates]
             )
         )
+        attempt_number = _attempt_number(attempt.name)
+        repair_loop_limit_reached = bool(
+            schema_version == "edit-plan-v3.7"
+            and attempt_number >= 3
+            and (missing_gates or not required_gates_green or verified_blockers)
+        )
+        if repair_loop_limit_reached:
+            verified_blockers = list(
+                dict.fromkeys(
+                    [
+                        *verified_blockers,
+                        "technical_blocker:repair_loop_limit_reached",
+                    ]
+                )
+            )
         _write_json(
             job.run_dir / "verification.json",
             {"gates": verified_gates, "blockers": verified_blockers},
         )
 
-        if not missing_gates and all(verified_gates.values()) and not verified_blockers:
+        if not missing_gates and required_gates_green and not verified_blockers:
             contract_bindings = _contract_receipt_fields(job)
             _write_json(
                 attempt / "contract-bindings.json",
@@ -563,14 +660,14 @@ class JobManager:
             shutil.move(str(attempt), str(final))
             final_state = (
                 JobState.PROOF_GATED_CANDIDATE_AWAITING_OWNER_TASTE
-                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
+                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6", "edit-plan-v3.7"}
                 else JobState.COMPLETED
             )
             updated = Job(job.id, job.source, job.snapshot, job.run_dir, final_state)
             _receipt(
                 updated,
                 "proof_gated_candidate_ready"
-                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6"}
+                if schema_version in {"edit-plan-v3.5", "edit-plan-v3.6", "edit-plan-v3.7"}
                 else "proof_gated_edit_completed",
                 **contract_bindings,
             )
@@ -580,7 +677,6 @@ class JobManager:
             if quarantine.exists():
                 raise RuntimeError(f"quarantine_attempt_exists:{attempt.name}")
             shutil.move(str(attempt), str(quarantine))
-            attempt_number = _attempt_number(attempt.name)
             exact_terminal_blocker = any(
                 blocker.startswith(("external_blocker:", "technical_blocker:"))
                 for blocker in verified_blockers
@@ -590,7 +686,11 @@ class JobManager:
                 {
                     "schema_version": "eddy-repair-packet-v1",
                     "attempt": attempt_number,
-                    "remaining_attempts": None,
+                    "remaining_attempts": (
+                        max(0, 3 - attempt_number)
+                        if schema_version == "edit-plan-v3.7"
+                        else None
+                    ),
                     "minimum_complete_passes": 3,
                     "repair_policy": "change_strategy_until_green_or_exact_blocker",
                     "gates": verified_gates,
@@ -598,7 +698,11 @@ class JobManager:
                     "quarantine": str(quarantine),
                 },
             )
-            next_state = JobState.BLOCKED if exact_terminal_blocker else JobState.AWAITING_HOST_REPAIR
+            next_state = (
+                JobState.BLOCKED
+                if exact_terminal_blocker or repair_loop_limit_reached
+                else JobState.AWAITING_HOST_REPAIR
+            )
             updated = Job(
                 job.id,
                 job.source,
@@ -610,11 +714,15 @@ class JobManager:
             _receipt(
                 updated,
                 "blocked_attempt_quarantined"
-                if exact_terminal_blocker
+                if exact_terminal_blocker or repair_loop_limit_reached
                 else "host_repair_requested",
                 blockers=verified_blockers,
                 quarantine=str(quarantine),
-                remaining_attempts=None,
+                remaining_attempts=(
+                    max(0, 3 - attempt_number)
+                    if schema_version == "edit-plan-v3.7"
+                    else None
+                ),
                 repair_policy="change_strategy_until_green_or_exact_blocker",
             )
         self._save(updated)
@@ -719,6 +827,7 @@ def _production_evidence(
     allowed_evidence = {"file", "frame", "timestamp", "hash", "playback", "measurement"}
     expected_ids: set[str] = set()
     bundle_path = run_dir / "contracts" / "contract-bundle.json"
+    bundle: dict[str, Any] = {}
     if bundle_path.is_file():
         bundle = json.loads(bundle_path.read_text())
         rubric_ref = (bundle.get("quality_evidence", {}).get("rubric") or {}).get("ref")
@@ -731,8 +840,14 @@ def _production_evidence(
                     for category in rubric.get("categories", [])
                     for index, _ in enumerate(category.get("checks", []), start=1)
                 }
+    bundle_schema = bundle.get("schema_version") if bundle_path.is_file() else None
+    expected_score_schema = (
+        "eddy-production-score-v2"
+        if bundle_schema == "eddy-contract-bundle-v3"
+        else "eddy-production-score-v1"
+    )
     evidence_complete = (
-        score.get("schema_version") == "eddy-production-score-v1"
+        score.get("schema_version") == expected_score_schema
         and isinstance(checks, list)
         and len(checks) == 100
         and {row.get("id") for row in checks if isinstance(row, dict)} == expected_ids
@@ -743,11 +858,15 @@ def _production_evidence(
             and isinstance(row.get("evidence"), list)
             and bool(row["evidence"])
             and all(
-                isinstance(item, dict)
-                and item.get("type") in allowed_evidence
-                and isinstance(item.get("ref"), str)
-                and bool(item["ref"].strip())
-                and _evidence_ref_exists(run_dir, attempt, item["ref"])
+                _production_score_evidence_v2(attempt, item)
+                if expected_score_schema == "eddy-production-score-v2"
+                else (
+                    isinstance(item, dict)
+                    and item.get("type") in allowed_evidence
+                    and isinstance(item.get("ref"), str)
+                    and bool(item["ref"].strip())
+                    and _evidence_ref_exists(run_dir, attempt, item["ref"])
+                )
                 for item in row["evidence"]
             )
             for row in checks
@@ -773,13 +892,43 @@ def _production_evidence(
     return gates, blockers
 
 
+def _production_score_evidence_v2(attempt: Path, value: object) -> bool:
+    """Bind every score claim to a gate-specific independent evaluator receipt."""
+
+    if not isinstance(value, dict) or value.get("type") != "measurement":
+        return False
+    gate_id = value.get("gate_id")
+    ref = value.get("ref")
+    if gate_id not in GATE_EVALUATORS or not isinstance(ref, str):
+        return False
+    try:
+        validate_gate_evidence_v2(attempt, value, str(gate_id))
+    except ValueError:
+        return False
+    return True
+
+
 def _professional_v35_evidence(
     attempt: Path,
 ) -> tuple[dict[str, bool], list[str]]:
     """Recompute v3.5 gates from independent, hash-bound review artifacts."""
 
+    professional_path = attempt / "professional-gates.json"
+    professional_schema = None
+    if professional_path.is_file():
+        try:
+            professional_schema = json.loads(professional_path.read_text()).get(
+                "schema_version"
+            )
+        except (json.JSONDecodeError, OSError, AttributeError):
+            professional_schema = None
+    required_professional_gates = (
+        REQUIRED_PROFESSIONAL_GATES_V2
+        if professional_schema == "professional-gate-evidence-v2"
+        else REQUIRED_PROFESSIONAL_GATES
+    )
     gates = {
-        **{gate: False for gate in REQUIRED_PROFESSIONAL_GATES},
+        **{gate: False for gate in required_professional_gates},
         "independent_verifier": False,
         "objective_open_items_closed": False,
     }
@@ -924,6 +1073,7 @@ def _contract_binding_evidence(
             "eddy-quality-profile-v1",
             "eddy-quality-profile-v2",
             "eddy-quality-profile-v3",
+            "eddy-quality-profile-v4",
         }
         and _sha256(profile_path) == profile.get("sha256")
     )
@@ -957,11 +1107,19 @@ def _contract_binding_evidence(
             if isinstance(row, dict)
         )
     )
-    if bundle.get("schema_version") == "eddy-contract-bundle-v2":
+    if bundle.get("schema_version") in {
+        "eddy-contract-bundle-v2",
+        "eddy-contract-bundle-v3",
+    }:
         fact = bundle.get("project_fact_brief", {})
         fact_path = run_dir / str(fact.get("ref", "missing"))
         gates["project_fact_brief_bound"] = (
-            fact.get("schema_version") == "eddy-project-fact-brief-ref-v1"
+            fact.get("schema_version")
+            == (
+                "eddy-project-fact-brief-ref-v2"
+                if bundle.get("schema_version") == "eddy-contract-bundle-v3"
+                else "eddy-project-fact-brief-ref-v1"
+            )
             and fact_path.is_file()
             and _sha256(fact_path) == fact.get("sha256")
         )
@@ -994,6 +1152,25 @@ def _contract_binding_evidence(
                 for label, row in design_rows.items()
             )
         )
+        if bundle.get("schema_version") == "eddy-contract-bundle-v3":
+            correction = bundle.get("correction_pack", {})
+            correction_path = run_dir / str(correction.get("ref", "missing"))
+            gates["correction_pack_bound"] = (
+                correction.get("schema_version") == "eddy-correction-pack-ref-v1"
+                and correction_path.is_file()
+                and _sha256(correction_path) == correction.get("sha256")
+            )
+            gate_contracts = (bundle.get("quality_evidence") or {}).get(
+                "professional_gate_contracts",
+                {},
+            )
+            gate_contracts_path = run_dir / str(
+                gate_contracts.get("ref", "missing")
+            )
+            gates["professional_gate_contracts_bound"] = (
+                gate_contracts_path.is_file()
+                and _sha256(gate_contracts_path) == gate_contracts.get("sha256")
+            )
     for gate, passed in gates.items():
         if not passed:
             blockers.append(f"{gate}_invalid")

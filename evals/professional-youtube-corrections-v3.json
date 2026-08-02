@@ -1,0 +1,28 @@
+{
+  "schema_version": "eddy-correction-evals-v3",
+  "profile_id": "lennox-professional-youtube-v3",
+  "inherits": {
+    "ref": "professional-youtube-corrections-v2.json",
+    "schema_version": "eddy-correction-evals-v2"
+  },
+  "privacy": "Generalized behavior and synthetic fixtures only. No private raw session text.",
+  "promotion_policy": {
+    "owner_profile": "passing_eval",
+    "generic_core": "cross_project_recurrence_or_explicit_owner_designation",
+    "project_facts": "never"
+  },
+  "cases": [
+    {"id": "micro-shot-third-frame", "failure_type": "micro_shot_or_boundary_handle", "input": "A one-to-six-frame third shot appears between two intended cuts.", "expected": "Detect it from source mapping, remove it unless a protected evidence-bound purpose exists, and review the repaired boundary at 0.25x.", "evidence": "boundary audit, plus-or-minus-eight-frame strip, and supercut"},
+    {"id": "silent-residual-handle", "failure_type": "micro_shot_or_boundary_handle", "input": "A sub-0.24-second segment below -40 dBFS remains at a cut.", "expected": "Drop the residual handle and rerun the source-mapped boundary audit.", "evidence": "energy measurement and repaired boundary manifest"},
+    {"id": "incomplete-clause", "failure_type": "retake_or_incomplete_clause", "input": "A delivered sentence ends before the source performance finishes.", "expected": "Recover the complete source clause or remove the incomplete setup.", "evidence": "source interval, delivered transcript, and ear review"},
+    {"id": "missing-source-voice-response", "failure_type": "missing_source_audio", "input": "A system or Voice Mode response is omitted after its recorded prompt.", "expected": "Restore only the declared original source interval; never synthesize a replacement.", "evidence": "source-audio-role binding and stream hash"},
+    {"id": "caption-project-override", "failure_type": "caption_timing_or_override", "input": "A project-locked caption correction is misspelled or a future word is visible.", "expected": "Apply the exact override and prove progressive delivered timing.", "evidence": "caption override binding and onset frames"},
+    {"id": "cropped-proof-context", "failure_type": "layout_or_crop_failure", "input": "Critical screen information or the speaker is cropped.", "expected": "Restore readable context and a non-clipped face without hiding proof.", "evidence": "full-context frame and geometry measurement"},
+    {"id": "elementary-motion", "failure_type": "motion_taste_or_sync", "input": "Motion is basic, text-heavy, late, or visually disconnected from speech.", "expected": "Use refined seek-safe illustration synchronized to the spoken beat, with sparse text.", "evidence": "speech-to-motion timing map and playback"},
+    {"id": "rendered-fact-mismatch", "failure_type": "factual_visual_mismatch", "input": "A synthetic fixture binds byte_count=247, but the rendered number shows another value.", "expected": "Block until the rendered fact matches its hash-bound source.", "evidence": "fact binding and rendered frame"},
+    {"id": "exact-caption-override", "failure_type": "caption_timing_or_override", "input": "A synthetic caption fixture requires tile to be corrected to dial, but the delivered caption still says tile.", "expected": "Block until the exact project override is visible at the correct delivered onset.", "evidence": "caption override binding and onset frames"},
+    {"id": "music-taste-or-level", "failure_type": "audio_mix_or_music_taste", "input": "Music is not authentic lo-fi or masks speech.", "expected": "Use provenance-bound suitable music at a restrained speech-safe level.", "evidence": "cue provenance, loudness measurement, and ear review"},
+    {"id": "generic-gate-receipt", "failure_type": "false_quality_claim", "input": "One generic pass JSON is reused for unrelated gates.", "expected": "Reject every mismatched gate; require the declared evaluator and gate-specific manifest.", "evidence": "professional-gate-evidence-v2 validation failure"},
+    {"id": "editor-self-clears-candidate", "failure_type": "false_quality_claim", "input": "The editor labels every detected boundary candidate designed and declares 100.", "expected": "Reject promotion until deterministic candidate decisions and independent review prove the final timeline clean.", "evidence": "candidate audit and verifier-review-v2"}
+  ]
+}

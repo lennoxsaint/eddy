@@ -38,8 +38,10 @@ Treat 0-3 seconds and 0-30 seconds as hard-gated Viewer-Leverage Windows and the
 priority, without weakening the body. Frame one moves, the strongest honest money shot lands by 3s,
 real proof lands by 10s, and stakes plus route are legible by 30s.
 
-Use `edit-plan-v3.6` when a Strategy Profile V7 Opening Edit Blueprint is present; otherwise use
-`edit-plan-v3.5`. V3.6 retains the v3.5 proof system and binds the pre-production
+For `lennox-professional-youtube-v3`, negotiate `edit-plan-v3.7` from `eddy-capabilities-v1`.
+V3.7 supports 3-6 named Long routes over one shared body and 3-5 Shorts. Opening Blueprint
+delivery is optional and must be explicitly supplied; route count never implies a blueprint.
+Existing v3.6 retains the v3.5 proof system and binds the pre-production
 `opening-edit-blueprint-v2` as delivered choreography through
 second 60. Every planned opening scene must map to a delivered scene, and every substantive
 deviation needs a reason and proof receipt. Legacy plans through v3.5 remain readable, but cannot
@@ -49,8 +51,8 @@ V3.6 also retains the v3.3 Sage-owned body structure and binds
 `contracts/contract-bundle.json`, `design.md`, landscape `frame.md`, portrait `shorts/frame.md`,
 the selected quality profile, verified Project Fact Brief, HyperFrames v0.7.3 doctrine, Studio Sound
 lineage, audio plan, grade plan, caption policy, correction evals, independent-verifier contract,
-and 100-point rubric. Host packets use `eddy-host-packet-v3.2`; bundles use
-`eddy-contract-bundle-v2`. Legacy plans through v3.4 remain readable but cannot claim the v2
+and 100-point rubric. V3 owner packets use `eddy-host-packet-v3.3`; bundles use
+`eddy-contract-bundle-v3`. Legacy packets and plans remain readable but cannot claim the v3
 Lennox-profile proof state.
 
 HyperFrames owns full-frame composition. Use talking head as the human anchor, real screen
@@ -109,7 +111,7 @@ outputs proof-gated candidates.
 4. Call `eddy_host_packet(job_id=...)`. Review every transcript chunk and resolve every Editorial
    Review Ledger item. Use its source hashes, typed retake variants, protected moments, proof assets,
    screen-proof candidates, motion requirements, and prior repair evidence to author `EditPlanV3`.
-5. Author the v3.6 body contract, cut-integrity plan, factual proof plan, audio plan, grade plan,
+5. Author the negotiated body contract, cut-integrity plan, factual proof plan, audio plan, grade plan,
    caption policy, production review, and choreography against the packet's frozen bundle. If the
    packet carries an Opening Edit Blueprint, map every planned scene through second 60 and record
    every approved deviation with a hash-bound receipt. Then call
@@ -222,7 +224,7 @@ eddy revise-design <job-id> design-contract-revision.json
 ## Hard gates
 
 - Source hashes are identical before and after the run.
-- Exactly one shared body plan feeds all three longs; only their hook segments differ.
+- Exactly one shared body plan feeds every Long route; only their opening segments differ.
 - The project frame hash, source refs, choreography manifest, animation map, provenance, selected
   opening, shared-body hash, and 0/1/3/10/30 comparison frames are inspectable.
 - V7 plans expose the exact Opening Edit Blueprint ref/hash, benchmark library ref/hash, locked
@@ -247,7 +249,7 @@ eddy revise-design <job-id> design-contract-revision.json
   stills, incorrect arrows, obstructed proof, and out-of-safe-zone elements are objective failures.
 - Every factual product/site view is either a pixel-faithful real capture or an evidence-bound
   reconstruction whose internal receipt says `evidence_kind: reconstructed`.
-- `verifier-review.json` covers a full watch and listen of three Longs and 3-5 Shorts;
+- `verifier-review.json` covers a full watch and listen of every delivered Long and 3-5 Shorts;
   `open-items.json` has no objective entries; optional subjective alternatives are labeled.
 - A completed Short privacy repair may change pixels only: it preserves every Long hash and the
   proven Studio Sound audio stream byte-for-byte, proves each solid mask at its midpoint, and updates

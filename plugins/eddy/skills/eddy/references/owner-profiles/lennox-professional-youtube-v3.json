@@ -1,0 +1,169 @@
+{
+  "schema_version": "eddy-quality-profile-v4",
+  "id": "lennox-professional-youtube-v3",
+  "display_name": "Lennox Professional YouTube V3",
+  "contract_precedence": [
+    "current_run_instruction",
+    "supplied_project_fact_brief_and_correction_pack",
+    "lennox_editing_taste_profile",
+    "hyperframes_house_style"
+  ],
+  "deliverables": {
+    "longs": {
+      "default": 3,
+      "minimum": 3,
+      "maximum": 6,
+      "one_primary": true,
+      "identical_shared_body": true
+    },
+    "shorts": {"minimum": 3, "maximum": 5, "padding_allowed": false}
+  },
+  "viewer_leverage": {
+    "hard_gated_windows_seconds": [[0, 3], [0, 30], [0, 60]],
+    "repair_priority": ["0_to_3", "0_to_30", "0_to_60", "body"],
+    "body_quality_may_be_weakened": false,
+    "frame_one_activity_by_second": 0.04,
+    "money_shot_by_second": 3,
+    "real_proof_by_second": 10,
+    "stakes_and_route_by_second": 30,
+    "first_minute_requires_owner_taste_review": true
+  },
+  "editorial": {
+    "delivered_media_retranscription_required": true,
+    "waveform_energy_envelope_overrides_bad_transcript_timing": true,
+    "sample_exact_splices_required": true,
+    "sequence_search_parity_required": true,
+    "shot_entry_latency_max_frames": 2,
+    "word_edge_protection_required": true,
+    "retake_survivors_allowed": 0,
+    "repeated_first_words_allowed": 0,
+    "false_starts_allowed": 0,
+    "unfinished_clauses_allowed": 0,
+    "unintended_chatter_allowed": 0,
+    "incoherent_joins_allowed": 0,
+    "unexplained_micro_insert_frames": [1, 6],
+    "silent_residual_handle_max_seconds": 0.24,
+    "silent_residual_handle_max_dbfs": -40,
+    "cut_boundary_frame_window_each_side": 8,
+    "cut_boundary_supercut_speed": 0.25,
+    "decode_policy": "fps_mode_passthrough",
+    "shared_body_for_long_variants": true,
+    "protected_exception_reason_and_evidence_required": true
+  },
+  "pacing": {
+    "gap_tighten_threshold_s": 0.2,
+    "gap_target_s": 0.1,
+    "unprotected_gap_hard_max_s": 0.28,
+    "long_mute_stretches_allowed": 0,
+    "protected_pause_ceiling_s": 0.8,
+    "shorts_faster_cut_bias": true
+  },
+  "proof_routing": {
+    "talking_head": "human_anchor",
+    "screen_recording": "full_context_real_product_action_and_proof",
+    "hyperframes": "seek_safe_concept_relationship_result_only",
+    "real_capture_preferred": true,
+    "critical_screen_content_may_be_cropped": false,
+    "talking_head_may_be_clipped": false,
+    "reconstruction_allowed_when_fact_bound": true,
+    "reconstruction_receipt_required": true,
+    "evidence_order": [
+      "raw_source",
+      "supplied_asset",
+      "pixel_faithful_capture",
+      "fact_bound_reconstruction",
+      "diagram",
+      "clearly_framed_metaphor"
+    ]
+  },
+  "layouts": {
+    "semantic_reason_required": true,
+    "repeat_without_proof_reason_max": 2,
+    "opening_meaningful_changes_first_30": [8, 12],
+    "opening_distinct_layout_states_min": 3,
+    "shorts_face_vertical_center_tolerance": 0.08,
+    "shorts_lower_half_requires_visual_job": true,
+    "allowed": [
+      "speaker_full", "speaker_close", "speaker_tight", "pip_bottom_right",
+      "pip_bottom_left", "pip_top_right", "pip_top_left", "vertical_speaker_left",
+      "vertical_speaker_right", "embedded_split_left", "embedded_split_right",
+      "speaker_plus_mental_model", "proof_canvas", "speaker_top_screen_bottom"
+    ]
+  },
+  "motion": {
+    "preferred_engine": "hyperframes",
+    "hyperframes_use_policy": "only_when_seek_safe_and_visually_meaningful",
+    "hero_frame_static_before_animation": true,
+    "full_segment_coverage_required": true,
+    "speech_synchronization_required": true,
+    "frozen_tail_allowed": false,
+    "one_frame_flash_allowed": false,
+    "semantic_zoom_job_required": true,
+    "automated_drift_allowed": false,
+    "filler_punch_ins_allowed": false,
+    "generic_template_visuals_allowed": false,
+    "childlike_or_elementary_graphics_allowed": false,
+    "licensed_asset_provenance_required": true,
+    "authored_callout_bias": ["icons", "diagrams", "spatial_relationships", "mental_models", "video_illustrations"],
+    "text_policy": "sparse_active_confident_factual_subordinate",
+    "label_reading_grade": [3, 5]
+  },
+  "audio": {
+    "studio_sound_required": true,
+    "studio_sound_lineage_policy": "verified_descript_only",
+    "source_voice_mode_policy": "restore_from_declared_original_source_or_remove_incomplete_setup",
+    "voice_synthesis_allowed": false,
+    "music": "authentic_restrained_upbeat_lofi_background",
+    "music_must_remain_below_speech": true,
+    "shorts_music_policy": "purposeful_variation",
+    "sfx": "restrained_state_change_only",
+    "allowed_sources": ["local", "supplied", "bundled", "locally_generated"],
+    "provenance_fields": ["ref", "provenance", "license", "cue", "purpose", "mix_db"],
+    "paid_retrieval_without_current_run_approval": false,
+    "missing_suitable_audio": "block"
+  },
+  "grade": {
+    "camera": ["natural_skin", "exposure", "white_balance", "shot_consistency"],
+    "screen_recording": "preserve_source_color_fidelity"
+  },
+  "captions": {
+    "longs_default": "disabled",
+    "longs_override": "project_fact_brief_only",
+    "shorts_style": "progressive_karaoke",
+    "prior_words": "visible",
+    "active_word": "highlighted",
+    "future_words": "invisible",
+    "speaker_attribution": "color_plus_label",
+    "speaker_colors": "design_contract_accessible_palette",
+    "source_caption_collision": "suppress_eddy_captions",
+    "terminal_punctuation": [".", "?", "!"],
+    "project_caption_overrides_are_exact": true,
+    "delivered_timing_proof_required": true
+  },
+  "review": {
+    "minimum_complete_watch_critique_repair_passes": 3,
+    "repair_review": "all_cut_boundaries_plus_repaired_intervals_and_joins_plus_full_final",
+    "independent_verifier_required": true,
+    "verifier_edit_authority": false,
+    "continue_until_score": 100,
+    "maximum_repair_loops": 3,
+    "changed_strategy_required_after_failure": true,
+    "generic_evidence_may_clear_multiple_gates": false,
+    "editor_prose_may_self_clear_detected_defect": false,
+    "external_or_technical_blocker_must_be_exact": true,
+    "red_attempts": "quarantine",
+    "objective_open_items_allowed": 0,
+    "subjective_optional_items_allowed": true,
+    "audience_performance": "NOT_RUN",
+    "promotion_state": "proof_gated_candidate_awaiting_owner_taste",
+    "final_authority": "owner_taste_lock",
+    "owner_rejection": "reopen_same_run"
+  },
+  "promotion": {
+    "current_run": "apply_immediately",
+    "owner_profile": "passing_correction_eval_required",
+    "generic_core": "cross_project_recurrence_or_explicit_owner_designation",
+    "project_facts_may_promote": false
+  },
+  "design_defaults": {"background": "#0E1014", "foreground": "#F7F8FA", "accent": "#7C5CFF"}
+}
